@@ -1,8 +1,25 @@
-import React from "react";
+import React, { useRef } from "react";
+import { CatSelections } from "@/const";
 
 const Categories = () => {
+  const trackRef = useRef(null);
+
+  const scrollByCard = (direction) => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const firstCard = track.querySelector("[data-card]");
+    if (!firstCard) return;
+
+    const cardWidth = firstCard.getBoundingClientRect().width;
+    const gap = 16; // because you used "gap-4" (16px)
+    const scrollAmount = (cardWidth + gap) * direction;
+
+    track.scrollBy({ left: scrollAmount, behavior: "smooth" });
+  };
+
   return (
-    <div className="relative w-full h-screen overflow-hidden mt-10 md:mt-20">
+    <div className="relative w-full sm:h-auto h-screen overflow-hidden mt-5 md:mt-5">
       <h1 className="text-2xl md:text-7xl font-semibold text-center mx-auto p-4">
         Our Latest Creations
       </h1>
@@ -11,79 +28,109 @@ const Categories = () => {
         intention, emotion, and style.
       </p>
 
-      <div className="flex items-center gap-2 h-[400px] w-full px-5 mt-10 mx-auto">
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1719368472026-dc26f70a9b76?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-          {/* Overlay (optional dark layer for readability) */}
-          {/* <div className="absolute inset-0 bg-black/30"></div> */}
+      {/* Controls (Desktop/Tablet) */}
+      <div className="mt-6 hidden md:flex items-center justify-center gap-3">
+        <button
+          onClick={() => scrollByCard(-1)}
+          className="rounded-full border px-4 py-2 text-sm hover:bg-black hover:text-white transition"
+        >
+          ← Prev
+        </button>
+        <button
+          onClick={() => scrollByCard(1)}
+          className="rounded-full border px-4 py-2 text-sm hover:bg-black hover:text-white transition"
+        >
+          Next →
+        </button>
+      </div>
 
-          {/* Button */}
-          <button
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 
-      rounded-full bg-white px-5 py-2 text-sm font-medium text-black 
-      hover:bg-gray-200 transition"
-          >
-            View Details
-          </button>
+      {/* Horizontal Carousel (Desktop/Tablet) */}
+      <div className="mt-8 px-5 hidden md:block">
+        <div
+          ref={trackRef}
+          className="no-scrollbar flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {CatSelections.slice(0, 10).map((item, i) => (
+            <div
+              key={item.image ?? i}
+              data-card
+              className="snap-start shrink-0 w-[24%] md:h-[55vh] lg:h-[70vh] relative overflow-hidden rounded-2xl hover:w-[30%] transition-[width]
+              duration-500 ease-in-out"
+            >
+              <img
+                src={item.image}
+                alt={item.title || "category"}
+                className="h-full w-full object-cover object-center"
+              />
 
-          {/* Text */}
-          <p className="absolute top-5 left-5 z-50 text-white font-semibold">
-            Poorna Kanishka
-          </p>
+              <div className="absolute inset-0 bg-black/35" />
+
+              <p className="absolute top-5 left-5 z-10 text-white text-lg font-semibold">
+                {item.title}
+              </p>
+
+              {item.description && (
+                <p className="absolute top-14 left-5 right-5 z-10 text-white/80 text-sm">
+                  {item.description}
+                </p>
+              )}
+
+              <button
+                className="absolute bottom-20 left-5 right-5 z-10 rounded-2xl bg-white/90 backdrop-blur
+                  px-5 py-3 text-sm font-medium text-black hover:bg-white transition whitespace-nowrap
+                   hover:shadow-lg hover:shadow-amber-500/30"
+              >
+                {item.title}
+              </button>
+            </div>
+          ))}
         </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1649265825072-f7dd6942baed?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
+
+        {/* scrollbar hide (webkit) */}
+        <style>{`
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        `}</style>
+      </div>
+
+      {/* MOBILE: swipe row */}
+      <div className="mt-10 px-5 md:hidden">
+        <div className="no-scrollbar flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
+          {CatSelections.map((item, i) => (
+            <div
+              key={item.image ?? i}
+              className="relative h-[540px] min-w-[260px] snap-start overflow-hidden rounded-xl"
+            >
+              <img
+                src={item.image}
+                alt={item.title || "category"}
+                className="h-full w-full object-cover object-center"
+              />
+
+              <div className="absolute inset-0 bg-black/30" />
+
+              <p className="absolute top-4 left-4 z-10 text-white font-semibold">
+                {item.title}
+              </p>
+
+              {item.description && (
+                <p className="absolute bottom-16 left-4 right-4 z-10 text-sm text-white/80 line-clamp-2">
+                  {item.description}
+                </p>
+              )}
+
+              <button className="absolute bottom-4 inset-x-4 z-10 rounded-2xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-gray-200">
+                {item.title}
+              </button>
+            </div>
+          ))}
         </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1555212697-194d092e3b8f?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-        </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1729086046027-09979ade13fd?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-        </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1601568494843-772eb04aca5d?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-        </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1585687501004-615dfdfde7f1?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-        </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1601568494843-772eb04aca5d?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-        </div>
-        <div className="relative group grow transition-all w-56 rounded-lg overflow-hidden h-[400px] duration-500 hover:w-[300px]">
-          <img
-            className="h-full w-full object-cover object-center"
-            src="https://images.unsplash.com/photo-1585687501004-615dfdfde7f1?q=80&h=800&w=800&auto=format&fit=crop"
-            alt="image"
-          />
-        </div>
+
+        <style>{`
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        `}</style>
       </div>
     </div>
   );

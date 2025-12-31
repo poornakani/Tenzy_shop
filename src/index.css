@@ -12,6 +12,12 @@
   --font-sans: "Mona Sans", sans-serif;
   --font-modern-negra: "Modern Negra", sans-serif;
   --font-serif: "DM Serif Text", serif;
+
+  --screen-sm: 640px;
+  --screen-md: 768px;
+  --screen-lg: 1024px;
+  --screen-xl: 1280px;
+  --screen-2xl: 1536px;
 }
 
 html,
@@ -23,26 +29,93 @@ body {
   overflow-x: hidden;
 }
 
-/* @utility flex-center {
+@utility masked-img {
+  mask-image: url("../public/images/sellingProd/aveeno.png");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 50%;
+}
+
+@utility flex-center {
   @apply flex justify-center items-center;
-}
-
-@utility col-center {
-  @apply flex flex-col justify-center items-center;
-}
-
-@utility text-gradient {
-  background: linear-gradient(to bottom, #ffffff, #898989);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 @utility radial-gradient {
   background: radial-gradient(
-    circle at center,
-    #434343 0%,
-    #000 50%,
-    transparent 100%
+    circle at top,
+    #7de2d1 50%,
+    #339989 90%,
+    #eeb868 10%
   );
-} */
+}
+
+@layer components {
+  #banner2 {
+    @apply flex-center flex-col min-h-dvh p-5 mt-20 relative radial-gradient;
+
+    h2 {
+      @apply relative  text-7xl
+              sm:text-8xl
+              md:text-[18vw]
+              lg:text-[20vw] text-nowrap leading-none font-modern-negra text-center text-[#f17f29] mb-8;
+    }
+
+    /* .content {
+      @apply flex md:flex-row flex-col justify-between md:mb-16 md:mt-0 mt-0 gap-10;
+    } */
+
+    .content {
+      @apply grid gap-10 md:flex md:flex-row md:justify-between md:mb-16 md:mt-0 mt-50;
+      @apply grid-cols-2;
+    }
+
+    /* Make the image take the full row on mobile grid */
+    .content .cocktail-img {
+      @apply col-span-2 order-1;
+    }
+
+    /* Put the two lists below the image (2 columns) */
+    .content ul:first-child {
+      @apply order-2;
+    }
+    .content ul:last-child {
+      @apply order-3;
+    }
+
+    /* On desktop keep original order: left | image | right */
+    @media (min-width: 768px) {
+      .content {
+        @apply grid-cols-none;
+      }
+      .content .cocktail-img {
+        @apply col-span-1 order-0;
+      }
+      .content ul:first-child,
+      .content ul:last-child {
+        @apply order-0;
+      }
+    }
+
+    .cocktail-img {
+      @apply md:w-[60vw] w-full h-[50vh] md:h-[70vh] rounded-4xl overflow-hidden absolute top-0 md:top-1/2 md:-translate-y-1/2 left-1/2 -translate-x-1/2;
+    }
+
+    .masked-container {
+      h2 {
+        @apply text-2xl md:text-7xl font-modern-negra text-center mb-10 text-black mt-32;
+      }
+
+      div {
+        @apply opacity-0 md:px-0 px-5 space-y-5 absolute md:bottom-5 bottom-52 left-1/2 -translate-x-1/2;
+
+        h3 {
+          @apply md:text-6xl text-2xl text-center font-serif md:w-full w-80 text-black;
+        }
+
+        p {
+          @apply text-lg text-center;
+        }
+      }
+    }
+  }
+}

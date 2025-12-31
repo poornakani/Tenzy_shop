@@ -65,9 +65,9 @@ const Header = () => {
           </div>
         </div>
 
-        <div className="hidden md:block w-full max-w-xl">
+        <div className="hidden md:block w-full max-w-xl md:mt-20 lg:mt-10">
           <div className="relative h-[580px] overflow-hidden rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl">
-            <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-black/20" />
+            <div className="absolute inset-0 bg-linear-to-b from-white/10 to-black/20" />
 
             {/* Slides (MUST be absolute) */}
             <div className="absolute inset-0">

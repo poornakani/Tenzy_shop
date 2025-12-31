@@ -7,6 +7,16 @@ import header1 from "../public/images/header_img.png";
 import header2 from "../public/images/header2.jpg";
 import header3 from "../public/images/header3.jpg";
 import header4 from "../public/images/header4.jpg";
+import banner01 from "../public/images/header4.jpg";
+
+import aveeno from "../public/images/sellingProd/aveeno.png";
+import cereve from "../public/images/sellingProd/cereve.jpg";
+import lorial from "../public/images/sellingProd/lorial.jpg";
+import madagskar from "../public/images/sellingProd/madagaskar.jpg";
+import vichy from "../public/images/sellingProd/ordinary.jpg";
+import vitac from "../public/images/sellingProd/vitac.jpg";
+import ordinary from "../public/images/sellingProd/ordinary.jpg";
+import check from "../public/images/check.png";
 
 export const assets = {
   logo,
@@ -18,6 +28,18 @@ export const assets = {
   header2,
   header3,
   header4,
+  banner01,
+  check,
+};
+
+export const sellingpro = {
+  aveeno,
+  cereve,
+  lorial,
+  madagskar,
+  ordinary,
+  vichy,
+  vitac,
 };
 
 export const slides = [
@@ -40,5 +62,534 @@ export const slides = [
     image: assets.header4,
     title: "Daily Essentials",
     description: "Minimal routine, maximum results",
+  },
+];
+
+export const CatSelections = [
+  {
+    image:
+      "https://images.unsplash.com/photo-1719368472026-dc26f70a9b76?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Skin Care",
+    description: "See how we care your skin",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1649265825072-f7dd6942baed?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Face Care",
+    description: "See how we care your Face",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1555212697-194d092e3b8f?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Head Care",
+    description: "See how we care your Head",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1729086046027-09979ade13fd?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Skin Care",
+    description: "See how we care your skin",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1601568494843-772eb04aca5d?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Face Care",
+    description: "See how we care your Face",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1585687501004-615dfdfde7f1?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Head Care",
+    description: "See how we care your Head",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1601568494843-772eb04aca5d?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Hand Care",
+    description: "See how we care your Face",
+  },
+
+  {
+    image:
+      "https://images.unsplash.com/photo-1585687501004-615dfdfde7f1?q=80&h=800&w=800&auto=format&fit=crop",
+    title: "Legs Care",
+    description: "See how we care your Head",
+  },
+];
+
+export const beautyArtListsLeft = [
+  "Dermatologist-tested formulas",
+  "Hydrating glow finish",
+  "Non-comedogenic (won’t clog pores)",
+  "Clean & cruelty-free ingredients",
+];
+
+export const beautyArtListsRight = [
+  "Long-lasting wear (8–12 hours)",
+  "Lightweight, breathable texture",
+  "Vitamin C + Niacinamide blend",
+  "Suitable for all skin types",
+];
+
+export const BrandsList = [
+  { name: "The Ordinary", logo: "../public/images/Brandslogo/brand1.png" },
+  { name: "CeraVe", logo: "../public/images/Brandslogo/brand2.png" },
+  { name: "Aveeno", logo: "../public/images/Brandslogo/brand3.png" },
+  { name: "L'Oréal", logo: "../public/images/Brandslogo/brand4.png" },
+  {
+    name: "Madagascar Centella",
+    logo: "../public/images/Brandslogo/brand1.png",
+  },
+  { name: "Vita C", logo: "../public/images/Brandslogo/brand2.png" },
+  { name: "Prévense", logo: "../public/images/Brandslogo/brand3.png" },
+];
+
+export const Testimonials = [
+  {
+    name: "Sarah M.",
+    role: "Verified customer",
+    quote: "Fast delivery and authentic products. My skin feels amazing!",
+    rating: 5,
+  },
+  {
+    name: "Amal K.",
+    role: "Verified customer",
+    quote: "Beautiful packaging and great quality. Will order again.",
+    rating: 5,
+  },
+  {
+    name: "Nimal P.",
+    role: "Verified customer",
+    quote: "Support team helped me choose the right routine. So helpful!",
+    rating: 4,
+  },
+  {
+    name: "Emma R.",
+    role: "Verified customer",
+    quote: "The Ordinary + CeraVe combo changed my skincare game.",
+    rating: 5,
+  },
+  {
+    name: "Leena S.",
+    role: "Verified customer",
+    quote: "Everything arrived perfectly. Great experience overall.",
+    rating: 5,
+  },
+  {
+    name: "Hasan A.",
+    role: "Verified customer",
+    quote: "Prices are fair and products are original. Love it.",
+    rating: 5,
+  },
+  {
+    name: "Maya D.",
+    role: "Verified customer",
+    quote: "Simple checkout and quick dispatch. Highly recommended.",
+    rating: 4,
+  },
+  {
+    name: "Jason T.",
+    role: "Verified customer",
+    quote: "Excellent range of brands and the site looks premium.",
+    rating: 5,
+  },
+  {
+    name: "Isuri W.",
+    role: "Verified customer",
+    quote: "Good customer service and quick replies on messages.",
+    rating: 5,
+  },
+  {
+    name: "Daniel K.",
+    role: "Verified customer",
+    quote: "The best skincare store I found recently. Trusted.",
+    rating: 5,
+  },
+  {
+    name: "Riya P.",
+    role: "Verified customer",
+    quote: "Love the brand selection and quick delivery.",
+    rating: 5,
+  },
+  {
+    name: "Noah S.",
+    role: "Verified customer",
+    quote: "Smooth experience, genuine items, great support.",
+    rating: 5,
+  },
+];
+
+export const linkSections = [
+  {
+    title: "Quick Links",
+    links: ["Home", "Best Sellers", "Offers & Deals", "Contact Us", "FAQs"],
+  },
+  {
+    title: "Need Help?",
+    links: [
+      "Delivery Information",
+      "Return & Refund Policy",
+      "Payment Methods",
+      "Track your Order",
+      "Contact Us",
+    ],
+  },
+  {
+    title: "Follow Us",
+    links: ["Instagram", "Tik Tok", "Facebook", "YouTube"],
+  },
+];
+
+export const faqs = [
+  {
+    question: "How to use this component?",
+    answer:
+      "To use this component, you need to import it in your project and use it in your JSX code. Here's an example of how to use it:",
+  },
+  {
+    question: "Are there any other components available?",
+    answer:
+      "Yes, there are many other components available in this library. You can find them in the 'Components' section of the website.",
+  },
+  {
+    question: "Are components responsive?",
+    answer:
+      "Yes, all components are responsive and can be used on different screen sizes.",
+  },
+  {
+    question: "Can I customize the components?",
+    answer:
+      "Yes, you can customize the components by passing props to them. You can find more information about customizing components in the 'Customization' section of the website.",
+  },
+];
+
+export const bestSellingProducts = [
+  {
+    id: 1,
+    name: "Aveeno body lotion",
+    price: 20000,
+    discountPercent: 20,
+    inSale: true,
+    stockCount: 12,
+    outOfStock: false,
+    image: sellingpro.aveeno,
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields (no changes to existing details)
+    brand: "Aveeno",
+    category: "Skin",
+    sku: "BS-0001",
+    description:
+      "Daily moisturizing body lotion for soft, smooth skin. Lightweight feel with long-lasting hydration.",
+    size: "354ml",
+    weight: "354g",
+    images: [sellingpro.aveeno],
+  },
+  {
+    id: 2,
+    name: "Hydra Cream 24H",
+    price: 18500,
+    discountPercent: 15,
+    inSale: true,
+    stockCount: 0,
+    outOfStock: true,
+    image:
+      "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Hydra",
+    category: "Face",
+    sku: "BS-0002",
+    description:
+      "24-hour hydration cream designed to support a healthy moisture barrier with a smooth, non-greasy finish.",
+    size: "50ml",
+    weight: "50g",
+    images: [
+      "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 3,
+    name: "Rose Cleanse Foam",
+    price: 12500,
+    discountPercent: 10,
+    inSale: true,
+    stockCount: 7,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1620916566393-7c3a4a4f3f10?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Rose Care",
+    category: "Face",
+    sku: "BS-0003",
+    description:
+      "Gentle foaming cleanser with a fresh feel. Helps remove daily impurities while keeping skin comfortable.",
+    size: "150ml",
+    weight: "150g",
+    images: [
+      "https://images.unsplash.com/photo-1620916566393-7c3a4a4f3f10?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 4,
+    name: "Vitamin C Bright Kit",
+    price: 24000,
+    discountPercent: 25,
+    inSale: true,
+    stockCount: 3,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1629198726018-41b7b7a4b3b2?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 4,
+
+    // ✅ added fields
+    brand: "Bright Lab",
+    category: "Face",
+    sku: "BS-0004",
+    description:
+      "Brightening kit powered by Vitamin C to support glow and a more even-looking complexion over time.",
+    size: "Kit",
+    weight: "N/A",
+    images: [
+      "https://images.unsplash.com/photo-1629198726018-41b7b7a4b3b2?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 5,
+    name: "Night Repair Oil",
+    price: 31500,
+    discountPercent: 18,
+    inSale: true,
+    stockCount: 9,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1611930022073-5f4f6c21f2e2?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Repair Studio",
+    category: "Face",
+    sku: "BS-0005",
+    description:
+      "Overnight facial oil blend to support a nourished look by morning. Smooth texture with a soft finish.",
+    size: "30ml",
+    weight: "30g",
+    images: [
+      "https://images.unsplash.com/photo-1611930022073-5f4f6c21f2e2?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 6,
+    name: "Soothing Toner",
+    price: 9900,
+    discountPercent: 12,
+    inSale: true,
+    stockCount: 18,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1585232351009-aa87416fca90?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Calm Skin",
+    category: "Face",
+    sku: "BS-0006",
+    description:
+      "Refreshing toner made for a comfortable feel. Preps skin for the next steps in your routine.",
+    size: "200ml",
+    weight: "200g",
+    images: [
+      "https://images.unsplash.com/photo-1585232351009-aa87416fca90?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 7,
+    name: "SPF 50+ Shield",
+    price: 21000,
+    discountPercent: 22,
+    inSale: true,
+    stockCount: 0,
+    outOfStock: true,
+    image:
+      "https://images.unsplash.com/photo-1620916566653-8fd8f4c86b2b?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Shield",
+    category: "Face",
+    sku: "BS-0007",
+    description:
+      "High-protection SPF 50+ formula designed for daily wear. Lightweight feel with a comfortable finish.",
+    size: "50ml",
+    weight: "50g",
+    images: [
+      "https://images.unsplash.com/photo-1620916566653-8fd8f4c86b2b?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 8,
+    name: "AHA Exfoliating Pad",
+    price: 16500,
+    discountPercent: 14,
+    inSale: true,
+    stockCount: 5,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1612810436541-15f7a2f29f8c?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Glow Pads",
+    category: "Face",
+    sku: "BS-0008",
+    description:
+      "Exfoliating pads with AHA to help refine the look of texture. Convenient and easy to use.",
+    size: "60 pads",
+    weight: "N/A",
+    images: [
+      "https://images.unsplash.com/photo-1612810436541-15f7a2f29f8c?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 9,
+    name: "Lip Butter Balm",
+    price: 6500,
+    discountPercent: 8,
+    inSale: true,
+    stockCount: 22,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Butter Lips",
+    category: "Face",
+    sku: "BS-0009",
+    description:
+      "Rich lip balm with a buttery feel for daily comfort. Smooth application with a soft sheen.",
+    size: "10g",
+    weight: "10g",
+    images: [
+      "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+  {
+    id: 10,
+    name: "Clay Detox Mask",
+    price: 14000,
+    discountPercent: 16,
+    inSale: true,
+    stockCount: 2,
+    outOfStock: false,
+    image:
+      "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=1200&auto=format&fit=crop",
+    paymentProvider: "CocoPay",
+    minInstallments: 3,
+
+    // ✅ added fields
+    brand: "Detox Lab",
+    category: "Face",
+    sku: "BS-0010",
+    description:
+      "Clay mask designed to leave skin feeling fresh and clean. Ideal as a weekly reset step.",
+    size: "100ml",
+    weight: "100g",
+    images: [
+      "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=1200&auto=format&fit=crop",
+    ],
+  },
+];
+
+export const productFaq = [
+  {
+    id: "f1",
+    productId: 1,
+    q: "Is this suitable for sensitive skin?",
+    a: "Yes, it’s designed to be gentle and hydrating. Patch test is recommended if you have very reactive skin.",
+  },
+  {
+    id: "f2",
+    productId: 1,
+    q: "How often can I use it?",
+    a: "Daily use is fine — morning and night depending on your routine.",
+  },
+  {
+    id: "f3",
+    productId: 4,
+    q: "How long to see results?",
+    a: "Many users notice improved glow in 2–4 weeks with consistent use.",
+  },
+  {
+    id: "f4",
+    productId: 10,
+    q: "How often should I use the detox mask?",
+    a: "1–2 times per week is ideal as a weekly reset step.",
+  },
+];
+
+export const productReviews = [
+  {
+    id: "r1",
+    productId: 1,
+    name: "Nadeesha",
+    rating: 5,
+    date: "2025-10-10",
+    comment: "Super smooth and moisturizing. I noticed a difference in a week.",
+    verified: true,
+  },
+  {
+    id: "r2",
+    productId: 1,
+    name: "Amal",
+    rating: 4,
+    date: "2025-10-18",
+    comment: "Good texture and non-greasy. Smells nice too.",
+    verified: false,
+  },
+  {
+    id: "r3",
+    productId: 2,
+    name: "Sahan",
+    rating: 5,
+    date: "2025-09-22",
+    comment: "Very hydrating. Wish it was in stock more often!",
+    verified: true,
+  },
+  {
+    id: "r4",
+    productId: 4,
+    name: "Ishara",
+    rating: 4,
+    date: "2025-11-01",
+    comment: "Brightening effect is real. Packaging looks premium.",
+    verified: true,
+  },
+  {
+    id: "r5",
+    productId: 10,
+    name: "Tharindu",
+    rating: 4,
+    date: "2025-11-20",
+    comment: "Great weekly reset mask. Skin feels clean and refreshed.",
+    verified: true,
   },
 ];

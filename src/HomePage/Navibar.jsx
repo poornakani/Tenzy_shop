@@ -1,21 +1,82 @@
-import React, { useState } from "react";
-import { assets } from "@/const";
+import React, { useEffect, useRef, useState } from "react";
+import { assets, bestSellingProducts } from "@/const";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import ProductSearchDropdown from "@/Widgets/ProductSearchDropdown";
+import { useWishlist } from "@/context/WishlistContext";
+import { useNavigate, Link } from "react-router-dom";
+
+gsap.registerPlugin(ScrollTrigger);
 
 const Navibar = () => {
   const [open, setOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { wishlistCount } = useWishlist();
+  const navigate = useNavigate();
+
+  // refs for gsap color change only
+  const navInnerRef = useRef(null);
+
+  // keep your existing look as "normal"
+  const NORMAL_BG = "rgba(255,255,255,0.10)"; // bg-white/10
+  const NORMAL_BORDER = "rgba(255,255,255,0.15)"; // border-white/15
+
+  // change only while scrolling (more visible)
+  const SCROLL_BG = "rgba(17,24,39,0.88)";
+  const SCROLL_BORDER = "rgba(255,255,255,0.22)";
+
+  useEffect(() => {
+    // initial
+    gsap.set(navInnerRef.current, {
+      backgroundColor: NORMAL_BG,
+      borderColor: NORMAL_BORDER,
+    });
+
+    const st = ScrollTrigger.create({
+      start: 0,
+      end: 999999,
+      onUpdate: () => {
+        if (!navInnerRef.current) return;
+
+        if (window.scrollY > 0) {
+          gsap.to(navInnerRef.current, {
+            backgroundColor: SCROLL_BG,
+            borderColor: SCROLL_BORDER,
+            duration: 0.2,
+            overwrite: "auto",
+          });
+        } else {
+          gsap.to(navInnerRef.current, {
+            backgroundColor: NORMAL_BG,
+            borderColor: NORMAL_BORDER,
+            duration: 0.2,
+            overwrite: "auto",
+          });
+        }
+      },
+    });
+
+    return () => st.kill();
+  }, []);
 
   return (
-    <div className="relative w-full z-10">
+    // ✅ fixed on top when scrolling
+    <div className="fixed top-0 left-0 w-full z-50">
       <nav className="mx-auto w-full max-w-7xl mt-5 px-4 sm:px-6">
-        <div className="flex h-16 items-center justify-between border px-4 rounded-2xl  border-white/15 bg-white/10 backdrop-blur-md">
+        <div
+          ref={navInnerRef}
+          className="flex h-16 items-center justify-between border px-4 rounded-2xl  border-white/15 bg-white/10 backdrop-blur-md"
+        >
           {/* Left: Logo */}
-          <div className="flex items-center ">
-            <img
-              src={assets.logo}
-              alt="Logo"
-              className="h-10 w-auto object-contain"
-            />
-          </div>
+          <Link to="/home">
+            <div className="flex items-center cursor-pointer">
+              <img
+                src={assets.logo}
+                alt="Logo"
+                className="h-10 w-auto object-contain"
+              />
+            </div>
+          </Link>
 
           {/* Center: Links (Desktop only) */}
           <div className="hidden md:flex flex-1 items-center justify-center gap-10">
@@ -32,12 +93,38 @@ const Navibar = () => {
 
           {/* Right: Icons (always visible) */}
           <div className="flex items-center gap-4">
-            <button className="hidden md:block p-2" aria-label="Search">
-              <img src={assets.search} className="h-6 w-6" alt="Search" />
-            </button>
+            <div className="relative">
+              <button
+                className="hidden md:block p-2"
+                aria-label="Search"
+                onClick={() => setSearchOpen((v) => !v)}
+              >
+                <img src={assets.search} className="h-6 w-6" alt="Search" />
+              </button>
 
-            <button className="p-2" aria-label="Wishlist">
+              {searchOpen && (
+                <ProductSearchDropdown
+                  products={bestSellingProducts}
+                  onClose={() => setSearchOpen(false)}
+                />
+              )}
+            </div>
+
+            <button
+              className="p-2 relative"
+              aria-label="Wishlist"
+              onClick={() => navigate("/wishlist")}
+            >
               <img src={assets.heart} className="h-6 w-6" alt="Wishlist" />
+              {wishlistCount > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px]
+                 rounded-full bg-red-600 text-white text-[10px]
+                 flex items-center justify-center font-semibold"
+                >
+                  {wishlistCount}
+                </span>
+              )}
             </button>
 
             <button className="p-2" aria-label="Cart">
@@ -61,6 +148,7 @@ const Navibar = () => {
           </button>
         </div>
       </nav>
+
       {/* Full screen Mobile Menu */}
       {open && (
         <div className="fixed inset-0 z-50 md:hidden bg-black/70">
