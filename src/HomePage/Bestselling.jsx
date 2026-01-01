@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { bestSellingProducts } from "@/const";
 import QuickViewModal from "@/Widgets/QuickViewModal";
 import { useWishlist } from "@/context/WishlistContext";
 import { Heart, Eye } from "lucide-react";
+import { SellingProducts } from "@/ProductsJson";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -81,7 +81,7 @@ const BestSelling = () => {
 
         {/* 2-row layout (10 items → 2 rows of 5 on xl screens) */}
         <div className="mt-8 grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {bestSellingProducts.map((p) => {
+          {SellingProducts.slice(0, 10).map((p) => {
             const discounted = calcDiscounted(p.price, p.discountPercent);
             const pWithComputed = { ...p, discountedPrice: discounted };
             return (
@@ -164,18 +164,6 @@ const BestSelling = () => {
                           className="text-white transition-transform duration-300"
                         />
                       </button>
-
-                      {/* <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onQuickView(pWithComputed);
-                        }}
-                        className="flex-1 rounded-xl bg-black/70 px-3 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-black/80"
-                      >
-                        Quick View
-                      </button> */}
                     </div>
 
                     {/* Mobile: always visible icon buttons at bottom */}
@@ -229,11 +217,11 @@ const BestSelling = () => {
                           console.log("Add to cart:", p.id);
                         }}
                         className={`flex-1 rounded-xl px-3 py-2 shadow-sm active:scale-95 transition backdrop-blur
-        ${
-          p.outOfStock
-            ? "bg-slate-200/90 text-slate-500 cursor-not-allowed"
-            : "bg-slate-900/90 text-white"
-        }`}
+                                  ${
+                                    p.outOfStock
+                                      ? "bg-slate-200/90 text-slate-500 cursor-not-allowed"
+                                      : "bg-slate-900/90 text-white"
+                                  }`}
                         aria-label="Add to cart"
                       >
                         <span className="flex items-center justify-center gap-2 text-sm font-semibold">

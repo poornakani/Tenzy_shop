@@ -3,15 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-import Header from "../HomePage/Header";
 import {
-  bestSellingProducts,
   productReviews as reviewsTable,
   productFaq as faqTable,
-} from "@/const";
+} from "@/ProductsJson";
 
 import { useWishlist } from "../Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
+import { SellingProducts } from "@/ProductsJson";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -49,7 +48,7 @@ const ProductDetails = () => {
 
   //  Find product + compute discountedPrice + normalize images
   const product = useMemo(() => {
-    const found = bestSellingProducts.find((p) => p.id === productId);
+    const found = SellingProducts.find((p) => p.id === productId);
     if (!found) return null;
 
     const discountedPrice = calcDiscounted(found.price, found.discountPercent);
@@ -106,11 +105,10 @@ const ProductDetails = () => {
   // Similar products (by category)
   const similarProducts = useMemo(() => {
     if (!product) return [];
-    return bestSellingProducts
-      .filter(
-        (p) =>
-          p.id !== product.id && (p.category || "Skincare") === product.category
-      )
+    return SellingProducts.filter(
+      (p) =>
+        p.id !== product.id && (p.category || "Skincare") === product.category
+    )
       .slice(0, 6)
       .map((p) => ({
         ...p,
@@ -490,7 +488,7 @@ const ProductDetails = () => {
           <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {(similarProducts.length
               ? similarProducts
-              : bestSellingProducts.slice(0, 4)
+              : SellingProducts.slice(0, 4)
             ).map((sp) => (
               <button
                 key={sp.id}

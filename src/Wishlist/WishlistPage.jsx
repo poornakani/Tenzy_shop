@@ -1,9 +1,9 @@
 // src/pages/WishlistPage.jsx
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { bestSellingProducts } from "@/const";
 import { useWishlist } from "@/Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
+import { SellingProducts } from "@/ProductsJson";
 
 function formatLKR(value) {
   return new Intl.NumberFormat("en-LK").format(value);
@@ -20,13 +20,11 @@ const WishlistPage = () => {
 
   // Build wishlisted products list from your data source
   const items = useMemo(() => {
-    const ids = wishlistIds; // Set
-    return bestSellingProducts
-      .filter((p) => ids.has(p.id))
-      .map((p) => ({
-        ...p,
-        discountedPrice: calcDiscounted(p.price, p.discountPercent),
-      }));
+    const ids = wishlistIds;
+    return SellingProducts.filter((p) => ids.has(p.id)).map((p) => ({
+      ...p,
+      discountedPrice: calcDiscounted(p.price, p.discountPercent),
+    }));
   }, [wishlistIds]);
 
   const goToProduct = (p) => navigate(`/product/${p.id}`);

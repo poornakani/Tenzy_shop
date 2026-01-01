@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { assets, bestSellingProducts } from "@/const";
+import { assets } from "@/const";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import ProductSearchDropdown from "@/Widgets/ProductSearchDropdown";
 import { useWishlist } from "@/context/WishlistContext";
 import { useNavigate, Link } from "react-router-dom";
+import { SellingProducts } from "@/ProductsJson";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -104,7 +105,7 @@ const Navibar = () => {
 
               {searchOpen && (
                 <ProductSearchDropdown
-                  products={bestSellingProducts}
+                  products={SellingProducts}
                   onClose={() => setSearchOpen(false)}
                 />
               )}

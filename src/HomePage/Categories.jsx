@@ -1,7 +1,9 @@
 import React, { useRef } from "react";
 import { CatSelections } from "@/const";
+import { useNavigate } from "react-router-dom";
 
 const Categories = () => {
+  const navigate = useNavigate();
   const trackRef = useRef(null);
 
   const scrollByCard = (direction) => {
@@ -80,6 +82,7 @@ const Categories = () => {
                 className="absolute bottom-20 left-5 right-5 z-10 rounded-2xl bg-white/90 backdrop-blur
                   px-5 py-3 text-sm font-medium text-black hover:bg-white transition whitespace-nowrap
                    hover:shadow-lg hover:shadow-amber-500/30"
+                onClick={() => navigate(`/products?category=${item.category}`)}
               >
                 {item.title}
               </button>
