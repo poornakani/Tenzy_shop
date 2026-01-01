@@ -123,7 +123,11 @@ const Categories = () => {
                 </p>
               )}
 
-              <button className="absolute bottom-4 inset-x-4 z-10 rounded-2xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-gray-200">
+              <button
+                className="absolute bottom-4 inset-x-4 z-10 rounded-2xl bg-white px-4 py-2 text-sm font-medium 
+              text-black hover:bg-gray-200"
+                onClick={() => navigate(`/products?category=${item.category}`)}
+              >
                 {item.title}
               </button>
             </div>

@@ -27,33 +27,38 @@ const Navibar = () => {
   const SCROLL_BORDER = "rgba(255,255,255,0.22)";
 
   useEffect(() => {
-    // initial
+    if (!navInnerRef.current) return;
+
+    // iOS Safari stability tweaks
     gsap.set(navInnerRef.current, {
       backgroundColor: NORMAL_BG,
       borderColor: NORMAL_BORDER,
+      willChange: "background-color, border-color, transform",
+      force3D: true,
     });
 
+    // Trigger only when scrolling away from top
     const st = ScrollTrigger.create({
-      start: 0,
+      trigger: document.documentElement,
+      start: "top top-=1", // once you scroll 1px
       end: 999999,
-      onUpdate: () => {
-        if (!navInnerRef.current) return;
 
-        if (window.scrollY > 0) {
-          gsap.to(navInnerRef.current, {
-            backgroundColor: SCROLL_BG,
-            borderColor: SCROLL_BORDER,
-            duration: 0.2,
-            overwrite: "auto",
-          });
-        } else {
-          gsap.to(navInnerRef.current, {
-            backgroundColor: NORMAL_BG,
-            borderColor: NORMAL_BORDER,
-            duration: 0.2,
-            overwrite: "auto",
-          });
-        }
+      onEnter: () => {
+        gsap.to(navInnerRef.current, {
+          backgroundColor: SCROLL_BG,
+          borderColor: SCROLL_BORDER,
+          duration: 0.18,
+          overwrite: "auto",
+        });
+      },
+
+      onLeaveBack: () => {
+        gsap.to(navInnerRef.current, {
+          backgroundColor: NORMAL_BG,
+          borderColor: NORMAL_BORDER,
+          duration: 0.18,
+          overwrite: "auto",
+        });
       },
     });
 
