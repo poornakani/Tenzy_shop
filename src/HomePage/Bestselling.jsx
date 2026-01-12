@@ -5,6 +5,9 @@ import QuickViewModal from "@/Widgets/QuickViewModal";
 import { useWishlist } from "@/context/WishlistContext";
 import { Heart, Eye } from "lucide-react";
 import { SellingProducts } from "@/ProductsJson";
+import { useCart } from "@/Context/CartContext";
+import { useToast } from "@/Context/ToastContext";
+import { useNavigate } from "react-router-dom";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -22,6 +25,9 @@ const BestSelling = () => {
   const [quickViewOpen, setQuickViewOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const { toggleWishlist, isWishlisted } = useWishlist();
+  const { addToCart } = useCart();
+  const { showToast } = useToast();
+  const navigation = useNavigate();
 
   const onQuickView = (p) => {
     setSelectedProduct(p);
@@ -97,7 +103,7 @@ const BestSelling = () => {
                     className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]
                       ${p.outOfStock ? "blur-[2px] grayscale" : ""}`}
                   />
-                  {/* Hover actions */}
+
                   {/* Actions overlay */}
                   <div className="absolute inset-0 z-20 flex items-end justify-center p-3">
                     {/* Desktop (unchanged behavior): shows on hover */}
@@ -304,12 +310,23 @@ const BestSelling = () => {
 
                     <button
                       disabled={p.outOfStock}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        addToCart(pWithComputed, 1);
+                        showToast({
+                          title: "Added to cart",
+                          message: `${pWithComputed.name} × 1`,
+                          image: pWithComputed.image,
+                        });
+                      }}
                       className={`rounded-xl px-3 py-2 text-xs font-semibold transition
-                        ${
-                          p.outOfStock
-                            ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                            : "bg-slate-900 text-white hover:bg-slate-800"
-                        }`}
+                                ${
+                                  p.outOfStock
+                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                    : "bg-slate-900 text-white hover:bg-slate-800 active:scale-95"
+                                }`}
                     >
                       Add to cart
                     </button>
@@ -323,16 +340,19 @@ const BestSelling = () => {
       <div className="flex justify-center p-10">
         <button
           className="
-      relative overflow-hidden
-      rounded-2xl px-10 py-4
-      font-semibold tracking-wide
-      text-white
-      bg-linear-to-r from-amber-400 to-orange-500
-      shadow-lg shadow-amber-500/30
-      transition-all duration-300
-      hover:scale-105 hover:shadow-xl hover:shadow-amber-500/50
-      active:scale-95
-    "
+                  relative overflow-hidden
+                  rounded-2xl px-10 py-4
+                  font-semibold tracking-wide
+                  text-white
+                  bg-linear-to-r from-amber-400 to-orange-500
+                  shadow-lg shadow-amber-500/30
+                  transition-all duration-300
+                  hover:scale-105 hover:shadow-xl hover:shadow-amber-500/50
+                  active:scale-95
+                "
+          onClick={() => {
+            navigation(`/products`);
+          }}
         >
           See more products
         </button>
@@ -347,6 +367,7 @@ const BestSelling = () => {
         onToggleWishlist={(p) => toggleWishlist(p)}
         onAddToCart={(p, qty) => {
           // your add to cart logic
+          addToCart(p, qty);
           console.log("Add to cart:", p.id, "qty:", qty);
         }}
       />

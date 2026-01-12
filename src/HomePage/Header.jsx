@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-
+import { useNavigate } from "react-router-dom";
 import { assets, slides } from "@/const";
-import Navibar from "./Navibar";
+import gsap from "gsap";
 
 const Header = () => {
   const images = [
@@ -12,6 +12,16 @@ const Header = () => {
   ];
 
   const [index, setIndex] = useState(0);
+  const navigate = useNavigate();
+
+  const navProductpage = () => {
+    gsap.to("body", {
+      opacity: 0,
+      duration: 0.4,
+      ease: "power2.inOut",
+      onComplete: () => navigate(`/products`),
+    });
+  };
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -37,11 +47,6 @@ const Header = () => {
         <div className="absolute inset-0 bg-black/50" />
       </div>
 
-      {/* Navbar on top */}
-      <div className="absolute top-0 left-0 w-full z-20">
-        <Navibar />
-      </div>
-
       {/* Hero content */}
       <div className="relative z-10 h-full w-full flex items-center px-5 md:px-50 lg:px-60">
         <div className="container mx-auto px-6 md:px-20">
@@ -56,11 +61,13 @@ const Header = () => {
           </p>
 
           <div className="mt-8 flex gap-4">
-            <button className="rounded-full bg-white px-6 py-3 text-black font-medium hover:bg-white/90 transition">
+            <button
+              className="rounded-full  bg-white px-30 py-3 text-black font-medium hover:bg-white/90 transition"
+              onClick={() => {
+                navigate(`/products`);
+              }}
+            >
               Shop Now
-            </button>
-            <button className="rounded-full border border-white/40 px-6 py-3 text-white font-medium hover:bg-white/10 transition">
-              Explore
             </button>
           </div>
         </div>

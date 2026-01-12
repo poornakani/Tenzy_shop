@@ -13,7 +13,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Aveeno",
+    brandId: 3,
     category: "Skin",
     sku: "BS-0001",
     description:
@@ -21,6 +21,7 @@ export const SellingProducts = [
     size: "354ml",
     weight: "354g",
     images: [sellingpro.aveeno],
+    concernIds: [4],
   },
   {
     id: 2,
@@ -35,7 +36,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Hydra",
+    brandId: "Hydra",
     category: "Face",
     sku: "BS-0002",
     description:
@@ -45,6 +46,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [4, 6],
   },
   {
     id: 3,
@@ -59,7 +61,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Rose Care",
+    brandId: 2,
     category: "Face",
     sku: "BS-0003",
     description:
@@ -69,6 +71,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1620916566393-7c3a4a4f3f10?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [1, 4],
   },
   {
     id: 4,
@@ -83,7 +86,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 4,
 
-    brand: "Bright Lab",
+    brandId: 4,
     category: "Face",
     sku: "BS-0004",
     description:
@@ -93,6 +96,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1629198726018-41b7b7a4b3b2?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [3, 4],
   },
   {
     id: 5,
@@ -107,7 +111,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Repair Studio",
+    brandId: 1,
     category: "Face",
     sku: "BS-0005",
     description:
@@ -117,6 +121,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1611930022073-5f4f6c21f2e2?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [5, 1, 4],
   },
   {
     id: 6,
@@ -131,7 +136,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Calm Skin",
+    brandId: 2,
     category: "Face",
     sku: "BS-0006",
     description:
@@ -141,6 +146,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1585232351009-aa87416fca90?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [4, 6, 2],
   },
   {
     id: 7,
@@ -155,7 +161,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Shield",
+    brandId: 5,
     category: "Face",
     sku: "BS-0007",
     description:
@@ -165,6 +171,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1620916566653-8fd8f4c86b2b?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [4],
   },
   {
     id: 8,
@@ -179,7 +186,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Glow Pads",
+    brandId: 5,
     category: "Face",
     sku: "BS-0008",
     description:
@@ -189,6 +196,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1612810436541-15f7a2f29f8c?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [1],
   },
   {
     id: 9,
@@ -203,7 +211,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Butter Lips",
+    brandId: 5,
     category: "Face",
     sku: "BS-0009",
     description:
@@ -213,6 +221,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [2, 3, 5],
   },
   {
     id: 10,
@@ -227,7 +236,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Detox Lab",
+    brandId: 1,
     category: "Face",
     sku: "BS-0010",
     description:
@@ -237,6 +246,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [2, 3, 4],
   },
   {
     id: 11,
@@ -251,7 +261,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "ClearFix",
+    brandId: 2,
     category: "Face",
     sku: "BS-0011",
     description:
@@ -261,6 +271,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1612810436541-15f7a2f29f8c?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [4],
   },
   {
     id: 12,
@@ -275,7 +286,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Hydra Lab",
+    brandId: 3,
     category: "Face",
     sku: "BS-0012",
     description:
@@ -285,6 +296,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1585232351009-aa87416fca90?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [6],
   },
   {
     id: 13,
@@ -299,7 +311,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "SoftClean",
+    brandId: 5,
     category: "Face",
     sku: "BS-0013",
     description:
@@ -309,6 +321,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [1, 6],
   },
   {
     id: 14,
@@ -323,7 +336,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 4,
 
-    brand: "Silk Hair",
+    brandId: 2,
     category: "Head",
     sku: "BS-0014",
     description:
@@ -333,6 +346,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [4],
   },
   {
     id: 15,
@@ -347,8 +361,8 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "FreshScalp",
-    category: "Head",
+    brandId: 6,
+    category: "Sun",
     sku: "BS-0015",
     description:
       "Cooling scalp shampoo for a refreshed feel. Cleanses gently while supporting a balanced scalp routine.",
@@ -357,6 +371,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1620916566653-8fd8f4c86b2b?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [3, 2, 4],
   },
   {
     id: 16,
@@ -371,8 +386,8 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Repair Studio",
-    category: "Skin",
+    brandId: 3,
+    category: "Sun",
     sku: "BS-0016",
     description:
       "Rich hand cream for dry hands. Smooth finish and comfortable daily moisture.",
@@ -381,6 +396,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1629198726018-41b7b7a4b3b2?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [6],
   },
   {
     id: 17,
@@ -395,7 +411,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Glow Body",
+    brandId: 7,
     category: "Skin",
     sku: "BS-0017",
     description:
@@ -419,7 +435,7 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brand: "Aloe Calm",
+    brandId: 3,
     category: "Skin",
     sku: "BS-0018",
     description:
@@ -429,6 +445,7 @@ export const SellingProducts = [
     images: [
       "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1200&auto=format&fit=crop",
     ],
+    concernIds: [1, 2, 5, 4],
   },
 ];
 
@@ -592,4 +609,28 @@ export const productReviews = [
     comment: "Cooling and soothing. Wish it was in stock again!",
     verified: false,
   },
+];
+
+export const concerns = [
+  { concernID: 1, concernType: "All Types", category: null },
+  { concernID: 2, concernType: "Aging & Wrinkling", category: "Face" },
+  { concernID: 3, concernType: "Acne Treatment", category: "Face" },
+  { concernID: 4, concernType: "Sun Damage", category: "Skin" },
+  { concernID: 5, concernType: "Dryness & Hydration", category: "Skin" },
+  { concernID: 6, concernType: "Dark Spots & Brightening", category: "Face" },
+  { concernID: 7, concernType: "Sensitive Skin", category: "Skin" },
+];
+
+export const BrandsList = [
+  { id: 1, name: "The Ordinary", logo: "./images/Brandslogo/brand1.png" },
+  { id: 2, name: "CeraVe", logo: "./images/Brandslogo/brand2.png" },
+  { id: 3, name: "Aveeno", logo: "./images/Brandslogo/brand3.png" },
+  { id: 4, name: "L'Oréal", logo: "./images/Brandslogo/brand4.png" },
+  {
+    id: 5,
+    name: "Madagascar Centella",
+    logo: "./images/Brandslogo/brand1.png",
+  },
+  { id: 6, name: "Vita C", logo: "./images/Brandslogo/brand2.png" },
+  { id: 7, name: "Prévense", logo: "./images/Brandslogo/brand3.png" },
 ];

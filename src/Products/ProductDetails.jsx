@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useCart } from "@/Context/CartContext";
 
 import {
   productReviews as reviewsTable,
@@ -42,6 +43,7 @@ const ProductDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const wrapRef = useRef(null);
+  const { addToCart } = useCart();
 
   const productId = Number(id);
   const { toggleWishlist, isWishlisted } = useWishlist();
@@ -341,7 +343,13 @@ const ProductDetails = () => {
               <button
                 type="button"
                 disabled={outOfStock}
-                onClick={() => navigate("/cart")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+
+                  addToCart(product, 1);
+                  navigate("/cart");
+                }}
                 className={`rounded-2xl px-5 py-3 text-sm font-semibold transition active:scale-95
                   ${
                     outOfStock

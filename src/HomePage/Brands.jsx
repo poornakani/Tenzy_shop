@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { BrandsList, Testimonials } from "@/const";
+import { Testimonials } from "@/const";
+import { BrandsList } from "@/ProductsJson";
 
 const Stars = ({ value = 5 }) => (
   <div className="flex items-center gap-1">
@@ -105,22 +106,6 @@ const Brands = () => {
           <div className="pointer-events-none absolute top-16 right-16 h-64 w-64 rounded-full bg-[#FAAB36]/40 blur-3xl" />
 
           <div className="relative  mx-auto px-5 sm:px-8 lg:px-12 py-10 sm:py-12">
-            {/* Header */}
-            <div className="text-center">
-              <p className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-xs sm:text-sm font-semibold text-white backdrop-blur-md">
-                Premium skincare brands
-              </p>
-
-              <h2 className="mt-4 text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white drop-shadow-lg">
-                Brands we stock
-              </h2>
-
-              <p className="mt-3 text-sm sm:text-base text-white/85 max-w-2xl mx-auto">
-                Authentic skincare brands with carefully selected products for
-                every skin type.
-              </p>
-            </div>
-
             {/* MARQUEE CONTAINER */}
             <div className="mt-8 sm:mt-10 relative overflow-hidden rounded-2xl bg-white/25 backdrop-blur-xl shadow-xl border border-white/30">
               {/* Side fades (dark gold) */}

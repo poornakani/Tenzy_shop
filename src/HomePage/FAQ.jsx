@@ -3,12 +3,14 @@ import { faqs } from "@/const";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useNavigate } from "react-router-dom";
 
 gsap.registerPlugin(ScrollTrigger);
 
 const FAQ = () => {
   const [openIndex, setOpenIndex] = useState(null);
   const rootRef = useRef(null);
+  const navigator = useNavigate();
 
   useGSAP(
     () => {
@@ -132,12 +134,14 @@ const FAQ = () => {
           </div>
 
           {/* Optional CTA */}
-          <div className="faq-reveal mt-6 flex flex-wrap items-center gap-3">
-            <button className="rounded-full bg-[#f05c26] px-5 py-2.5 text-white text-sm font-semibold hover:opacity-90 transition">
+          <div className="faq-reveal mt-6 flex flex-wrap items-center justify-center">
+            <button
+              className="rounded-full bg-[#f05c26] px-20 py-2.5 text-white text-sm font-semibold hover:opacity-90 transition"
+              onClick={() => {
+                navigator(`/contact`);
+              }}
+            >
               Contact Support
-            </button>
-            <button className="rounded-full border border-slate-300 px-5 py-2.5 text-slate-900 text-sm font-semibold hover:bg-slate-50 transition">
-              View Policies
             </button>
           </div>
         </div>

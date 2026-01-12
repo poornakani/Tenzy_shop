@@ -1,8 +1,10 @@
 import React from "react";
 import { assets } from "@/const";
 import RotatingText from "../Animation/RotatingText";
+import { useNavigate } from "react-router-dom";
 
 const Banner01 = () => {
+  const navigator = useNavigate();
   return (
     <div className="mt-5 mb-5 px-4 sm:px-6 md:mt-20 md:mb-10 md:px-10">
       <section
@@ -64,27 +66,17 @@ const Banner01 = () => {
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               className="
-        w-full sm:w-auto
-        rounded-full bg-teal-500 px-7 py-2.5
-        text-sm sm:text-base font-medium text-white
-        shadow-[0_12px_35px_rgba(45,212,191,0.25)]
-        transition hover:bg-teal-400
-        active:scale-[0.98]
-      "
+            w-full sm:w-auto
+            rounded-full bg-teal-500 px-20 py-2.5
+            text-sm sm:text-base font-medium text-white
+            shadow-[0_12px_35px_rgba(45,212,191,0.25)]
+            transition hover:bg-teal-400
+            active:scale-[0.98]"
+              onClick={() => {
+                navigator(`/products`);
+              }}
             >
               Shop Now
-            </button>
-
-            <button
-              className="
-        w-full sm:w-auto
-        rounded-full border border-teal-300/60 px-7 py-2.5
-        text-sm sm:text-base font-medium text-white
-        transition hover:bg-white/10
-        active:scale-[0.98]
-      "
-            >
-              Explore
             </button>
           </div>
         </div>

@@ -88,7 +88,7 @@ const QuickViewModal = ({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-[999] flex items-center justify-center bg-black/65 px-3 sm:px-4"
+      className="fixed inset-0 z-999 flex items-center justify-center bg-black/65 px-3 sm:px-4"
       onMouseDown={(e) => {
         if (e.target === overlayRef.current) onClose?.();
       }}
@@ -99,15 +99,15 @@ const QuickViewModal = ({
         className="
           w-full bg-white shadow-2xl overflow-hidden
 
-          /* ✅ MOBILE (DO NOT CHANGE) */
-          max-w-[22rem] rounded-2xl
+          /*  MOBILE (DO NOT CHANGE) */
+          max-w-22rem rounded-2xl
 
-          /* ✅ MD+ responsive sizing (smaller, not huge) */
+          /*  MD+ responsive sizing (smaller, not huge) */
           md:max-w-2xl md:rounded-3xl
           lg:max-w-3xl
           xl:max-w-4xl
 
-          /* ✅ prevent being too tall on md+ */
+          /*  prevent being too tall on md+ */
           md:max-h-[85vh] md:overflow-y-auto
         "
       >
