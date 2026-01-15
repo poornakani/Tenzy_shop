@@ -12,6 +12,7 @@ import {
 import { useWishlist } from "../Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
 import { SellingProducts } from "@/ProductsJson";
+import Footer from "@/HomePage/Footer";
 
 gsap.registerPlugin(ScrollTrigger);
 

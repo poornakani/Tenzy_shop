@@ -10,6 +10,7 @@ import { SellingProducts } from "@/ProductsJson";
 import Navibar from "@/HomePage/Navibar";
 import { useCart } from "@/Context/CartContext";
 import { useToast } from "@/Context/ToastContext";
+import Footer from "@/HomePage/Footer";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -995,6 +996,7 @@ const ProductsPage = () => {
           </div>
         </div>
       )}
+      <Footer />
     </div>
   );
 };

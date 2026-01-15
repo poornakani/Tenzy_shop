@@ -5,6 +5,7 @@ import gsap from "gsap";
 import Header from "../HomePage/Header";
 import { useCart } from "../Context/CartContext";
 import Navibar from "@/HomePage/Navibar";
+import Footer from "@/HomePage/Footer";
 
 function formatLKR(value) {
   return new Intl.NumberFormat("en-LK").format(value);
@@ -382,6 +383,7 @@ const CartPage = () => {
           </aside>
         </section>
       </main>
+      <Footer />
     </div>
   );
 };

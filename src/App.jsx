@@ -27,6 +27,10 @@ import CartToastStack from "./Widgets/CartToastStack";
 import ContactUsPage from "./Contact/ContactUsPage";
 import PageTransition from "./Animation/PageTransition";
 import CustomerInfoPage from "./Poliyices/CustomerInfo";
+import BlogPage from "./BlogsPages/BlogPage";
+import BlogDetails from "./BlogsPages/BlogDetails";
+import SignInPage from "./Authenticator/Pages/SignInPage";
+import RegisterPage from "./Authenticator/Pages/RegisterPage";
 
 const Home = () => {
   return (
@@ -61,6 +65,10 @@ const App = () => {
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/contact" element={<ContactUsPage />} />
                 <Route path="/help" element={<CustomerInfoPage />} />
+                <Route path="/blog" element={<BlogPage />} />
+                <Route path="/blog/:id" element={<BlogDetails />} />
+                <Route path="/signin" element={<SignInPage />} />
+                <Route path="/register" element={<RegisterPage />} />
               </Routes>
               <CartToastStack />
             </CartProvider>

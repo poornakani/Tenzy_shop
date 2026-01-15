@@ -8,6 +8,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { SellingProducts, concerns } from "@/ProductsJson";
 import MobileProductSearchDropdown from "@/Widgets/MobileProductSearchDropdown";
 import { useCart } from "@/Context/CartContext";
+import { useIconHover } from "@/Animation/IconAnimation";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -29,6 +30,15 @@ const Navibar = () => {
   const navInnerRef = useRef(null);
   const concernBtnRef = useRef(null);
   const concernMenuRef = useRef(null);
+
+  const searchRef = useRef(null);
+  const wishRef = useRef(null);
+  const cartRef = useRef(null);
+  const accountRef = useRef(null);
+  useIconHover(searchRef);
+  useIconHover(wishRef);
+  useIconHover(cartRef);
+  useIconHover(accountRef);
 
   // Highlight selected concern from URL (?concern=aging)
   const sp = new URLSearchParams(location.search);
@@ -218,7 +228,7 @@ const Navibar = () => {
             </Link>
 
             <Link
-              to="/beauty-tips"
+              to="/blog"
               className="text-sm font-medium text-white hover:opacity-80"
             >
               Beauty Tips
@@ -236,6 +246,7 @@ const Navibar = () => {
           <div className="flex items-center gap-2 sm:gap-4">
             <div className="relative">
               <button
+                ref={searchRef}
                 className="hidden md:block p-2"
                 aria-label="Search"
                 onClick={() => {
@@ -255,6 +266,7 @@ const Navibar = () => {
             </div>
 
             <button
+              ref={wishRef}
               className="p-2 relative"
               aria-label="Wishlist"
               onClick={() => navigate("/wishlist")}
@@ -272,6 +284,7 @@ const Navibar = () => {
             </button>
 
             <button
+              ref={cartRef}
               className="p-2 relative"
               aria-label="Cart"
               onClick={() => navigate("/cart")}
@@ -289,7 +302,12 @@ const Navibar = () => {
               )}
             </button>
 
-            <button className="p-2" aria-label="Account">
+            <button
+              ref={accountRef}
+              className="p-2"
+              aria-label="Account"
+              onClick={() => navigate("/signin")}
+            >
               <img src={assets.man} className="h-6 w-6" alt="Account" />
             </button>
 
@@ -451,14 +469,6 @@ const Navibar = () => {
                   </details>
 
                   <Link
-                    to="/best-sellers"
-                    className="rounded-2xl px-4 py-3 bg-white/10 hover:bg-white/15 transition"
-                    onClick={() => setOpen(false)}
-                  >
-                    Best Sellers
-                  </Link>
-
-                  <Link
                     to="/new-arrivals"
                     className="rounded-2xl px-4 py-3 bg-white/10 hover:bg-white/15 transition"
                     onClick={() => setOpen(false)}
@@ -467,7 +477,7 @@ const Navibar = () => {
                   </Link>
 
                   <Link
-                    to="/beauty-tips"
+                    to="/blog"
                     className="rounded-2xl px-4 py-3 bg-white/10 hover:bg-white/15 transition"
                     onClick={() => setOpen(false)}
                   >

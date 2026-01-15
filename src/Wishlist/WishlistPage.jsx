@@ -71,7 +71,7 @@ const WishlistPage = () => {
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button
                 type="button"
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/products")}
                 className="rounded-2xl px-5 py-3 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 transition"
               >
                 Continue shopping
