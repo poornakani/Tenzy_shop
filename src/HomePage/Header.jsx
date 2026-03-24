@@ -150,20 +150,35 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                   boxShadow: "0 8px 80px rgba(0,0,0,0.5)",
                 }}
               >
-                {/* Hero YouTube video — covers card like object-cover */}
-                <iframe
-                  title="Hero video"
-                  src="https://www.youtube.com/embed/lnTWVAyMHg0?autoplay=1&mute=1&loop=1&playlist=lnTWVAyMHg0&controls=0&rel=0&modestbranding=1&playsinline=1"
-                  allow="autoplay; encrypted-media"
-                  className="absolute border-0 pointer-events-none"
-                  style={{
-                    top: "50%",
-                    left: "50%",
-                    width: `${Math.max(mediaW, (mediaH * 16) / 9)}px`,
-                    height: `${Math.max(mediaH, (mediaW * 9) / 16)}px`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                />
+                {/* Mobile: crossfading slide images */}
+                {isMobile && bgSlides.map((slide, i) => (
+                  <motion.img
+                    key={slide.image}
+                    src={slide.image}
+                    alt={slide.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: i === slideIndex ? 1 : 0 }}
+                    transition={{ duration: 1.2, ease: "easeInOut" }}
+                  />
+                ))}
+
+                {/* Tablet / Desktop: YouTube video */}
+                {!isMobile && (
+                  <iframe
+                    title="Hero video"
+                    src="https://www.youtube.com/embed/lnTWVAyMHg0?autoplay=1&mute=1&loop=1&playlist=lnTWVAyMHg0&controls=0&rel=0&modestbranding=1&playsinline=1"
+                    allow="autoplay; encrypted-media"
+                    className="absolute border-0 pointer-events-none"
+                    style={{
+                      top: "50%",
+                      left: "50%",
+                      width: `${Math.max(mediaW, (mediaH * 16) / 9)}px`,
+                      height: `${Math.max(mediaH, (mediaW * 9) / 16)}px`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
+                )}
 
                 {/* Dark shade — full at rest so text/button are readable, clears as card expands */}
                 <motion.div
