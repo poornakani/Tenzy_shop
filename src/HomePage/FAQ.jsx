@@ -136,7 +136,7 @@ const FAQ = () => {
           {/* Optional CTA */}
           <div className="faq-reveal mt-6 flex flex-wrap items-center justify-center">
             <button
-              className="rounded-full bg-[#f05c26] px-20 py-2.5 text-white text-sm font-semibold hover:opacity-90 transition"
+              className="rounded-full bg-tenzy-orange px-8 sm:px-16 py-2.5 text-white text-sm font-semibold hover:opacity-90 transition"
               onClick={() => {
                 navigator(`/contact`);
               }}

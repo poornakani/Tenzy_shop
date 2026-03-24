@@ -97,8 +97,8 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
   }, [scrollProgress, mediaFullyExpanded, touchStartY]);
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const mediaW = 750 + scrollProgress * (isMobile ? 230 : 830);
-  const mediaH = 600 + scrollProgress * (isMobile ? 0 : 200);
+  const mediaW = isMobile ? 300 + scrollProgress * 680 : 750 + scrollProgress * 830;
+  const mediaH = isMobile ? 380 + scrollProgress * 220 : 600 + scrollProgress * 200;
   const shiftVw = scrollProgress * (isMobile ? 160 : 140);
 
   const current = bgSlides[slideIndex] ?? {};
@@ -231,7 +231,7 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                 {/* Skin Consultation button — visible on the hero before scrolling */}
                 <motion.button
                   onClick={() => navigate("/contact")}
-                  className="mt-8 rounded-full border-2 border-tenzy-teal text-tenzy-teal text-base md:text-lg font-bold px-10 md:px-14 py-4 md:py-5 hover:bg-tenzy-teal hover:text-white transition-all active:scale-95 backdrop-blur-sm bg-white/5 shadow-lg shadow-tenzy-teal/20"
+                  className="mt-6 w-[85vw] sm:w-auto rounded-full border-2 border-tenzy-teal text-tenzy-teal text-sm sm:text-base md:text-lg font-bold px-8 sm:px-10 md:px-14 py-3.5 sm:py-4 md:py-5 hover:bg-tenzy-teal hover:text-white transition-all active:scale-95 backdrop-blur-sm bg-white/5 shadow-lg shadow-tenzy-teal/20"
                   style={{ textShadow: "none" }}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -301,10 +301,10 @@ const HeroContent = () => {
         }}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 min-h-[580px] relative z-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 md:min-h-[580px] relative z-10">
         {/* Left: text */}
         <motion.div
-          className="flex flex-col justify-center px-10 py-16 lg:px-16 xl:px-20"
+          className="flex flex-col justify-center px-6 py-10 sm:px-10 sm:py-14 md:py-16 lg:px-16 xl:px-20"
           initial={{ opacity: 0, x: -55 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true, amount: 0.2 }}

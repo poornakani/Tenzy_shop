@@ -67,7 +67,7 @@ const Banner01 = () => {
             <button
               className="
             w-full sm:w-auto
-            rounded-full bg-teal-500 px-20 py-2.5
+            rounded-full bg-teal-500 px-8 sm:px-16 py-2.5
             text-sm sm:text-base font-medium text-white
             shadow-[0_12px_35px_rgba(45,212,191,0.25)]
             transition hover:bg-teal-400

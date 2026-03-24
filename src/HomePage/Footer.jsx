@@ -8,7 +8,7 @@ const Footer = () => {
     <footer className="bg-white border-t border-zinc-100">
       <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 xl:px-28">
         {/* ── Main columns ──────────────────────────────────────────── */}
-        <div className="flex flex-col md:flex-row gap-12 py-14 border-b border-zinc-100">
+        <div className="flex flex-col md:flex-row gap-8 md:gap-12 py-10 md:py-14 border-b border-zinc-100">
           {/* Brand column */}
           <div className="max-w-xs shrink-0">
             <img className="w-32 mb-5" src={assets.logo} alt="Tenzy" />
@@ -37,7 +37,7 @@ const Footer = () => {
           </div>
 
           {/* Link sections */}
-          <div className="flex flex-wrap justify-between flex-1 gap-8">
+          <div className="flex flex-wrap justify-between flex-1 gap-5 sm:gap-8">
             {linkSections.map((section, index) => (
               <div key={index}>
                 <h3

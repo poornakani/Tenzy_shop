@@ -99,7 +99,7 @@ export default function Categories() {
       {/* ── Carousel ─────────────────────────────────────────────── */}
       <div className="w-full max-w-7xl mx-auto">
         <div
-          className="relative overflow-hidden rounded-4xl lg:rounded-[3rem] flex flex-col lg:flex-row min-h-[600px] lg:min-h-0 lg:aspect-video"
+          className="relative overflow-hidden rounded-4xl lg:rounded-[3rem] flex flex-col lg:flex-row min-h-[480px] sm:min-h-[560px] lg:min-h-0 lg:aspect-video"
           style={{
             boxShadow:
               "0 24px 80px rgba(43,185,180,0.13), 0 4px 16px rgba(0,0,0,0.07)",
@@ -107,7 +107,7 @@ export default function Categories() {
         >
           {/* ── LEFT: teal scrolling chip panel ──────────────────── */}
           <div
-            className="relative w-full lg:w-[38%] min-h-[340px] md:min-h-[420px] lg:h-full z-10 overflow-hidden"
+            className="relative w-full lg:w-[38%] min-h-60 sm:min-h-[300px] md:min-h-[380px] lg:h-full z-10 overflow-hidden"
             style={{ background: TEAL }}
           >
             {/* fade edges */}
@@ -155,7 +155,7 @@ export default function Categories() {
             </button>
 
             {/* chip scroll area — absolute inset-0 fills full panel height */}
-            <div className="absolute inset-20 z-10 flex items-center justify-center lg:justify-start lg:pl-14">
+            <div className="absolute inset-x-3 inset-y-12 sm:inset-x-6 sm:inset-y-14 lg:inset-20 z-10 flex items-center justify-center lg:justify-start lg:pl-14">
               {CatSelections.map((item, i) => {
                 const isActive = i === current;
                 const wd = wrap(-(TOTAL / 2), TOTAL / 2, i - current);
@@ -193,20 +193,18 @@ export default function Categories() {
                               borderColor: ORANGE,
                               color: "#ffffff",
                               boxShadow: "0 6px 24px rgba(232,82,42,0.40)",
-                              padding: "0.75rem 2rem",
-                              minWidth: "200px",
+                              padding: "0.5rem 1.1rem",
                             }
                           : {
                               background: "transparent",
                               borderColor: "rgba(255,255,255,0.28)",
                               color: "rgba(255,255,255,0.72)",
-                              padding: "0.75rem 2rem",
-                              minWidth: "200px",
+                              padding: "0.5rem 1.1rem",
                             }
                       }
                     >
                       <Icon size={15} strokeWidth={2} />
-                      <span className="text-[20px] font-bold uppercase tracking-widest">
+                      <span className="text-sm sm:text-base lg:text-[20px] font-bold uppercase tracking-widest">
                         {item.title}
                       </span>
                     </button>
@@ -218,11 +216,10 @@ export default function Categories() {
 
           {/* ── RIGHT: card carousel ──────────────────────────────── */}
           <div
-            className="flex-1 min-h-[500px] lg:h-full relative flex items-center justify-center overflow-hidden border-t lg:border-t-0 lg:border-l"
+            className="flex-1 min-h-[280px] sm:min-h-[360px] lg:h-full relative flex items-center justify-center overflow-hidden border-t lg:border-t-0 lg:border-l p-5 sm:p-10 lg:p-14"
             style={{
               background: "#f0fbfa",
               borderColor: "rgba(43,185,180,0.12)",
-              padding: "3rem 3.5rem",
             }}
           >
             {/* subtle radial glow */}
