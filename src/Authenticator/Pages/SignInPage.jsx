@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "../components/AuthLayout";
-import AuthTextField from "../components/AuthTextField";
-import SocialAuthButtons from "../components/SocialAuthButtons";
-import ForgotPasswordModal from "../components/ForgotPasswordModal";
+import AuthLayout from "../Components/AuthLayout";
+import AuthTextField from "../Components/AuthTextField";
+import SocialAuthButtons from "../Components/SocialAuthButtons";
+import ForgotPasswordModal from "../Components/ForgotPasswordModal";
 import Navibar from "@/HomePage/Navibar";
 
 export default function SignInPage() {

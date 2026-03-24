@@ -164,7 +164,8 @@ const ProductDetails = () => {
             </p>
             <button
               onClick={() => navigate("/home")}
-              className="mt-5 rounded-2xl bg-slate-900 text-white px-5 py-3 text-sm font-semibold hover:bg-slate-800 transition"
+              className="mt-5 rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+              style={{ background: "#2BB9B4", color: "white" }}
             >
               Back to Home
             </button>
@@ -195,7 +196,7 @@ const ProductDetails = () => {
               />
 
               {product.inSale && (
-                <div className="absolute top-4 left-4 rounded-2xl bg-linear-to-r from-pink-500 to-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-pink-500/20">
+                <div className="absolute top-4 left-4 rounded-2xl bg-linear-to-r from-orange-500 to-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-orange-500/20">
                   IN SALE
                 </div>
               )}
@@ -205,7 +206,7 @@ const ProductDetails = () => {
                   ${
                     outOfStock
                       ? "bg-black/60"
-                      : "bg-linear-to-r from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                      : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
                   }`}
               >
                 {outOfStock ? "Out of stock" : `Stock: ${product.stockCount}`}
@@ -224,8 +225,8 @@ const ProductDetails = () => {
                     className={`h-16 w-16 shrink-0 rounded-2xl overflow-hidden border transition
                       ${
                         i === activeImg
-                          ? "border-slate-900"
-                          : "border-slate-200 hover:border-slate-400"
+                          ? "border-tenzy-teal"
+                          : "border-slate-200 hover:border-tenzy-teal/50"
                       }`}
                   >
                     <img
@@ -266,7 +267,7 @@ const ProductDetails = () => {
                 className={`h-11 w-11 rounded-2xl border border-slate-200 flex items-center justify-center transition active:scale-95
                   ${
                     isWishlisted(product.id)
-                      ? "bg-red-500/90 text-white"
+                      ? "bg-tenzy-orange/90 text-white"
                       : "bg-white text-slate-900 hover:bg-slate-50"
                   }`}
                 aria-label="Wishlist"
@@ -279,7 +280,7 @@ const ProductDetails = () => {
             </div>
 
             {/* Price */}
-            <div className="mt-5 rounded-3xl border border-slate-200 bg-linear-to-br from-slate-50 via-white to-amber-50 p-4">
+            <div className="mt-5 rounded-3xl border border-slate-200 bg-linear-to-br from-teal-50 via-white to-orange-50 p-4">
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="text-sm text-slate-600">Price</p>
@@ -291,7 +292,7 @@ const ProductDetails = () => {
                   <p className="text-sm text-slate-500 line-through">
                     LKR {formatLKR(product.price)}
                   </p>
-                  <p className="text-sm font-semibold text-red-600">
+                  <p className="text-sm font-semibold text-tenzy-orange">
                     -{product.discountPercent}%
                   </p>
                 </div>
@@ -355,7 +356,7 @@ const ProductDetails = () => {
                   ${
                     outOfStock
                       ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      : "bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-black/20"
+                      : "bg-tenzy-teal text-white hover:opacity-90 shadow-lg shadow-tenzy-teal/25"
                   }`}
               >
                 Add to cart
@@ -369,7 +370,7 @@ const ProductDetails = () => {
                   ${
                     outOfStock
                       ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      : "bg-linear-to-r from-amber-400 to-orange-500 text-white hover:opacity-95 shadow-lg shadow-amber-500/25"
+                      : "bg-tenzy-orange text-white hover:opacity-90 shadow-lg shadow-tenzy-orange/25"
                   }`}
               >
                 Purchase now
@@ -431,7 +432,7 @@ const ProductDetails = () => {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-linear-to-r from-amber-50 via-white to-orange-50 px-4 py-3">
+            <div className="rounded-2xl border border-slate-200 bg-linear-to-r from-teal-50 via-white to-orange-50 px-4 py-3">
               <div className="flex items-center gap-3">
                 <div>
                   <p className="text-xs text-slate-500">Average rating</p>
@@ -527,7 +528,7 @@ const ProductDetails = () => {
                         LKR {formatLKR(sp.price)}
                       </p>
                     </div>
-                    <p className="text-xs font-semibold text-red-600">
+                    <p className="text-xs font-semibold text-tenzy-orange">
                       -{sp.discountPercent}%
                     </p>
                   </div>

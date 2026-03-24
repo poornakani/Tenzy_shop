@@ -3,6 +3,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+  X,
+  Check,
+  ArrowUpDown,
+  Tag,
+} from "lucide-react";
 
 import { BrandsList } from "@/ProductsJson";
 import { useWishlist } from "../Context/WishlistContext";
@@ -26,16 +35,64 @@ function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
+const SORT_OPTIONS = [
+  { v: "featured",  label: "Featured" },
+  { v: "priceAsc",  label: "Price: Low → High" },
+  { v: "priceDesc", label: "Price: High → Low" },
+  { v: "discount",  label: "Highest Discount" },
+  { v: "stock",     label: "Most in Stock" },
+];
+
+/* ── Small helper components ──────────────────────────────────────── */
+
+function FilterChip({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold"
+      style={{ borderColor: "rgba(43,185,180,0.25)", background: "rgba(43,185,180,0.06)", color: "#2BB9B4" }}>
+      {label}
+      <button type="button" onClick={onRemove}
+        className="h-3.5 w-3.5 rounded-full flex items-center justify-center hover:opacity-70 transition"
+        style={{ background: "rgba(43,185,180,0.2)" }}>
+        <X size={8} />
+      </button>
+    </span>
+  );
+}
+
+function ToggleSwitch({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="relative h-6 w-11 rounded-full transition-all shrink-0"
+      style={{ background: checked ? "#2BB9B4" : "#e4e4e7" }}
+    >
+      <span
+        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+        style={{ left: checked ? "22px" : "2px" }}
+      />
+    </button>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+
 const ProductsPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const wrapRef = useRef(null);
+  const sortRef = useRef(null);
 
   // Mobile slide panel
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [mobilePanelTab, setMobilePanelTab] = useState("sort");
   const panelRef = useRef(null);
+
+  // Custom sort dropdown
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
 
   // Wishlist (optional)
   const wishlistApi = useWishlist?.();
@@ -52,13 +109,11 @@ const ProductsPage = () => {
     return (SellingProducts || []).map((p) => {
       const discountedPrice = calcDiscounted(p.price, p.discountPercent);
 
-      // normalize brandId (supports different property names + fallback from old "brand" string)
       const rawBrandId =
         p.brandId ?? p.BrandID ?? p.brandID ?? p.brand_id ?? p.brand ?? null;
 
       let brandObj = null;
 
-      // if brandId exists, match by id (supports id or BrandID)
       if (rawBrandId !== null && typeof rawBrandId !== "undefined") {
         brandObj =
           BrandsList?.find(
@@ -66,7 +121,6 @@ const ProductsPage = () => {
           ) || null;
       }
 
-      // fallback: if product still has brand string, match by name
       if (!brandObj && p.brand && typeof p.brand === "string") {
         brandObj =
           BrandsList?.find(
@@ -94,20 +148,16 @@ const ProductsPage = () => {
         ...p,
         discountedPrice,
         category: p.category || "Skin",
-
-        // keep your UI using p.brand, but back it by brandId
         brand: brandName,
         brandId: normalizedBrandId,
         brandName,
         brandLogo,
-
         sku: p.sku || `SKU-${p.id}`,
         description:
           p.description ||
           "Premium quality product with a clean modern feel. Comfortable daily use.",
         images:
           Array.isArray(p.images) && p.images.length ? p.images : [p.image],
-
         concernIds: Array.isArray(p.concernIds) ? p.concernIds : undefined,
         concernID:
           typeof p.concernID === "number"
@@ -119,7 +169,6 @@ const ProductsPage = () => {
     });
   }, []);
 
-  // Unique categories from products (no duplicates)
   const uniqueCats = useMemo(() => {
     const set = new Set(products.map((p) => p.category).filter(Boolean));
     return ["All", ...Array.from(set)];
@@ -133,10 +182,8 @@ const ProductsPage = () => {
   const [onlyInStock, setOnlyInStock] = useState(false);
   const { showToast } = useToast();
 
-  // Brand filter (single source of truth)
   const [selectedBrandId, setSelectedBrandId] = useState("All");
 
-  // Price slider bounds
   const priceMin = useMemo(() => {
     if (!products.length) return 0;
     return Math.min(...products.map((p) => p.discountedPrice));
@@ -170,11 +217,8 @@ const ProductsPage = () => {
     if (cat && uniqueCats.includes(cat)) setActiveCategory(cat);
   }, [searchParams, uniqueCats]);
 
-  // If concernID exists, keep category "All" (so concern controls the result)
   useEffect(() => {
-    if (activeConcernID) {
-      setActiveCategory("All");
-    }
+    if (activeConcernID) setActiveCategory("All");
   }, [activeConcernID]);
 
   // -------- Filtered list --------
@@ -182,20 +226,17 @@ const ProductsPage = () => {
     const query = q.trim().toLowerCase();
 
     let list = products.filter((p) => {
-      // Concern filter first
       if (activeConcernID) {
         const hasConcern =
           (Array.isArray(p.concernIds) &&
             p.concernIds.includes(activeConcernID)) ||
           (typeof p.concernID === "number" && p.concernID === activeConcernID);
-
         if (!hasConcern) return false;
       }
 
       if (activeCategory !== "All" && p.category !== activeCategory)
         return false;
 
-      // Brand filtering: compare by brandId (int) + ignore bad values
       if (
         selectedBrandId !== "All" &&
         selectedBrandId !== "" &&
@@ -234,26 +275,18 @@ const ProductsPage = () => {
     maxPrice,
   ]);
 
-  // -------- Pagination (only when > 20) --------
+  // -------- Pagination --------
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(1);
 
-  const totalPages = useMemo(() => {
-    return Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  }, [filtered.length]);
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)),
+    [filtered.length]
+  );
 
   useEffect(() => {
     setPage(1);
-  }, [
-    activeCategory,
-    selectedBrandId,
-    q,
-    sort,
-    onlySale,
-    onlyInStock,
-    maxPrice,
-    activeConcernID,
-  ]);
+  }, [activeCategory, selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -265,6 +298,30 @@ const ProductsPage = () => {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
 
+  // -------- Active filter count --------
+  const hasActiveFilters =
+    activeCategory !== "All" ||
+    selectedBrandId !== "All" ||
+    onlySale ||
+    onlyInStock ||
+    maxPrice < priceMax;
+
+  const activeFilterCount = [
+    activeCategory !== "All",
+    selectedBrandId !== "All",
+    onlySale,
+    onlyInStock,
+    maxPrice < priceMax,
+  ].filter(Boolean).length;
+
+  const activeBrandName = useMemo(() => {
+    if (selectedBrandId === "All") return null;
+    const b = BrandsList.find(
+      (b) => String(b.id ?? b.BrandID) === String(selectedBrandId)
+    );
+    return b?.name ?? b?.BrandName ?? selectedBrandId;
+  }, [selectedBrandId]);
+
   // -------- GSAP animations --------
   useEffect(() => {
     if (!wrapRef.current) return;
@@ -274,55 +331,46 @@ const ProductsPage = () => {
         { y: 14, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.55, ease: "power2.out" }
       );
-
       gsap.fromTo(
         ".pp-card",
         { y: 18, opacity: 0, scale: 0.985 },
         {
-          y: 0,
-          opacity: 1,
-          scale: 1,
-          duration: 0.45,
-          ease: "power2.out",
-          stagger: 0.04,
+          y: 0, opacity: 1, scale: 1,
+          duration: 0.45, ease: "power2.out", stagger: 0.04,
           scrollTrigger: { trigger: ".pp-grid", start: "top 85%" },
         }
       );
     }, wrapRef);
-
     return () => ctx.revert();
   }, []);
 
-  // Subtle reflow animation on filter change / page change
   useEffect(() => {
     gsap.fromTo(
       ".pp-card",
       { y: 10, opacity: 0 },
       { y: 0, opacity: 1, duration: 0.25, stagger: 0.02, ease: "power2.out" }
     );
-  }, [
-    activeCategory,
-    selectedBrandId,
-    q,
-    sort,
-    onlySale,
-    onlyInStock,
-    maxPrice,
-    activeConcernID,
-    page,
-  ]);
+  }, [activeCategory, selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID, page]);
 
-  // Mobile panel open animation
+  // Mobile panel slide-up animation
   useEffect(() => {
-    if (!panelRef.current) return;
-    if (mobilePanelOpen) {
-      gsap.fromTo(
-        panelRef.current,
-        { x: -40, autoAlpha: 0 },
-        { x: 0, autoAlpha: 1, duration: 0.22, ease: "power2.out" }
-      );
-    }
+    if (!panelRef.current || !mobilePanelOpen) return;
+    gsap.fromTo(
+      panelRef.current,
+      { y: 80, autoAlpha: 0 },
+      { y: 0, autoAlpha: 1, duration: 0.28, ease: "power3.out" }
+    );
   }, [mobilePanelOpen]);
+
+  // Sort dropdown outside-click
+  useEffect(() => {
+    if (!showSortDropdown) return;
+    const handler = (e) => {
+      if (!sortRef.current?.contains(e.target)) setShowSortDropdown(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSortDropdown]);
 
   // -------- Actions --------
   const clearFilters = () => {
@@ -336,272 +384,457 @@ const ProductsPage = () => {
   };
 
   const { addToCart } = useCart();
-
   const showPagination = filtered.length > PAGE_SIZE;
 
+  /* ════════════════════════════════════════════════════════════════
+     RENDER
+  ════════════════════════════════════════════════════════════════ */
   return (
-    <div ref={wrapRef} className="w-full overflow-hidden">
+    <div ref={wrapRef} className="w-full overflow-hidden bg-zinc-50 min-h-screen">
       <Navibar />
 
-      {/* Helps glass nav be visible */}
+      {/* Nav spacer */}
       <div className="h-24 bg-linear-to-b from-slate-950/90 via-slate-900/60 to-transparent" />
 
-      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 pb-12">
-        {/* HERO (mobile minimal: search only + buttons) */}
-        <section className="pp-hero rounded-3xl border border-slate-300/70 bg-white shadow-sm overflow-hidden">
-          <div className="relative p-5 sm:p-6">
-            {/* more colorful + slightly darker */}
-            <div className="absolute inset-0 bg-linear-to-r from-indigo-200/55 via-amber-100/55 to-rose-200/55" />
-            <div className="absolute inset-0 bg-linear-to-b from-slate-900/10 via-transparent to-slate-900/5" />
+      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 pb-16">
 
-            <div className="relative">
-              {/* Desktop heading only */}
-              <div className="hidden md:flex md:items-end md:justify-between gap-4">
+        {/* ── HERO / SEARCH ───────────────────────────────────────── */}
+        <section className="pp-hero">
+          <div className="rounded-3xl bg-white border border-zinc-100 shadow-sm overflow-hidden">
+
+            {/* Brand accent bar */}
+            <div className="h-[3px] bg-linear-to-r from-tenzy-teal via-tenzy-teal/40 to-tenzy-orange" />
+
+            <div className="px-5 sm:px-8 pt-6 pb-5">
+              {/* Title + result count */}
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 tracking-wide">
-                    PRODUCTS
+                  <p className="text-[10px] font-bold tracking-[0.28em] uppercase"
+                    style={{ color: "#2BB9B4" }}>
+                    All Products
                   </p>
-                  <h1 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-950">
-                    Find your perfect match
+                  <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-zinc-900 leading-tight">
+                    Find your{" "}
+                    <span className="italic font-bold" style={{ color: "#E8522A" }}>
+                      perfect
+                    </span>{" "}
+                    match
                   </h1>
-                  <p className="mt-2 text-sm text-slate-700 max-w-2xl">
-                    Search by name, filter by category, price, availability, and
-                    brand. Tap a product to see full details.
-                  </p>
                 </div>
 
-                <div className="rounded-2xl border border-slate-300/70 bg-white/70 backdrop-blur px-4 py-3">
-                  <p className="text-xs text-slate-600">Results</p>
-                  <p className="text-lg font-semibold text-slate-950">
+                <div className="shrink-0 text-right hidden sm:block">
+                  <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-400">
+                    Results
+                  </p>
+                  <p className="text-3xl font-bold text-zinc-900 leading-none">
                     {filtered.length}
                   </p>
                   {showPagination && (
-                    <p className="text-[11px] text-slate-600 mt-0.5">
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
                       Page {page} / {totalPages}
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Search + suggestions */}
-              <div className="mt-0 md:mt-5 grid gap-3 lg:grid-cols-3">
-                <div className="relative lg:col-span-2">
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search products by name…"
-                    className="w-full rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
+              {/* Search input */}
+              <div className="mt-5 relative">
+                <Search
+                  size={17}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: "#2BB9B4" }}
+                />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search skincare, brands, categories…"
+                  className="w-full rounded-2xl border-2 border-zinc-100 bg-zinc-50 pl-11 pr-11 py-4 text-sm font-medium text-zinc-900 placeholder-zinc-400 outline-none transition-all focus:border-tenzy-teal/40 focus:bg-white"
+                  style={{ boxShadow: q ? "0 0 0 4px rgba(43,185,180,0.07)" : undefined }}
+                />
+                {q && (
+                  <button
+                    type="button"
+                    onClick={() => setQ("")}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-zinc-200 hover:bg-zinc-300 flex items-center justify-center transition"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
 
-                  {suggestions.length > 0 && (
-                    <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-slate-300/70 bg-white/85 backdrop-blur shadow-xl">
-                      {suggestions.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => goToProduct(p)}
-                          className="w-full px-4 py-3 text-left hover:bg-slate-50 transition flex items-center justify-between"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-950 truncate">
-                              {p.name}
-                            </p>
-                            <p className="text-xs text-slate-600">
-                              {p.category} • {p.brand}
-                            </p>
-                          </div>
-                          <p className="text-sm font-semibold text-slate-950">
+                {/* Suggestions dropdown */}
+                {suggestions.length > 0 && (
+                  <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-2xl">
+                    <div className="px-4 py-2 border-b border-zinc-50">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        Suggestions
+                      </p>
+                    </div>
+                    {suggestions.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => goToProduct(p)}
+                        className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-teal-50 transition group"
+                      >
+                        <div className="h-10 w-10 rounded-xl overflow-hidden border border-zinc-100 bg-zinc-50 shrink-0">
+                          <img
+                            src={p.image}
+                            alt={p.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-tenzy-teal transition">
+                            {p.name}
+                          </p>
+                          <p className="text-xs text-zinc-400">
+                            {p.category} • {p.brand}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-bold text-zinc-900">
                             LKR {formatLKR(p.discountedPrice)}
                           </p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Mobile actions: Sort/Filters buttons */}
-                  <div className="mt-3 flex md:hidden gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobilePanelTab("sort");
-                        setMobilePanelOpen(true);
-                      }}
-                      className="flex-1 rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-50 transition"
-                    >
-                      Sort
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobilePanelTab("filters");
-                        setMobilePanelOpen(true);
-                      }}
-                      className="flex-1 rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-50 transition"
-                    >
-                      Filters
-                    </button>
+                          {p.discountPercent > 0 && (
+                            <p className="text-[11px] font-semibold text-tenzy-orange">
+                              -{p.discountPercent}%
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                </div>
-
-                {/* Desktop sort + clear only */}
-                <div className="hidden md:grid grid-cols-2 gap-3 lg:grid-cols-1">
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value)}
-                    className="rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-950 outline-none"
-                  >
-                    <option value="featured">Featured</option>
-                    <option value="priceAsc">Price: Low → High</option>
-                    <option value="priceDesc">Price: High → Low</option>
-                    <option value="discount">Highest Discount</option>
-                    <option value="stock">Most Stock</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-50 transition"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-
-              {/* Desktop category tabs only */}
-              <div className="hidden md:flex mt-5 flex-wrap gap-2">
-                {uniqueCats.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setActiveCategory(cat)}
-                    className={`rounded-2xl px-4 py-2 text-sm font-semibold transition
-                      ${
-                        activeCategory === cat
-                          ? "bg-slate-950 text-white"
-                          : "bg-white/85 border border-slate-300/70 text-slate-950 hover:bg-slate-50"
-                      }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+                )}
               </div>
             </div>
           </div>
         </section>
 
-        {/* Filters + Grid */}
-        <section className="mt-6 grid gap-5 lg:grid-cols-12">
-          {/* Desktop filters sidebar only */}
-          <aside className="hidden lg:block lg:col-span-3 rounded-3xl border border-slate-300/70 bg-linear-to-b from-slate-50 via-white to-indigo-50 shadow-sm p-5 sm:p-6">
-            <h2 className="text-lg font-semibold text-slate-950">Filters</h2>
-            <p className="mt-1 text-sm text-slate-700">
-              Refine results quickly.
-            </p>
+        {/* ── FILTER TOOLBAR (sticky) ───────────────────────────────── */}
+        <div className="mt-3 sticky top-[72px] z-40">
+          <div className="rounded-2xl bg-white/95 backdrop-blur-sm border border-zinc-100 shadow-sm px-4 py-3">
 
-            {/* Price */}
-            <div className="mt-5">
-              <p className="text-sm font-semibold text-slate-950">Max Price</p>
-              <p className="text-xs text-slate-600 mt-1">
-                LKR {formatLKR(priceMin)} — LKR {formatLKR(priceMax)}
-              </p>
+            {/* Pills + Sort + Filter row */}
+            <div className="flex items-center gap-2">
 
-              <input
-                type="range"
-                min={priceMin}
-                max={priceMax}
-                value={maxPrice}
-                onChange={(e) =>
-                  setMaxPrice(clamp(Number(e.target.value), priceMin, priceMax))
-                }
-                className="mt-3 w-full"
-              />
-              <div className="mt-2 rounded-2xl border border-slate-300/70 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-950">
-                Up to: LKR {formatLKR(maxPrice)}
-              </div>
-            </div>
-
-            {/* Brand */}
-            <div className="mt-5">
-              <p className="text-sm font-semibold text-slate-950">Brand</p>
-              <select
-                value={selectedBrandId}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectedBrandId(
-                    v === "All" || v === "" || v === "undefined" ? "All" : v
-                  );
-                }}
-                className="mt-2 w-full rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-950 outline-none"
+              {/* Category pills — scrollable */}
+              <div
+                className="flex-1 flex gap-2 overflow-x-auto"
+                style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
               >
-                <option value="All">All Brands</option>
-                {BrandsList.map((b) => {
-                  const id = b.id ?? b.BrandID ?? b.brandId ?? b.brandID;
-                  return (
-                    <option key={id ?? b.name} value={String(id)}>
-                      {b.name ?? b.BrandName}
-                    </option>
-                  );
-                })}
-              </select>
+                {uniqueCats.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveCategory(cat)}
+                    className="shrink-0 rounded-full px-4 py-2 text-[11px] font-bold transition-all whitespace-nowrap"
+                    style={
+                      activeCategory === cat
+                        ? {
+                            background: "#2BB9B4",
+                            color: "white",
+                            boxShadow: "0 2px 8px rgba(43,185,180,0.35)",
+                          }
+                        : {}
+                    }
+                    {...(activeCategory !== cat
+                      ? { className: "shrink-0 rounded-full px-4 py-2 text-[11px] font-bold transition-all whitespace-nowrap bg-zinc-100 text-zinc-600 hover:bg-teal-50 hover:text-tenzy-teal" }
+                      : {})}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Divider */}
+              <div className="h-6 w-px bg-zinc-200 shrink-0" />
+
+              {/* Custom Sort dropdown */}
+              <div ref={sortRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowSortDropdown((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] font-bold transition-all"
+                  style={
+                    showSortDropdown
+                      ? { borderColor: "rgba(43,185,180,0.5)", background: "rgba(43,185,180,0.06)", color: "#2BB9B4" }
+                      : { borderColor: "#e4e4e7", background: "white", color: "#3f3f46" }
+                  }
+                >
+                  <ArrowUpDown size={11} />
+                  <span className="hidden sm:inline text-zinc-400 font-medium">Sort:</span>
+                  <span>{SORT_OPTIONS.find((o) => o.v === sort)?.label ?? "Featured"}</span>
+                  <ChevronDown
+                    size={11}
+                    className="transition-transform"
+                    style={{ transform: showSortDropdown ? "rotate(180deg)" : "rotate(0deg)" }}
+                  />
+                </button>
+
+                {showSortDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-zinc-100 bg-white shadow-2xl z-50 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-zinc-50">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        Sort by
+                      </p>
+                    </div>
+                    {SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => {
+                          setSort(opt.v);
+                          setShowSortDropdown(false);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-3 text-sm transition"
+                        style={
+                          sort === opt.v
+                            ? { background: "rgba(43,185,180,0.06)", color: "#2BB9B4", fontWeight: 700 }
+                            : { color: "#3f3f46" }
+                        }
+                        onMouseEnter={(e) => {
+                          if (sort !== opt.v) e.currentTarget.style.background = "#fafafa";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (sort !== opt.v) e.currentTarget.style.background = "";
+                        }}
+                      >
+                        {opt.label}
+                        {sort === opt.v && (
+                          <Check size={14} style={{ color: "#2BB9B4" }} />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Filter button (mobile/tablet only) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobilePanelTab("filters");
+                  setMobilePanelOpen(true);
+                }}
+                className="lg:hidden shrink-0 flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-2 text-[11px] font-bold text-zinc-700 transition hover:border-tenzy-teal/40"
+              >
+                <SlidersHorizontal size={11} />
+                <span>Filters</span>
+                {hasActiveFilters && (
+                  <span
+                    className="h-4 w-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                    style={{ background: "#E8522A" }}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
             </div>
 
-            {/* Toggles */}
-            <div className="mt-5 grid gap-3">
-              <label className="flex items-center justify-between rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3">
-                <span className="text-sm font-semibold text-slate-950">
-                  In Sale
-                </span>
-                <input
-                  type="checkbox"
-                  checked={onlySale}
-                  onChange={(e) => setOnlySale(e.target.checked)}
-                  className="h-5 w-5"
-                />
-              </label>
+            {/* Active filter chips */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-zinc-50">
+                {activeCategory !== "All" && (
+                  <FilterChip
+                    label={activeCategory}
+                    onRemove={() => setActiveCategory("All")}
+                  />
+                )}
+                {activeBrandName && (
+                  <FilterChip
+                    label={activeBrandName}
+                    onRemove={() => setSelectedBrandId("All")}
+                  />
+                )}
+                {onlySale && (
+                  <FilterChip label="On Sale" onRemove={() => setOnlySale(false)} />
+                )}
+                {onlyInStock && (
+                  <FilterChip label="In Stock" onRemove={() => setOnlyInStock(false)} />
+                )}
+                {maxPrice < priceMax && (
+                  <FilterChip
+                    label={`≤ LKR ${formatLKR(maxPrice)}`}
+                    onRemove={() => setMaxPrice(priceMax)}
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-[11px] font-semibold text-zinc-400 hover:text-tenzy-orange transition px-1"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
-              <label className="flex items-center justify-between rounded-2xl border border-slate-300/70 bg-white/90 px-4 py-3">
-                <span className="text-sm font-semibold text-slate-950">
-                  In Stock
-                </span>
-                <input
-                  type="checkbox"
-                  checked={onlyInStock}
-                  onChange={(e) => setOnlyInStock(e.target.checked)}
-                  className="h-5 w-5"
-                />
-              </label>
-            </div>
+        {/* ── MAIN CONTENT ─────────────────────────────────────────── */}
+        <section className="mt-5 grid gap-5 lg:grid-cols-12">
 
-            <div className="mt-5 rounded-2xl bg-linear-to-r from-indigo-50 via-white to-amber-50 border border-slate-300/70 p-4">
-              <p className="text-sm font-semibold text-slate-950">Tip</p>
-              <p className="mt-1 text-xs text-slate-700">
-                Use category tabs + search to find products faster.
-              </p>
+          {/* ── Desktop Filters Sidebar ─────────────────────────── */}
+          <aside className="hidden lg:block lg:col-span-3">
+            <div className="sticky top-[158px] rounded-3xl border border-zinc-100 bg-white shadow-sm overflow-hidden">
+
+              {/* Sidebar header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-50">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal size={14} style={{ color: "#2BB9B4" }} />
+                  <h2 className="text-sm font-bold text-zinc-900">Filters</h2>
+                  {hasActiveFilters && (
+                    <span
+                      className="h-4 w-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                      style={{ background: "#E8522A" }}
+                    >
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </div>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="text-[11px] font-semibold hover:opacity-70 transition"
+                    style={{ color: "#E8522A" }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+
+              <div className="px-5 py-5 space-y-6">
+
+                {/* Price Range */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      Price Range
+                    </p>
+                    <span
+                      className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
+                      style={{ background: "rgba(43,185,180,0.08)", color: "#2BB9B4" }}
+                    >
+                      ≤ LKR {formatLKR(maxPrice)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={priceMin}
+                    max={priceMax}
+                    value={maxPrice}
+                    onChange={(e) =>
+                      setMaxPrice(clamp(Number(e.target.value), priceMin, priceMax))
+                    }
+                    className="w-full"
+                    style={{ accentColor: "#2BB9B4" }}
+                  />
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-[10px] text-zinc-400">
+                      LKR {formatLKR(priceMin)}
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      LKR {formatLKR(priceMax)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-100" />
+
+                {/* Brand */}
+                <div>
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                    Brand
+                  </p>
+                  <div className="relative">
+                    <select
+                      value={selectedBrandId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSelectedBrandId(
+                          v === "All" || v === "" || v === "undefined" ? "All" : v
+                        );
+                      }}
+                      className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 pr-9 text-sm font-medium text-zinc-800 outline-none transition focus:border-tenzy-teal/40"
+                    >
+                      <option value="All">All Brands</option>
+                      {BrandsList.map((b) => {
+                        const id = b.id ?? b.BrandID ?? b.brandId ?? b.brandID;
+                        return (
+                          <option key={id ?? b.name} value={String(id)}>
+                            {b.name ?? b.BrandName}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown
+                      size={13}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-100" />
+
+                {/* Availability toggles */}
+                <div>
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                    Availability
+                  </p>
+                  <div className="space-y-2.5">
+                    <label className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-4 py-3 cursor-pointer hover:bg-teal-50 transition group">
+                      <div className="flex items-center gap-2">
+                        <Tag size={13} className="text-zinc-400 group-hover:text-tenzy-teal transition" />
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800">On Sale</p>
+                          <p className="text-[10px] text-zinc-400">Discounted items only</p>
+                        </div>
+                      </div>
+                      <ToggleSwitch checked={onlySale} onChange={setOnlySale} />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-4 py-3 cursor-pointer hover:bg-teal-50 transition group">
+                      <div className="flex items-center gap-2">
+                        <Check size={13} className="text-zinc-400 group-hover:text-tenzy-teal transition" />
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-800">In Stock</p>
+                          <p className="text-[10px] text-zinc-400">Hide unavailable items</p>
+                        </div>
+                      </div>
+                      <ToggleSwitch checked={onlyInStock} onChange={setOnlyInStock} />
+                    </label>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </aside>
 
-          {/* Grid */}
+          {/* ── Product Grid ─────────────────────────────────────── */}
           <section className="pp-grid lg:col-span-9">
             {filtered.length === 0 ? (
-              <div className="rounded-3xl border border-slate-200 bg-white shadow-sm p-8 text-center">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  No results found
-                </h3>
-                <p className="mt-2 text-sm text-slate-600">
-                  Try changing filters or clearing search.
+              <div className="rounded-3xl border border-zinc-100 bg-white shadow-sm p-10 text-center">
+                <div
+                  className="mx-auto h-14 w-14 rounded-2xl flex items-center justify-center text-2xl mb-4"
+                  style={{ background: "rgba(43,185,180,0.07)" }}
+                >
+                  🔍
+                </div>
+                <h3 className="text-lg font-bold text-zinc-900">No results found</h3>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Try adjusting your filters or search term.
                 </p>
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="mt-5 rounded-2xl bg-slate-900 text-white px-5 py-3 text-sm font-semibold hover:bg-slate-800 transition"
+                  className="mt-5 rounded-2xl px-6 py-3 text-sm font-bold text-white hover:opacity-90 transition active:scale-95"
+                  style={{ background: "#2BB9B4" }}
                 >
                   Reset filters
                 </button>
               </div>
             ) : (
               <>
-                {/* DO NOT CHANGE middle products section colours (cards remain the same) */}
                 <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
                   {pagedProducts.map((p) => {
                     const outOfStock = p.outOfStock || p.stockCount === 0;
@@ -609,7 +842,7 @@ const ProductsPage = () => {
                     return (
                       <article
                         key={p.id}
-                        className="pp-card group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                        className="pp-card group rounded-2xl border border-zinc-100 bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                       >
                         {/* Image */}
                         <div
@@ -624,17 +857,16 @@ const ProductsPage = () => {
                           />
 
                           {p.inSale && (
-                            <div className="absolute top-3 left-3 rounded-xl bg-linear-to-r from-pink-500 to-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-pink-500/20">
+                            <div className="absolute top-3 left-3 rounded-xl bg-tenzy-orange px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-tenzy-orange/25">
                               IN SALE
                             </div>
                           )}
 
                           <div
                             className={`absolute top-3 right-3 rounded-xl px-3 py-1.5 text-xs font-semibold text-white backdrop-blur shadow-lg
-                              ${
-                                outOfStock
-                                  ? "bg-black/60"
-                                  : "bg-linear-to-r from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                              ${outOfStock
+                                ? "bg-black/60"
+                                : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
                               }`}
                           >
                             {outOfStock
@@ -644,10 +876,9 @@ const ProductsPage = () => {
 
                           <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/45 to-transparent" />
 
-                          {/* Bottom actions (mobile-friendly) */}
+                          {/* Bottom actions */}
                           <div className="absolute inset-x-0 bottom-0 p-3">
                             <div className="rounded-2xl bg-white/80 backdrop-blur border border-white/30 shadow-sm p-2 flex items-center gap-2">
-                              {/* Wishlist */}
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -656,10 +887,9 @@ const ProductsPage = () => {
                                   toggleWishlist(p);
                                 }}
                                 className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95
-                                  ${
-                                    isWishlisted(p.id)
-                                      ? "bg-red-500/90 text-white"
-                                      : "bg-white text-slate-900 hover:bg-slate-50"
+                                  ${isWishlisted(p.id)
+                                    ? "bg-tenzy-orange/90 text-white"
+                                    : "bg-white text-slate-900 hover:bg-slate-50"
                                   }`}
                                 aria-label="Wishlist"
                                 title="Wishlist"
@@ -669,7 +899,6 @@ const ProductsPage = () => {
                                 </span>
                               </button>
 
-                              {/* Add to cart */}
                               <button
                                 type="button"
                                 disabled={outOfStock}
@@ -684,10 +913,9 @@ const ProductsPage = () => {
                                   });
                                 }}
                                 className={`flex-1 h-10 rounded-xl text-xs font-semibold transition active:scale-95
-                                  ${
-                                    outOfStock
-                                      ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                                      : "bg-slate-900 text-white hover:bg-slate-800"
+                                  ${outOfStock
+                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                    : "bg-tenzy-teal text-white hover:opacity-90"
                                   }`}
                               >
                                 Add to cart
@@ -698,35 +926,35 @@ const ProductsPage = () => {
 
                         {/* Details */}
                         <div className="p-4">
-                          <p className="text-[11px] font-semibold text-slate-500">
+                          <p className="text-[11px] font-semibold text-zinc-400">
                             {p.category} • {p.brand}
                           </p>
 
                           <h3
-                            className="mt-1 text-sm font-semibold text-slate-900 leading-snug line-clamp-2 cursor-pointer"
+                            className="mt-1 text-sm font-semibold text-zinc-900 leading-snug line-clamp-2 cursor-pointer hover:text-tenzy-teal transition"
                             onClick={() => goToProduct(p)}
                           >
                             {p.name}
                           </h3>
 
-                          <div className="mt-2 flex items-end justify-between gap-3">
+                          <div className="mt-2 flex items-end justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-slate-900">
+                              <p className="text-sm font-bold text-zinc-900">
                                 LKR {formatLKR(p.discountedPrice)}
                               </p>
-                              <p className="text-xs text-slate-500 line-through">
+                              <p className="text-xs text-zinc-400 line-through">
                                 LKR {formatLKR(p.price)}
                               </p>
                             </div>
-                            <p className="text-xs font-semibold text-red-600">
+                            <p className="text-xs font-bold text-tenzy-orange">
                               -{p.discountPercent}%
                             </p>
                           </div>
 
-                          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <p className="text-[11px] text-slate-700">
+                          <div className="mt-3 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2">
+                            <p className="text-[11px] text-zinc-500">
                               Pay with{" "}
-                              <span className="font-semibold">
+                              <span className="font-semibold text-zinc-700">
                                 {p.paymentProvider}
                               </span>{" "}
                               • {p.minInstallments}+ instalments
@@ -738,17 +966,17 @@ const ProductsPage = () => {
                   })}
                 </div>
 
-                {/* Pagination (only if > 20) */}
+                {/* Pagination */}
                 {showPagination && (
-                  <div className="mt-6 rounded-3xl border border-slate-200 bg-white shadow-sm p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-900">
+                  <div className="mt-6 rounded-3xl border border-zinc-100 bg-white shadow-sm p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-zinc-700">
                       Showing{" "}
-                      <span className="text-slate-600">
+                      <span className="text-zinc-500">
                         {(page - 1) * PAGE_SIZE + 1}–
                         {Math.min(page * PAGE_SIZE, filtered.length)}
                       </span>{" "}
                       of{" "}
-                      <span className="text-slate-600">{filtered.length}</span>
+                      <span className="text-zinc-500">{filtered.length}</span>
                     </p>
 
                     <div className="flex items-center gap-2">
@@ -757,30 +985,27 @@ const ProductsPage = () => {
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page === 1}
                         className={`rounded-2xl px-4 py-2 text-sm font-semibold border transition
-                          ${
-                            page === 1
-                              ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                              : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
+                          ${page === 1
+                            ? "border-zinc-100 bg-zinc-50 text-zinc-300 cursor-not-allowed"
+                            : "border-zinc-200 bg-white text-zinc-800 hover:border-tenzy-teal/40 hover:text-tenzy-teal"
                           }`}
                       >
                         Prev
                       </button>
 
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-900">
+                      <div className="rounded-2xl border border-zinc-100 px-4 py-2 text-sm font-bold"
+                        style={{ background: "rgba(43,185,180,0.06)", color: "#2BB9B4" }}>
                         {page} / {totalPages}
                       </div>
 
                       <button
                         type="button"
-                        onClick={() =>
-                          setPage((p) => Math.min(totalPages, p + 1))
-                        }
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
                         className={`rounded-2xl px-4 py-2 text-sm font-semibold border transition
-                          ${
-                            page === totalPages
-                              ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                              : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
+                          ${page === totalPages
+                            ? "border-zinc-100 bg-zinc-50 text-zinc-300 cursor-not-allowed"
+                            : "border-zinc-200 bg-white text-zinc-800 hover:border-tenzy-teal/40 hover:text-tenzy-teal"
                           }`}
                       >
                         Next
@@ -794,69 +1019,74 @@ const ProductsPage = () => {
         </section>
       </main>
 
-      {/* Mobile slide panel (Sort / Filters) */}
+      {/* ── MOBILE BOTTOM SHEET (Sort / Filters) ──────────────────── */}
       {mobilePanelOpen && (
-        <div className="fixed inset-0 z-999 md:hidden">
+        <div className="fixed inset-0 z-[999] md:hidden flex flex-col justify-end">
+          {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/45"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobilePanelOpen(false)}
           />
 
+          {/* Sheet */}
           <div
             ref={panelRef}
-            className="absolute left-0 top-0 h-full w-[86%] max-w-[360px] bg-linear-to-b from-white via-slate-50 to-indigo-50 shadow-2xl border-r border-slate-200"
+            className="relative bg-white rounded-t-3xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMobilePanelTab("sort")}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                    mobilePanelTab === "sort"
-                      ? "bg-slate-950 text-white"
-                      : "bg-slate-100 text-slate-900"
-                  }`}
-                >
-                  Sort
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMobilePanelTab("filters")}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                    mobilePanelTab === "filters"
-                      ? "bg-slate-950 text-white"
-                      : "bg-slate-100 text-slate-900"
-                  }`}
-                >
-                  Filters
-                </button>
-              </div>
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="h-1 w-10 rounded-full bg-zinc-200" />
+            </div>
 
+            {/* Tab bar */}
+            <div className="flex items-center gap-2 px-4 pb-3 border-b border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setMobilePanelTab("sort")}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold transition capitalize"
+                style={
+                  mobilePanelTab === "sort"
+                    ? { background: "#2BB9B4", color: "white" }
+                    : { background: "#f4f4f5", color: "#52525b" }
+                }
+              >
+                Sort
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobilePanelTab("filters")}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold transition capitalize"
+                style={
+                  mobilePanelTab === "filters"
+                    ? { background: "#2BB9B4", color: "white" }
+                    : { background: "#f4f4f5", color: "#52525b" }
+                }
+              >
+                Filters
+                {hasActiveFilters && mobilePanelTab !== "filters" && (
+                  <span
+                    className="ml-1.5 inline-flex h-4 w-4 rounded-full text-white text-[9px] font-bold items-center justify-center"
+                    style={{ background: "#E8522A" }}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => setMobilePanelOpen(false)}
-                className="h-10 w-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
-                aria-label="Close"
+                className="h-10 w-10 rounded-xl border border-zinc-200 bg-white flex items-center justify-center shrink-0"
               >
-                ✕
+                <X size={15} />
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto h-[calc(100%-64px)]">
+            {/* Panel content */}
+            <div className="p-4 overflow-y-auto max-h-[65vh]">
               {mobilePanelTab === "sort" ? (
                 <div className="grid gap-2">
-                  <p className="text-sm font-semibold text-slate-900 mb-1">
-                    Sort products
-                  </p>
-
-                  {[
-                    { v: "featured", label: "Featured" },
-                    { v: "priceAsc", label: "Price: Low → High" },
-                    { v: "priceDesc", label: "Price: High → Low" },
-                    { v: "discount", label: "Highest Discount" },
-                    { v: "stock", label: "Most Stock" },
-                  ].map((opt) => (
+                  {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.v}
                       type="button"
@@ -864,35 +1094,37 @@ const ProductsPage = () => {
                         setSort(opt.v);
                         setMobilePanelOpen(false);
                       }}
-                      className={`w-full text-left rounded-2xl border px-4 py-3 text-sm font-semibold transition
-                        ${
-                          sort === opt.v
-                            ? "border-slate-950 bg-slate-950 text-white"
-                            : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
-                        }`}
+                      className="flex items-center justify-between rounded-2xl border px-4 py-3.5 text-sm font-semibold transition"
+                      style={
+                        sort === opt.v
+                          ? { borderColor: "rgba(43,185,180,0.4)", background: "rgba(43,185,180,0.06)", color: "#2BB9B4" }
+                          : { borderColor: "#f4f4f5", background: "#fafafa", color: "#3f3f46" }
+                      }
                     >
                       {opt.label}
+                      {sort === opt.v && <Check size={15} style={{ color: "#2BB9B4" }} />}
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="grid gap-4">
+                <div className="space-y-5">
+                  {/* Category */}
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                       Category
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {uniqueCats.map((cat) => (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => setActiveCategory(cat)}
-                          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition
-                            ${
-                              activeCategory === cat
-                                ? "bg-slate-950 text-white"
-                                : "bg-white border border-slate-200 text-slate-900 hover:bg-slate-50"
-                            }`}
+                          className="rounded-full px-3.5 py-1.5 text-xs font-bold transition"
+                          style={
+                            activeCategory === cat
+                              ? { background: "#2BB9B4", color: "white" }
+                              : { background: "#f4f4f5", color: "#52525b" }
+                          }
                         >
                           {cat}
                         </button>
@@ -900,95 +1132,99 @@ const ProductsPage = () => {
                     </div>
                   </div>
 
+                  {/* Price */}
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      Max Price
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      LKR {formatLKR(priceMin)} — LKR {formatLKR(priceMax)}
-                    </p>
-
+                    <div className="flex justify-between mb-2">
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                        Price
+                      </p>
+                      <span className="text-xs font-bold" style={{ color: "#2BB9B4" }}>
+                        ≤ LKR {formatLKR(maxPrice)}
+                      </span>
+                    </div>
                     <input
                       type="range"
                       min={priceMin}
                       max={priceMax}
                       value={maxPrice}
                       onChange={(e) =>
-                        setMaxPrice(
-                          clamp(Number(e.target.value), priceMin, priceMax)
-                        )
+                        setMaxPrice(clamp(Number(e.target.value), priceMin, priceMax))
                       }
-                      className="mt-3 w-full"
+                      className="w-full"
+                      style={{ accentColor: "#2BB9B4" }}
                     />
-
-                    <div className="mt-2 rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-900">
-                      Up to: LKR {formatLKR(maxPrice)}
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[10px] text-zinc-400">
+                        LKR {formatLKR(priceMin)}
+                      </span>
+                      <span className="text-[10px] text-zinc-400">
+                        LKR {formatLKR(priceMax)}
+                      </span>
                     </div>
                   </div>
 
+                  {/* Brand */}
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                       Brand
                     </p>
-                    <select
-                      value={selectedBrandId}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setSelectedBrandId(
-                          v === "All" || v === "" || v === "undefined"
-                            ? "All"
-                            : v
-                        );
-                      }}
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
-                    >
-                      <option value="All">All Brands</option>
-                      {BrandsList.map((b) => {
-                        const id = b.id ?? b.BrandID ?? b.brandId ?? b.brandID;
-                        return (
-                          <option key={id ?? b.name} value={String(id)}>
-                            {b.name ?? b.BrandName}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={selectedBrandId}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSelectedBrandId(
+                            v === "All" || v === "" || v === "undefined" ? "All" : v
+                          );
+                        }}
+                        className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 pr-9 text-sm font-medium text-zinc-800 outline-none"
+                      >
+                        <option value="All">All Brands</option>
+                        {BrandsList.map((b) => {
+                          const id = b.id ?? b.BrandID ?? b.brandId ?? b.brandID;
+                          return (
+                            <option key={id ?? b.name} value={String(id)}>
+                              {b.name ?? b.BrandName}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <ChevronDown
+                        size={13}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400"
+                      />
+                    </div>
                   </div>
 
-                  <div className="grid gap-3">
-                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <span className="text-sm font-semibold text-slate-900">
-                        In Sale
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={onlySale}
-                        onChange={(e) => setOnlySale(e.target.checked)}
-                        className="h-5 w-5"
-                      />
+                  {/* Toggles */}
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-4 py-3 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <Tag size={13} className="text-zinc-400" />
+                        <span className="text-sm font-semibold text-zinc-800">On Sale</span>
+                      </div>
+                      <ToggleSwitch checked={onlySale} onChange={setOnlySale} />
                     </label>
-
-                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <span className="text-sm font-semibold text-slate-900">
-                        In Stock
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={onlyInStock}
-                        onChange={(e) => setOnlyInStock(e.target.checked)}
-                        className="h-5 w-5"
-                      />
+                    <label className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-4 py-3 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <Check size={13} className="text-zinc-400" />
+                        <span className="text-sm font-semibold text-zinc-800">In Stock</span>
+                      </div>
+                      <ToggleSwitch checked={onlyInStock} onChange={setOnlyInStock} />
                     </label>
                   </div>
 
+                  {/* Clear filters */}
                   <button
                     type="button"
                     onClick={() => {
                       clearFilters();
                       setMobilePanelOpen(false);
                     }}
-                    className="rounded-2xl bg-slate-900 text-white px-5 py-3 text-sm font-semibold hover:bg-slate-800 transition"
+                    className="w-full rounded-2xl py-3.5 text-sm font-bold text-white hover:opacity-90 transition"
+                    style={{ background: "#2BB9B4" }}
                   >
-                    Clear Filters
+                    Clear all filters
                   </button>
                 </div>
               )}
@@ -996,6 +1232,7 @@ const ProductsPage = () => {
           </div>
         </div>
       )}
+
       <Footer />
     </div>
   );

@@ -38,11 +38,11 @@ const WishlistPage = () => {
       <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 py-8 md:py-12">
         {/* Top area */}
         <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="absolute inset-0 bg-linear-to-r from-amber-100/60 via-white to-orange-100/60" />
+          <div className="absolute inset-0 bg-linear-to-r from-teal-50/60 via-white to-orange-50/50" />
           <div className="relative p-6 md:p-8">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
               <div>
-                <p className="text-xs font-semibold text-slate-500 tracking-wide">
+                <p className="text-xs font-semibold tracking-wide" style={{ color: "#2BB9B4" }}>
                   YOUR COLLECTION
                 </p>
                 <h1 className="mt-2 text-2xl md:text-4xl font-semibold text-slate-900">
@@ -56,7 +56,7 @@ const WishlistPage = () => {
 
               {/* Stats pill */}
               <div className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/70 backdrop-blur px-4 py-3">
-                <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center">
+                <div className="h-10 w-10 rounded-2xl bg-tenzy-teal text-white flex items-center justify-center">
                   ♥
                 </div>
                 <div>
@@ -82,7 +82,7 @@ const WishlistPage = () => {
                 <button
                   type="button"
                   onClick={() => navigate("/products")}
-                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-linear-to-r from-amber-400 to-orange-500 shadow-lg shadow-amber-500/25 hover:opacity-95 transition"
+                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-tenzy-orange hover:opacity-90 transition"
                 >
                   Explore more deals
                 </button>
@@ -94,7 +94,7 @@ const WishlistPage = () => {
         {/* Empty state */}
         {items.length === 0 && (
           <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-8 md:p-12 text-center shadow-sm">
-            <div className="mx-auto h-14 w-14 rounded-2xl bg-linear-to-r from-amber-400 to-orange-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-amber-500/25">
+            <div className="mx-auto h-14 w-14 rounded-2xl bg-tenzy-teal/10 flex items-center justify-center text-2xl">
               ♡
             </div>
             <h2 className="mt-4 text-xl md:text-2xl font-semibold text-slate-900">
@@ -107,7 +107,7 @@ const WishlistPage = () => {
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="mt-6 rounded-2xl px-6 py-3 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 transition"
+              className="mt-6 rounded-2xl px-6 py-3 text-sm font-semibold text-white bg-tenzy-teal hover:opacity-90 transition"
             >
               Start adding favorites
             </button>
@@ -133,7 +133,7 @@ const WishlistPage = () => {
 
                   {/* Sale */}
                   {p.inSale && (
-                    <div className="absolute top-3 left-3 rounded-xl bg-linear-to-r from-pink-500 to-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-pink-500/20">
+                    <div className="absolute top-3 left-3 rounded-xl bg-tenzy-orange px-3 py-1.5 text-xs font-semibold text-white">
                       IN SALE
                     </div>
                   )}
@@ -144,7 +144,7 @@ const WishlistPage = () => {
                       ${
                         p.outOfStock
                           ? "bg-black/60"
-                          : "bg-linear-to-r from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                          : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
                       }`}
                   >
                     {p.outOfStock ? "Out of stock" : `Stock: ${p.stockCount}`}
@@ -160,7 +160,7 @@ const WishlistPage = () => {
                         className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95
                           ${
                             isWishlisted(p.id)
-                              ? "bg-red-500/90 text-white"
+                              ? "bg-tenzy-orange/90 text-white"
                               : "bg-slate-100 text-slate-900"
                           }`}
                         aria-label="Remove from wishlist"
@@ -173,7 +173,7 @@ const WishlistPage = () => {
                       <button
                         type="button"
                         onClick={() => goToProduct(p)}
-                        className="flex-1 h-10 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition active:scale-95"
+                        className="flex-1 h-10 rounded-xl bg-tenzy-teal text-white text-xs font-semibold hover:opacity-90 transition active:scale-95"
                       >
                         View product
                       </button>
@@ -198,14 +198,14 @@ const WishlistPage = () => {
                     </div>
 
                     <div className="text-right">
-                      <p className="text-xs font-semibold text-red-600">
+                      <p className="text-xs font-semibold text-tenzy-orange">
                         -{p.discountPercent}%
                       </p>
                     </div>
                   </div>
 
                   {/* Minimal “most wanted” info */}
-                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-teal-50/50 px-3 py-2">
                     <p className="text-[11px] text-slate-700">
                       Pay with{" "}
                       <span className="font-semibold">{p.paymentProvider}</span>{" "}

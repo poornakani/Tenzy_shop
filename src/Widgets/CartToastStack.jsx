@@ -69,11 +69,11 @@ const CartToastStack = () => {
           <div className="absolute inset-0 bg-linear-to-br from-[#0b3a3a] via-[#1f2f3a] to-[#3a1f14]" />
 
           {/* Glow blobs (logo colours) */}
-          <div className="pointer-events-none absolute -top-20 -left-20 h-44 w-44 rounded-full bg-[#ff7a18]/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -right-20 h-44 w-44 rounded-full bg-[#14b8a6]/25 blur-3xl" />
+          <div className="pointer-events-none absolute -top-20 -left-20 h-44 w-44 rounded-full bg-[#E8522A]/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -right-20 h-44 w-44 rounded-full bg-tenzy-teal/25 blur-3xl" />
 
           {/* Accent bar */}
-          <div className="absolute left-0 top-0 h-full w-[4px] bg-linear-to-b from-[#ff7a18] to-[#14b8a6]" />
+          <div className="absolute left-0 top-0 h-full w-[4px] bg-linear-to-b from-[#E8522A] to-tenzy-teal" />
 
           <div className="relative flex items-center gap-3 p-4 text-white">
             {/* Image */}
@@ -101,7 +101,7 @@ const CartToastStack = () => {
               )}
 
               {/* tiny highlight line */}
-              <div className="mt-2 h-[2px] w-24 rounded-full bg-linear-to-r from-[#ff7a18] via-white/25 to-[#14b8a6]" />
+              <div className="mt-2 h-[2px] w-24 rounded-full bg-linear-to-r from-[#E8522A] via-white/25 to-tenzy-teal" />
             </div>
 
             {/* Close */}

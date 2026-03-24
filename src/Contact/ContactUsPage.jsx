@@ -106,16 +106,16 @@ const ContactUsPage = () => {
       <div className="relative">
         <div className="absolute inset-0 bg-linear-to-b from-[#070b14] via-[#0b1220] to-[#070b14]" />
         {/* soft brand glows */}
-        <div className="absolute -top-28 -left-28 h-72 w-72 rounded-full bg-[#ff7a18]/12 blur-3xl" />
-        <div className="absolute top-40 -right-28 h-72 w-72 rounded-full bg-[#14b8a6]/12 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-[#ff7a18]/10 blur-3xl" />
+        <div className="absolute -top-28 -left-28 h-72 w-72 rounded-full bg-[#E8522A]/12 blur-3xl" />
+        <div className="absolute top-40 -right-28 h-72 w-72 rounded-full bg-tenzy-teal/12 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-[#E8522A]/10 blur-3xl" />
 
         <main className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 pb-16">
           {/* Hero */}
           <section className="cu-hero">
             <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden">
               <div className="relative p-6 sm:p-8">
-                <div className="absolute inset-0 bg-linear-to-r from-[#ff7a18]/10 via-transparent to-[#14b8a6]/10" />
+                <div className="absolute inset-0 bg-linear-to-r from-[#E8522A]/10 via-transparent to-tenzy-teal/10" />
                 <div className="relative">
                   <p className="text-xs font-semibold tracking-wide text-white/60">
                     CONTACT US
@@ -191,11 +191,11 @@ const ContactUsPage = () => {
                       placeholder="Tell us what you need..."
                       className={[
                         "mt-2 w-full rounded-2xl border bg-white/5 backdrop-blur px-4 py-3 text-sm text-white outline-none",
-                        "border-white/10 focus:border-[#ff7a18]/50 focus:ring-2 focus:ring-[#14b8a6]/20",
+                        "border-white/10 focus:border-[#E8522A]/50 focus:ring-2 focus:ring-tenzy-teal/20",
                       ].join(" ")}
                     />
                     {errors.message ? (
-                      <p className="mt-1 text-xs text-[#ff7a18]">
+                      <p className="mt-1 text-xs text-[#E8522A]">
                         {errors.message}
                       </p>
                     ) : null}
@@ -204,10 +204,7 @@ const ContactUsPage = () => {
                   <div className=" flex flex-row justify-center sm:grid-cols-2">
                     <button
                       type="submit"
-                      className="rounded-2xl px-20 py-3 text-sm font-semibold text-white
-                                 bg-linear-to-r from-[#ff7a18] to-[#f97316]
-                                 shadow-lg shadow-[#ff7a18]/25
-                                 hover:opacity-95 active:scale-95 transition"
+                      className="rounded-2xl px-20 py-3 text-sm font-semibold text-white bg-tenzy-orange shadow-lg shadow-tenzy-orange/25 hover:opacity-90 active:scale-95 transition"
                     >
                       Send Email
                     </button>
@@ -233,7 +230,7 @@ const ContactUsPage = () => {
                   <InfoRow title="Location" value="Nugegoda, Sri Lanka" />
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-white/10 bg-linear-to-r from-[#14b8a6]/10 via-transparent to-[#ff7a18]/10 p-4">
+                <div className="mt-5 rounded-2xl border border-white/10 bg-linear-to-r from-tenzy-teal/10 via-transparent to-tenzy-orange/10 p-4">
                   <p className="text-sm font-semibold text-white">Quick help</p>
                   <p className="mt-1 text-xs text-white/70">
                     For order issues, include your Order ID in the subject line.
@@ -264,10 +261,7 @@ const ContactUsPage = () => {
 
                 <div className="p-4">
                   <a
-                    className="inline-flex items-center justify-center w-full rounded-2xl px-5 py-3 text-sm font-semibold text-white
-                               bg-linear-to-r from-[#14b8a6] to-[#0ea5e9]
-                               shadow-lg shadow-[#14b8a6]/20
-                               hover:opacity-95 active:scale-95 transition"
+                    className="inline-flex items-center justify-center w-full rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-tenzy-teal shadow-lg shadow-tenzy-teal/20 hover:opacity-90 active:scale-95 transition"
                     href="https://www.google.com/maps?q=Nugegoda,+Sri+Lanka"
                     target="_blank"
                     rel="noreferrer"
@@ -303,10 +297,10 @@ function Field({ label, value, onChange, placeholder, error }) {
         placeholder={placeholder}
         className={[
           "mt-2 w-full rounded-2xl border bg-white/5 backdrop-blur px-4 py-3 text-sm text-white outline-none",
-          "border-white/10 focus:border-[#14b8a6]/50 focus:ring-2 focus:ring-[#ff7a18]/15",
+          "border-white/10 focus:border-tenzy-teal/50 focus:ring-2 focus:ring-tenzy-orange/15",
         ].join(" ")}
       />
-      {error ? <p className="mt-1 text-xs text-[#ff7a18]">{error}</p> : null}
+      {error ? <p className="mt-1 text-xs text-tenzy-orange">{error}</p> : null}
     </div>
   );
 }

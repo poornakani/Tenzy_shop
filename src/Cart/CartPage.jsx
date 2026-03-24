@@ -67,10 +67,10 @@ const CartPage = () => {
         {/* Top */}
         <section className="cart-hero rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="relative p-5 sm:p-6">
-            <div className="absolute inset-0 bg-linear-to-r from-amber-100/60 via-white to-orange-100/60" />
+            <div className="absolute inset-0 bg-linear-to-r from-teal-50/60 via-white to-orange-50/50" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold text-slate-500 tracking-wide">
+                <p className="text-xs font-semibold tracking-wide" style={{ color: "#2BB9B4" }}>
                   CART
                 </p>
                 <h1 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900">
@@ -102,7 +102,7 @@ const CartPage = () => {
                   <button
                     type="button"
                     onClick={clearCart}
-                    className="rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800 transition"
+                    className="rounded-2xl bg-tenzy-teal text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition"
                   >
                     Clear cart
                   </button>
@@ -118,7 +118,7 @@ const CartPage = () => {
           <section className="lg:col-span-8">
             {items.length === 0 ? (
               <div className="cart-card rounded-3xl border border-slate-200 bg-white shadow-sm p-8 text-center">
-                <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-900/10 flex items-center justify-center text-2xl">
+                <div className="mx-auto h-14 w-14 rounded-2xl bg-tenzy-teal/10 flex items-center justify-center text-2xl">
                   🛍️
                 </div>
                 <h3 className="mt-4 text-lg font-semibold text-slate-900">
@@ -130,7 +130,7 @@ const CartPage = () => {
                 <button
                   type="button"
                   onClick={() => navigate("/products")}
-                  className="mt-5 rounded-2xl bg-linear-to-r from-amber-400 to-orange-500 text-white px-5 py-3 text-sm font-semibold shadow-lg shadow-amber-500/25 hover:opacity-95 transition active:scale-95"
+                  className="mt-5 rounded-2xl bg-tenzy-orange text-white px-5 py-3 text-sm font-semibold hover:opacity-90 transition active:scale-95"
                 >
                   Go to shop
                 </button>
@@ -181,7 +181,7 @@ const CartPage = () => {
                                     <span className="text-xs text-slate-500 line-through">
                                       LKR {formatLKR(p.price)}
                                     </span>
-                                    <span className="text-xs font-semibold text-red-600">
+                                    <span className="text-xs font-semibold text-tenzy-orange">
                                       -{p.discountPercent}%
                                     </span>
                                   </>
@@ -193,7 +193,7 @@ const CartPage = () => {
                                   className={`inline-flex items-center rounded-xl px-3 py-1 text-xs font-semibold ${
                                     outOfStock
                                       ? "bg-black/10 text-slate-700"
-                                      : "bg-emerald-50 text-emerald-700"
+                                      : "bg-teal-50 text-tenzy-teal"
                                   }`}
                                 >
                                   {outOfStock
@@ -282,7 +282,7 @@ const CartPage = () => {
                 <button
                   type="button"
                   onClick={clearCart}
-                  className="rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800 transition"
+                  className="rounded-2xl bg-tenzy-teal text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition"
                 >
                   Clear
                 </button>
@@ -319,7 +319,7 @@ const CartPage = () => {
                   {savings > 0 && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-slate-600">You saved</span>
-                      <span className="font-semibold text-emerald-600">
+                      <span className="font-semibold text-tenzy-teal">
                         - LKR {formatLKR(savings)}
                       </span>
                     </div>
@@ -345,7 +345,7 @@ const CartPage = () => {
                     className={`rounded-2xl px-4 py-3 text-sm font-semibold transition active:scale-95 ${
                       items.length === 0
                         ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                        : "bg-linear-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/25 hover:opacity-95"
+                        : "bg-tenzy-orange text-white hover:opacity-90"
                     }`}
                   >
                     Proceed to Checkout
@@ -366,7 +366,7 @@ const CartPage = () => {
                 </div>
 
                 {/* Little trust line */}
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-teal-50/50 p-4">
                   <p className="text-xs text-slate-700">
                     Free shipping for orders above{" "}
                     <span className="font-semibold">LKR 50,000</span>.

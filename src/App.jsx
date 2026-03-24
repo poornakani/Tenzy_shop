@@ -24,7 +24,7 @@ import { ToastProvider } from "./Context/ToastContext";
 import CartToastStack from "./Widgets/CartToastStack";
 import ContactUsPage from "./Contact/ContactUsPage";
 import PageTransition from "./Animation/PageTransition";
-import CustomerInfoPage from "./Poliyices/CustomerInfo";
+import CustomerInfoPage from "./Policies/CustomerInfo";
 import BlogPage from "./BlogsPages/BlogPage";
 import BlogDetails from "./BlogsPages/BlogDetails";
 import SignInPage from "./Authenticator/Pages/SignInPage";

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 const Banner01 = () => {
   const navigator = useNavigate();
   return (
-    <div className="mt-5 mb-5 px-4 sm:px-6 md:mt-20 md:mb-10 md:px-10">
+    <div className="py-8 md:py-14 px-4 sm:px-6 md:px-10">
       <section
         className="
       relative mx-auto w-full overflow-hidden text-center

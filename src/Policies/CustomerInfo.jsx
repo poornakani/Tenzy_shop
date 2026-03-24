@@ -67,7 +67,7 @@ export default function CustomerInfoPage() {
             <button
               key={id}
               onClick={() => goTo(id)}
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-tenzy-teal/40 hover:text-tenzy-teal transition"
               type="button"
             >
               {label}
@@ -175,11 +175,11 @@ export default function CustomerInfoPage() {
                 </p>
                 <div className="mt-3 flex flex-col sm:flex-row gap-3">
                   <input
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-slate-900/10"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-tenzy-teal/30"
                     placeholder="Enter your tracking number"
                   />
                   <button
-                    className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition"
+                    className="rounded-xl bg-tenzy-teal px-5 py-3 text-sm font-semibold text-white hover:opacity-90 transition"
                     type="button"
                   >
                     Track
@@ -205,7 +205,7 @@ export default function CustomerInfoPage() {
                 </p>
                 <div className="mt-4 flex flex-col gap-2">
                   <button
-                    className="rounded-xl bg-[#0b5351] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition"
+                    className="rounded-xl bg-tenzy-teal px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition"
                     type="button"
                   >
                     Contact Support
@@ -234,7 +234,7 @@ export default function CustomerInfoPage() {
                     <button
                       key={id}
                       onClick={() => goTo(id)}
-                      className="text-left rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+                      className="text-left rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-tenzy-teal/40 hover:text-tenzy-teal transition"
                       type="button"
                     >
                       {label}

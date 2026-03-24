@@ -97,8 +97,8 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
   }, [scrollProgress, mediaFullyExpanded, touchStartY]);
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const mediaW = 280 + scrollProgress * (isMobile ? 700 : 1300);
-  const mediaH = 380 + scrollProgress * (isMobile ? 220 : 420);
+  const mediaW = 750 + scrollProgress * (isMobile ? 230 : 830);
+  const mediaH = 600 + scrollProgress * (isMobile ? 0 : 200);
   const shiftVw = scrollProgress * (isMobile ? 160 : 140);
 
   const current = bgSlides[slideIndex] ?? {};
@@ -150,27 +150,29 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                   boxShadow: "0 8px 80px rgba(0,0,0,0.5)",
                 }}
               >
-                {/* Crossfade the card image too */}
-                {bgSlides.map((slide, i) => (
-                  <motion.img
-                    key={slide.image}
-                    src={slide.image}
-                    alt={slide.title}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: i === slideIndex ? 1 : 0 }}
-                    transition={{ duration: 1.2, ease: "easeInOut" }}
-                  />
-                ))}
+                {/* Hero YouTube video — covers card like object-cover */}
+                <iframe
+                  title="Hero video"
+                  src="https://www.youtube.com/embed/lnTWVAyMHg0?autoplay=1&mute=1&loop=1&playlist=lnTWVAyMHg0&controls=0&rel=0&modestbranding=1&playsinline=1"
+                  allow="autoplay; encrypted-media"
+                  className="absolute border-0 pointer-events-none"
+                  style={{
+                    top: "50%",
+                    left: "50%",
+                    width: `${Math.max(mediaW, (mediaH * 16) / 9)}px`,
+                    height: `${Math.max(mediaH, (mediaW * 9) / 16)}px`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                />
 
-                {/* Overlay clears as card expands */}
+                {/* Dark shade — full at rest so text/button are readable, clears as card expands */}
                 <motion.div
                   className="absolute inset-0"
                   style={{
                     background:
-                      "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.6) 100%)",
+                      "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.82) 50%, rgba(0,0,0,0.65) 100%)",
                   }}
-                  animate={{ opacity: 0.9 - scrollProgress * 0.55 }}
+                  animate={{ opacity: Math.max(0, 1 - scrollProgress * 1.1) }}
                   transition={{ duration: 0.15 }}
                 />
               </div>
@@ -229,7 +231,7 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                 {/* Skin Consultation button — visible on the hero before scrolling */}
                 <motion.button
                   onClick={() => navigate("/contact")}
-                  className="mt-6 rounded-full border border-tenzy-teal text-tenzy-teal text-sm font-semibold px-8 py-3 hover:bg-tenzy-teal hover:text-white transition-all active:scale-95 backdrop-blur-sm bg-white/5"
+                  className="mt-8 rounded-full border-2 border-tenzy-teal text-tenzy-teal text-base md:text-lg font-bold px-10 md:px-14 py-4 md:py-5 hover:bg-tenzy-teal hover:text-white transition-all active:scale-95 backdrop-blur-sm bg-white/5 shadow-lg shadow-tenzy-teal/20"
                   style={{ textShadow: "none" }}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -324,13 +326,13 @@ const HeroContent = () => {
           <div className="mt-9 flex flex-col sm:flex-row gap-4">
             <button
               onClick={() => navigate("/products")}
-              className="rounded-full bg-tenzy-orange text-white px-8 py-3.5 text-sm font-bold hover:bg-tenzy-orange/85 transition active:scale-95 shadow-xl shadow-tenzy-orange/30"
+              className="rounded-full bg-tenzy-orange text-white px-10 py-4 text-base md:text-lg font-bold hover:bg-tenzy-orange/85 transition active:scale-95 shadow-xl shadow-tenzy-orange/30"
             >
               Shop With Us
             </button>
             <button
               onClick={() => navigate("/contact")}
-              className="rounded-full border border-tenzy-teal/50 text-tenzy-teal px-8 py-3.5 text-sm font-semibold hover:bg-tenzy-teal/10 transition active:scale-95"
+              className="rounded-full border-2 border-tenzy-teal/60 text-tenzy-teal px-10 py-4 text-base md:text-lg font-semibold hover:bg-tenzy-teal/10 transition active:scale-95"
             >
               Skin Consultation
             </button>

@@ -112,10 +112,10 @@ const QuickViewModal = ({
         "
       >
         {/* Top bar */}
-        <div className="px-4 py-3 md:px-5 md:py-4 border-b border-slate-200 bg-linear-to-r from-amber-50 via-white to-orange-50">
+        <div className="px-4 py-3 md:px-5 md:py-4 border-b border-slate-200 bg-linear-to-r from-teal-50 via-white to-orange-50">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] md:text-xs font-semibold text-slate-500 tracking-wide">
+              <p className="text-[10px] md:text-xs font-semibold tracking-wide" style={{ color: "#2BB9B4" }}>
                 QUICK VIEW
               </p>
               <h3 className="text-base md:text-lg lg:text-xl font-semibold text-slate-900 leading-snug truncate">
@@ -140,7 +140,7 @@ const QuickViewModal = ({
           <div className="grid gap-4 p-4 md:gap-5 md:p-5 md:grid-cols-2">
             {/* Image */}
             <div className="rounded-2xl md:rounded-3xl overflow-hidden border border-slate-200 bg-slate-50">
-              <div className="relative aspect-[4/3] md:aspect-4/5">
+              <div className="relative aspect-4/3 md:aspect-4/5">
                 <img
                   src={product.image}
                   alt={product.name}
@@ -148,7 +148,7 @@ const QuickViewModal = ({
                 />
 
                 {product.inSale && (
-                  <div className="absolute top-2 left-2 md:top-3 md:left-3 rounded-xl bg-linear-to-r from-pink-500 to-red-600 px-2.5 py-1 text-[10px] md:text-xs font-semibold text-white shadow-lg shadow-pink-500/20">
+                  <div className="absolute top-2 left-2 md:top-3 md:left-3 rounded-xl bg-tenzy-orange px-2.5 py-1 text-[10px] md:text-xs font-semibold text-white shadow-lg shadow-tenzy-orange/25">
                     IN SALE
                   </div>
                 )}
@@ -158,7 +158,7 @@ const QuickViewModal = ({
                     ${
                       outOfStock
                         ? "bg-black/60"
-                        : "bg-linear-to-r from-emerald-500 to-teal-600 shadow-emerald-500/20"
+                        : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
                     }`}
                 >
                   {outOfStock ? "Out of stock" : `Stock: ${stock}`}
@@ -171,7 +171,7 @@ const QuickViewModal = ({
             {/* Details */}
             <div className="flex flex-col">
               {/* Price */}
-              <div className="rounded-2xl md:rounded-3xl border border-slate-200 bg-linear-to-br from-slate-50 via-white to-amber-50 p-3 md:p-4">
+              <div className="rounded-2xl md:rounded-3xl border border-slate-200 bg-linear-to-br from-teal-50 via-white to-orange-50 p-3 md:p-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
                     <p className="text-xs md:text-sm text-slate-600">Price</p>
@@ -184,7 +184,7 @@ const QuickViewModal = ({
                     <p className="text-xs md:text-sm text-slate-500 line-through">
                       LKR {formatLKR(product.price)}
                     </p>
-                    <p className="text-xs md:text-sm font-semibold text-red-600">
+                    <p className="text-xs md:text-sm font-semibold text-tenzy-orange">
                       -{product.discountPercent}%
                     </p>
                   </div>
@@ -247,7 +247,7 @@ const QuickViewModal = ({
                       className={`w-full rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-sm font-semibold transition active:scale-95
                         ${
                           IsWishlisted
-                            ? "bg-linear-to-r from-pink-500 to-red-600 text-white shadow-lg shadow-pink-500/25"
+                            ? "bg-tenzy-orange text-white shadow-lg shadow-tenzy-orange/25"
                             : "bg-linear-to-r from-slate-100 to-slate-200 text-slate-900"
                         }`}
                     >
@@ -267,7 +267,7 @@ const QuickViewModal = ({
                         ${
                           outOfStock
                             ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                            : "bg-linear-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/25"
+                            : "bg-tenzy-teal text-white shadow-lg shadow-tenzy-teal/25"
                         }`}
                     >
                       Add to cart
@@ -288,7 +288,7 @@ const QuickViewModal = ({
                     type="button"
                     onClick={goToProduct}
                     className="mt-3 w-full md:hidden rounded-2xl px-4 py-2.5 text-sm font-semibold text-white
-                               bg-slate-900 shadow-lg shadow-slate-900/20 active:scale-95 transition"
+                               bg-tenzy-teal shadow-lg shadow-tenzy-teal/20 active:scale-95 transition hover:opacity-90"
                   >
                     View more
                   </button>
