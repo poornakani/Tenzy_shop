@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWishlist } from "@/Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
+import Footer from "@/HomePage/Footer";
 import { SellingProducts } from "@/ProductsJson";
 
 function formatLKR(value) {
@@ -217,6 +218,7 @@ const WishlistPage = () => {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 };

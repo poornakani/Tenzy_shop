@@ -31,7 +31,7 @@ const PostCard = ({ post }) => (
         className="h-44 sm:h-52 w-full object-cover group-hover:scale-[1.02] transition duration-500"
         loading="lazy"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-t from-black/30 via-transparent to-transparent" />
       <div className="absolute left-4 top-4 flex gap-2">
         <Badge>{post.category}</Badge>
         <Badge>{post.readTime}</Badge>
@@ -89,9 +89,9 @@ export default function BlogPage() {
   return (
     <div className="min-h-screen bg-linear-to-b from-slate-50 to-white">
       <Navibar />
-      <div className="h-24 bg-linear-to-b from-slate-950 " />
+      <div className="h-24 bg-linear-to-b from-slate-950" />
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-10 pt-10 sm:pt-14 pb-10">
-        {/* <div className="rounded-[2.5rem] border border-black/5 bg-white/70 shadow-sm overflow-hidden">
+        <div className="rounded-[2.5rem] border border-black/5 bg-white/70 shadow-sm overflow-hidden">
           <div className="relative p-6 sm:p-10">
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-amber-200/40 blur-3xl" />
@@ -136,7 +136,7 @@ export default function BlogPage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {CATEGORIES.slice(0, 6).map((c) => (
+                {CATEGORIES.map((c) => (
                   <button
                     key={c}
                     onClick={() => setCategory(c)}
@@ -153,7 +153,13 @@ export default function BlogPage() {
               </div>
             </div>
           </div>
-        </div> */}
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="mt-10 text-center text-slate-500 text-sm py-16">
+            No articles found for your search.
+          </div>
+        )}
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((p) => (

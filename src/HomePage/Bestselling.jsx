@@ -220,7 +220,6 @@ const BestSelling = () => {
                           e.preventDefault();
                           e.stopPropagation();
                           onQuickView(pWithComputed);
-                          console.log("Add to cart:", p.id);
                         }}
                         className={`flex-1 rounded-xl px-3 py-2 shadow-sm active:scale-95 transition backdrop-blur
                                   ${
@@ -366,9 +365,7 @@ const BestSelling = () => {
         IsWishlisted={isWishlisted(selectedProduct?.id)}
         onToggleWishlist={(p) => toggleWishlist(p)}
         onAddToCart={(p, qty) => {
-          // your add to cart logic
           addToCart(p, qty);
-          console.log("Add to cart:", p.id, "qty:", qty);
         }}
       />
     </section>

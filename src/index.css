@@ -9,6 +9,9 @@
 @theme {
   --color-yellow: #e7d393;
   --color-white-100: #efefef;
+  /* Tenzy brand colours (from logo) */
+  --color-tenzy-orange: #E8522A;
+  --color-tenzy-teal: #2BB9B4;
   --font-sans: "Mona Sans", sans-serif;
   --font-modern-negra: "Modern Negra", sans-serif;
   --font-serif: "DM Serif Text", serif;

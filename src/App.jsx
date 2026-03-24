@@ -10,8 +10,6 @@ import Header from "./HomePage/Header";
 import Categories from "./HomePage/Categories";
 import Banner01 from "./HomePage/Banner01";
 import BestSelling from "./HomePage/Bestselling";
-import Banner02 from "./HomePage/Banner02";
-
 import Brands from "./HomePage/Brands";
 import Footer from "./HomePage/Footer";
 import FAQ from "./HomePage/FAQ";
@@ -69,6 +67,7 @@ const App = () => {
                 <Route path="/blog/:id" element={<BlogDetails />} />
                 <Route path="/signin" element={<SignInPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                <Route path="*" element={<Navigate to="/home" replace />} />
               </Routes>
               <CartToastStack />
             </CartProvider>

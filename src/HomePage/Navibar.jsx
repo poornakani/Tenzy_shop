@@ -3,7 +3,7 @@ import { assets } from "@/const";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import ProductSearchDropdown from "@/Widgets/ProductSearchDropdown";
-import { useWishlist } from "@/context/WishlistContext";
+import { useWishlist } from "@/Context/WishlistContext";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { SellingProducts, concerns } from "@/ProductsJson";
 import MobileProductSearchDropdown from "@/Widgets/MobileProductSearchDropdown";
@@ -221,7 +221,7 @@ const Navibar = () => {
             </div>
 
             <Link
-              to="/new-arrivals"
+              to="/products"
               className="text-sm font-medium text-white hover:opacity-80"
             >
               New Arrivals
@@ -469,7 +469,7 @@ const Navibar = () => {
                   </details>
 
                   <Link
-                    to="/new-arrivals"
+                    to="/products"
                     className="rounded-2xl px-4 py-3 bg-white/10 hover:bg-white/15 transition"
                     onClick={() => setOpen(false)}
                   >

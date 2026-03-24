@@ -1,122 +1,389 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
-import { assets, slides } from "@/const";
-import gsap from "gsap";
+import { slides } from "@/const";
 
-const Header = () => {
-  const images = [
-    assets.header,
-    assets.header2,
-    assets.header3,
-    assets.header4,
-  ];
+// ─── Scroll-Expansion Hero ──────────────────────────────────────────────────
 
-  const [index, setIndex] = useState(0);
+const ScrollExpandHero = ({ bgSlides = [], children }) => {
   const navigate = useNavigate();
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [showContent, setShowContent] = useState(false);
+  const [mediaFullyExpanded, setMediaFullyExpanded] = useState(false);
+  const [touchStartY, setTouchStartY] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [slideIndex, setSlideIndex] = useState(0);
 
-  const navProductpage = () => {
-    gsap.to("body", {
-      opacity: 0,
-      duration: 0.4,
-      ease: "power2.inOut",
-      onComplete: () => navigate(`/products`),
-    });
-  };
+  const sectionRef = useRef(null);
 
+  // ── Carousel auto-advance (pauses once expansion begins) ──────────────────
   useEffect(() => {
-    const id = setInterval(() => {
-      setIndex((prev) => (prev + 1) % images.length);
-    }, 4500); //
+    if (scrollProgress > 0) return; // pause while user is expanding
+    const id = setInterval(
+      () => setSlideIndex((p) => (p + 1) % bgSlides.length),
+      4500,
+    );
     return () => clearInterval(id);
-  }, [images.length]);
+  }, [bgSlides.length, scrollProgress]);
+
+  // ── Detect mobile ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // ── Wheel + touch scroll interception ────────────────────────────────────
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (mediaFullyExpanded && e.deltaY < 0 && window.scrollY <= 5) {
+        setMediaFullyExpanded(false);
+        e.preventDefault();
+      } else if (!mediaFullyExpanded) {
+        e.preventDefault();
+        const next = Math.min(
+          Math.max(scrollProgress + e.deltaY * 0.0009, 0),
+          1,
+        );
+        setScrollProgress(next);
+        if (next >= 1) {
+          setMediaFullyExpanded(true);
+          setShowContent(true);
+        } else if (next < 0.75) setShowContent(false);
+      }
+    };
+
+    const handleTouchStart = (e) => setTouchStartY(e.touches[0].clientY);
+
+    const handleTouchMove = (e) => {
+      if (!touchStartY) return;
+      const touchY = e.touches[0].clientY;
+      const deltaY = touchStartY - touchY;
+      if (mediaFullyExpanded && deltaY < -20 && window.scrollY <= 5) {
+        setMediaFullyExpanded(false);
+        e.preventDefault();
+      } else if (!mediaFullyExpanded) {
+        e.preventDefault();
+        const factor = deltaY < 0 ? 0.008 : 0.005;
+        const next = Math.min(Math.max(scrollProgress + deltaY * factor, 0), 1);
+        setScrollProgress(next);
+        if (next >= 1) {
+          setMediaFullyExpanded(true);
+          setShowContent(true);
+        } else if (next < 0.75) setShowContent(false);
+        setTouchStartY(touchY);
+      }
+    };
+
+    const handleTouchEnd = () => setTouchStartY(0);
+    const handleScroll = () => {
+      if (!mediaFullyExpanded) window.scrollTo(0, 0);
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("touchstart", handleTouchStart, { passive: false });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [scrollProgress, mediaFullyExpanded, touchStartY]);
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const mediaW = 280 + scrollProgress * (isMobile ? 700 : 1300);
+  const mediaH = 380 + scrollProgress * (isMobile ? 220 : 420);
+  const shiftVw = scrollProgress * (isMobile ? 160 : 140);
+
+  const current = bgSlides[slideIndex] ?? {};
+  const firstWord = (current.title ?? "").split(" ")[0];
+  const rest = (current.title ?? "").split(" ").slice(1).join(" ");
 
   return (
-    <header id="Header" className="relative h-screen w-screen overflow-hidden">
-      {/* Background Images  */}
-      <div className="absolute inset-0">
-        {slides.map((slide, i) => (
-          <div
-            key={slide.image}
-            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000
-      ${i === index ? "opacity-100" : "opacity-0"}`}
-            style={{ backgroundImage: `url('${slide.image}')` }}
-          />
-        ))}
-
-        {/* Dark overlay for readability */}
-        <div className="absolute inset-0 bg-black/50" />
-      </div>
-
-      {/* Hero content */}
-      <div className="relative z-10 h-full w-full flex items-center px-5 md:px-50 lg:px-60">
-        <div className="container mx-auto px-6 md:px-20">
-          <p className="text-white/80 tracking-widest uppercase text-sm">
-            TENZY SHOP
-          </p>
-          <h1 className="mt-3 text-white text-4xl md:text-6xl font-semibold leading-tight">
-            {slides[index].title}
-          </h1>
-          <p className="mt-5 max-w-xl text-white/80 text-base md:text-lg">
-            {slides[index].description}
-          </p>
-
-          <div className="mt-8 flex gap-4">
-            <button
-              className="rounded-full  bg-white px-30 py-3 text-black font-medium hover:bg-white/90 transition"
-              onClick={() => {
-                navigate(`/products`);
-              }}
-            >
-              Shop Now
-            </button>
-          </div>
-        </div>
-
-        <div className="hidden md:block w-full max-w-xl md:mt-20 lg:mt-10">
-          <div className="relative h-[580px] overflow-hidden rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl">
-            <div className="absolute inset-0 bg-linear-to-b from-white/10 to-black/20" />
-
-            {/* Slides (MUST be absolute) */}
-            <div className="absolute inset-0">
-              {images.map((src, i) => (
-                <div
-                  key={`${src}-${i}`}
-                  className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out
-            ${i === index ? "opacity-100" : "opacity-0"}`}
-                  style={{ backgroundImage: `url('${src}')` }}
+    <div ref={sectionRef} className="overflow-x-hidden">
+      <section className="relative flex flex-col items-center justify-start min-h-dvh">
+        <div className="relative w-full flex flex-col items-center min-h-dvh">
+          {/* ── Background carousel ──────────────────────────────────────── */}
+          <motion.div
+            className="absolute inset-0 z-0"
+            animate={{ opacity: 1 - scrollProgress }}
+            transition={{ duration: 0.1 }}
+          >
+            {/* Crossfading slide images */}
+            {bgSlides.map((slide, i) => (
+              <motion.div
+                key={slide.image}
+                className="absolute inset-0"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: i === slideIndex ? 1 : 0 }}
+                transition={{ duration: 1.2, ease: "easeInOut" }}
+              >
+                <img
+                  src={slide.image}
+                  alt={slide.title}
+                  className="w-screen h-screen object-cover object-center"
                 />
-              ))}
+              </motion.div>
+            ))}
+
+            {/* Gradient overlay — dark at edges, lighter in centre */}
+            <div className="absolute inset-0 bg-linear-to-b from-black/60 via-black/30 to-black/60" />
+          </motion.div>
+
+          {/* ── Main layout ──────────────────────────────────────────────── */}
+          <div className="container mx-auto flex flex-col items-center justify-start relative z-10">
+            <div className="flex flex-col items-center justify-center w-full h-dvh relative">
+              {/* ── Expanding media card ──────────────────────────────────── */}
+              <div
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl overflow-hidden"
+                style={{
+                  width: `${mediaW}px`,
+                  height: `${mediaH}px`,
+                  maxWidth: "95vw",
+                  maxHeight: "85vh",
+                  boxShadow: "0 8px 80px rgba(0,0,0,0.5)",
+                }}
+              >
+                {/* Crossfade the card image too */}
+                {bgSlides.map((slide, i) => (
+                  <motion.img
+                    key={slide.image}
+                    src={slide.image}
+                    alt={slide.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: i === slideIndex ? 1 : 0 }}
+                    transition={{ duration: 1.2, ease: "easeInOut" }}
+                  />
+                ))}
+
+                {/* Overlay clears as card expands */}
+                <motion.div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.6) 100%)",
+                  }}
+                  animate={{ opacity: 0.9 - scrollProgress * 0.55 }}
+                  transition={{ duration: 0.15 }}
+                />
+              </div>
+
+              {/* ── Split title ─────────────────────────────────────────── */}
+              <div
+                className="relative z-10 flex flex-col items-center justify-center w-full gap-1"
+                style={{ opacity: Math.max(0, 1 - scrollProgress * 1.8) }}
+              >
+                {/* Words — no pointer events so they don't block card clicks */}
+                <span
+                  className="block font-bold text-white leading-none tracking-tight pointer-events-none select-none"
+                  style={{
+                    fontSize: isMobile
+                      ? "clamp(3.5rem,14vw,5rem)"
+                      : "clamp(5rem,9vw,8rem)",
+                    textShadow:
+                      "0 4px 32px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,1)",
+                    transform: `translateX(-${shiftVw}vw)`,
+                  }}
+                >
+                  {firstWord}
+                </span>
+
+                {rest && (
+                  <span
+                    className="block font-bold text-white leading-none tracking-tight pointer-events-none select-none"
+                    style={{
+                      fontSize: isMobile
+                        ? "clamp(3.5rem,14vw,5rem)"
+                        : "clamp(5rem,9vw,8rem)",
+                      textShadow:
+                        "0 4px 32px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,1)",
+                      transform: `translateX(${shiftVw}vw)`,
+                    }}
+                  >
+                    {rest}
+                  </span>
+                )}
+
+                {/* Slide description */}
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={slideIndex}
+                    className="mt-4 text-white/80 text-base md:text-lg font-medium tracking-wide pointer-events-none select-none"
+                    style={{ textShadow: "0 2px 12px rgba(0,0,0,0.9)" }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    {current.description}
+                  </motion.p>
+                </AnimatePresence>
+
+                {/* Skin Consultation button — visible on the hero before scrolling */}
+                <motion.button
+                  onClick={() => navigate("/contact")}
+                  className="mt-6 rounded-full border border-tenzy-teal text-tenzy-teal text-sm font-semibold px-8 py-3 hover:bg-tenzy-teal hover:text-white transition-all active:scale-95 backdrop-blur-sm bg-white/5"
+                  style={{ textShadow: "none" }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                >
+                  Book for Skin Consultation
+                </motion.button>
+              </div>
+
+              {/* ── Slide indicator dots ─────────────────────────────────── */}
+              <motion.div
+                className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20"
+                animate={{ opacity: Math.max(0, 1 - scrollProgress * 2) }}
+              >
+                {bgSlides.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSlideIndex(i)}
+                    aria-label={`Go to slide ${i + 1}`}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      i === slideIndex ? "w-6 bg-white" : "w-2 bg-white/40"
+                    }`}
+                  />
+                ))}
+              </motion.div>
             </div>
 
-            <div className="absolute bottom-5 left-5 right-5">
-              <p className="text-white/70 text-xs tracking-widest uppercase">
-                Featured
-              </p>
-              <h3 className="mt-1 text-white text-xl font-semibold">
-                Velvet Pour
-              </h3>
-              <p className="mt-1 text-white/70 text-sm">
-                Smooth transitions • Premium skincare
-              </p>
-            </div>
+            {/* ── Content revealed after full expansion ─────────────────── */}
+            <motion.div
+              className="w-full px-6 pb-16 md:px-16 lg:pb-24"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: showContent ? 1 : 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              {children}
+            </motion.div>
           </div>
         </div>
-      </div>
-
-      {/* Small indicator dots */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-2">
-        {images.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setIndex(i)}
-            className={`h-2 w-2 rounded-full transition-all
-              ${i === index ? "bg-white w-6" : "bg-white/50"}`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
-        ))}
-      </div>
-    </header>
+      </section>
+    </div>
   );
 };
+
+// ─── Post-expansion two-column section ──────────────────────────────────────
+
+const HeroContent = () => {
+  const navigate = useNavigate();
+  return (
+    <div
+      className="w-full rounded-3xl overflow-hidden relative"
+      style={{ background: "linear-gradient(135deg,#1f0805 0%,#06201f 100%)" }}
+    >
+      {/* Orange glow — left */}
+      <div
+        className="absolute top-0 left-0 w-[480px] h-[480px] rounded-full blur-[110px] pointer-events-none"
+        style={{
+          background: "rgba(232,82,42,0.22)",
+          transform: "translate(-30%,-30%)",
+        }}
+      />
+      {/* Teal glow — right */}
+      <div
+        className="absolute bottom-0 right-0 w-[480px] h-[480px] rounded-full blur-[110px] pointer-events-none"
+        style={{
+          background: "rgba(43,185,180,0.18)",
+          transform: "translate(30%,30%)",
+        }}
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 min-h-[580px] relative z-10">
+        {/* Left: text */}
+        <motion.div
+          className="flex flex-col justify-center px-10 py-16 lg:px-16 xl:px-20"
+          initial={{ opacity: 0, x: -55 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span className="inline-flex items-center gap-2 mb-6 text-xs font-semibold text-tenzy-teal tracking-[0.18em] uppercase">
+            <span className="h-px w-6 bg-tenzy-teal" />
+            Premium Beauty · Sri Lanka
+          </span>
+          <h2 className="font-serif text-4xl md:text-5xl lg:text-[3.4rem] text-white leading-tight">
+            Your glow,
+            <br />
+            <span className="text-tenzy-orange italic">your story.</span>
+          </h2>
+          <p className="mt-5 text-white/60 text-base md:text-lg leading-relaxed max-w-sm">
+            Expert-curated beauty essentials from trusted global brands. We help
+            you build the perfect routine — made for your skin, your life.
+          </p>
+          <div className="mt-9 flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={() => navigate("/products")}
+              className="rounded-full bg-tenzy-orange text-white px-8 py-3.5 text-sm font-bold hover:bg-tenzy-orange/85 transition active:scale-95 shadow-xl shadow-tenzy-orange/30"
+            >
+              Shop With Us
+            </button>
+            <button
+              onClick={() => navigate("/contact")}
+              className="rounded-full border border-tenzy-teal/50 text-tenzy-teal px-8 py-3.5 text-sm font-semibold hover:bg-tenzy-teal/10 transition active:scale-95"
+            >
+              Skin Consultation
+            </button>
+          </div>
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/35">
+            {[
+              "Free shipping over LKR 50,000",
+              "100% Authentic",
+              "CocoPay installments",
+              "Easy returns",
+            ].map((t) => (
+              <span key={t} className="flex items-center gap-1.5">
+                <span className="h-1 w-1 rounded-full bg-tenzy-orange/70" />
+                {t}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Right: image slides in from behind the right edge */}
+        <div className="relative overflow-hidden min-h-[380px] md:min-h-0">
+          <motion.div
+            className="absolute inset-0"
+            initial={{ x: "100%", scale: 1.06 }}
+            whileInView={{ x: "0%", scale: 1 }}
+            viewport={{ once: true, amount: 0.15 }}
+            transition={{ duration: 1.2, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <img
+              src="https://images.unsplash.com/photo-1596462502278-27bfdc403348?q=80&w=1000&auto=format&fit=crop"
+              alt="Luxury cosmetics"
+              className="w-full h-full object-cover object-center"
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to right,rgba(31,8,5,0.75) 0%,rgba(31,8,5,0.15) 30%,transparent 60%)",
+              }}
+            />
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Header ─────────────────────────────────────────────────────────────────
+
+const Header = () => (
+  <ScrollExpandHero bgSlides={slides}>
+    <HeroContent />
+  </ScrollExpandHero>
+);
 
 export default Header;

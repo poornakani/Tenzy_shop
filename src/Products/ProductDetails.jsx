@@ -11,8 +11,8 @@ import {
 
 import { useWishlist } from "../Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
-import { SellingProducts } from "@/ProductsJson";
 import Footer from "@/HomePage/Footer";
+import { SellingProducts } from "@/ProductsJson";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -537,6 +537,7 @@ const ProductDetails = () => {
           </div>
         </section>
       </main>
+      <Footer />
     </div>
   );
 };

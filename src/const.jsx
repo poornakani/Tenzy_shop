@@ -13,7 +13,6 @@ import aveeno from "../public/images/sellingProd/aveeno.png";
 import cereve from "../public/images/sellingProd/cereve.jpg";
 import lorial from "../public/images/sellingProd/lorial.jpg";
 import madagskar from "../public/images/sellingProd/madagaskar.jpg";
-import vichy from "../public/images/sellingProd/ordinary.jpg";
 import vitac from "../public/images/sellingProd/vitac.jpg";
 import ordinary from "../public/images/sellingProd/ordinary.jpg";
 import check from "../public/images/check.png";
@@ -38,14 +37,13 @@ export const sellingpro = {
   lorial,
   madagskar,
   ordinary,
-  vichy,
   vitac,
 };
 
 export const slides = [
   {
-    image: assets.header,
-    title: "Velvet Pour",
+    image: assets.header1,
+    title: "Tenzy Fashion UK",
     description: "Luxury skincare crafted for elegance",
   },
   {
@@ -218,9 +216,9 @@ export const linkSections = [
   {
     title: "Quick Links",
     links: [
-      { label: "Home", url: "/" },
+      { label: "Home", url: "/home" },
       { label: "Best Sellers", url: "/products" },
-      { label: "Offers & Deals", url: "/offers" },
+      { label: "New Arrivals", url: "/products" },
       { label: "Contact Us", url: "/contact" },
       { label: "FAQs", url: "/help" },
     ],
@@ -228,10 +226,10 @@ export const linkSections = [
   {
     title: "Need Help?",
     links: [
-      { label: "Delivery Information", url: "/help#delivery" },
-      { label: "Return & Refund Policy", url: "/help#returns" },
-      { label: "Payment Methods", url: "/help#payments" },
-      { label: "Track your Order", url: "/help#tracking" },
+      { label: "Delivery Information", url: "/help" },
+      { label: "Return & Refund Policy", url: "/help" },
+      { label: "Payment Methods", url: "/help" },
+      { label: "Track your Order", url: "/help" },
       { label: "Contact Us", url: "/contact" },
     ],
   },
@@ -248,23 +246,33 @@ export const linkSections = [
 
 export const faqs = [
   {
-    question: "How to use this component?",
+    question: "How do I place an order?",
     answer:
-      "To use this component, you need to import it in your project and use it in your JSX code. Here's an example of how to use it:",
+      "Browse our product catalog, add items to your cart, and proceed to checkout. You can pay using CocoPay with convenient instalment options.",
   },
   {
-    question: "Are there any other components available?",
+    question: "What payment methods do you accept?",
     answer:
-      "Yes, there are many other components available in this library. You can find them in the 'Components' section of the website.",
+      "We accept payments through CocoPay, which supports 3–4 instalment plans. Additional payment options will be added soon.",
   },
   {
-    question: "Are components responsive?",
+    question: "How long does delivery take?",
     answer:
-      "Yes, all components are responsive and can be used on different screen sizes.",
+      "Standard delivery takes 2–5 business days. Orders above LKR 50,000 qualify for free shipping. Express delivery options are available at checkout.",
   },
   {
-    question: "Can I customize the components?",
+    question: "Can I return a product?",
     answer:
-      "Yes, you can customize the components by passing props to them. You can find more information about customizing components in the 'Customization' section of the website.",
+      "Yes, we offer a 14-day return policy on unopened, unused products in their original packaging. Please visit our Help page or contact us to initiate a return.",
+  },
+  {
+    question: "Are your products authentic?",
+    answer:
+      "Absolutely. We source all products directly from authorised distributors and brand partners. Every item sold on Tenzy Shop is 100% genuine.",
+  },
+  {
+    question: "How do I track my order?",
+    answer:
+      "Once your order is dispatched, you will receive a tracking link via email or SMS. You can also check your order status from your account dashboard.",
   },
 ];

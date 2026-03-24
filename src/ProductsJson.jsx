@@ -14,6 +14,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 3,
+    brand: "Aveeno",
     category: "Skin",
     sku: "BS-0001",
     description:
@@ -36,7 +37,8 @@ export const SellingProducts = [
     paymentProvider: "CocoPay",
     minInstallments: 3,
 
-    brandId: "Hydra",
+    brandId: 4,
+    brand: "L'Oréal",
     category: "Face",
     sku: "BS-0002",
     description:
@@ -62,6 +64,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 2,
+    brand: "CeraVe",
     category: "Face",
     sku: "BS-0003",
     description:
@@ -87,6 +90,7 @@ export const SellingProducts = [
     minInstallments: 4,
 
     brandId: 4,
+    brand: "L'Oréal",
     category: "Face",
     sku: "BS-0004",
     description:
@@ -112,6 +116,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 1,
+    brand: "The Ordinary",
     category: "Face",
     sku: "BS-0005",
     description:
@@ -137,6 +142,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 2,
+    brand: "CeraVe",
     category: "Face",
     sku: "BS-0006",
     description:
@@ -162,6 +168,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 5,
+    brand: "Madagascar Centella",
     category: "Face",
     sku: "BS-0007",
     description:
@@ -187,6 +194,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 5,
+    brand: "Madagascar Centella",
     category: "Face",
     sku: "BS-0008",
     description:
@@ -212,6 +220,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 5,
+    brand: "Madagascar Centella",
     category: "Face",
     sku: "BS-0009",
     description:
@@ -237,6 +246,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 1,
+    brand: "The Ordinary",
     category: "Face",
     sku: "BS-0010",
     description:
@@ -262,6 +272,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 2,
+    brand: "CeraVe",
     category: "Face",
     sku: "BS-0011",
     description:
@@ -287,6 +298,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 3,
+    brand: "Aveeno",
     category: "Face",
     sku: "BS-0012",
     description:
@@ -312,6 +324,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 5,
+    brand: "Madagascar Centella",
     category: "Face",
     sku: "BS-0013",
     description:
@@ -337,6 +350,7 @@ export const SellingProducts = [
     minInstallments: 4,
 
     brandId: 2,
+    brand: "CeraVe",
     category: "Head",
     sku: "BS-0014",
     description:
@@ -362,6 +376,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 6,
+    brand: "Vita C",
     category: "Sun",
     sku: "BS-0015",
     description:
@@ -387,6 +402,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 3,
+    brand: "Aveeno",
     category: "Sun",
     sku: "BS-0016",
     description:
@@ -412,6 +428,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 7,
+    brand: "Prévense",
     category: "Skin",
     sku: "BS-0017",
     description:
@@ -436,6 +453,7 @@ export const SellingProducts = [
     minInstallments: 3,
 
     brandId: 3,
+    brand: "Aveeno",
     category: "Skin",
     sku: "BS-0018",
     description:

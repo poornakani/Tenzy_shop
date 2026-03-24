@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import Navibar from "@/HomePage/Navibar";
+import Footer from "@/HomePage/Footer";
 
 const ContactUsPage = () => {
   const wrapRef = useRef(null);
@@ -249,7 +250,7 @@ const ContactUsPage = () => {
                 </div>
 
                 {/* Google map embed */}
-                <div className="relative aspect-[16/10]">
+                <div className="relative aspect-16/10">
                   <iframe
                     title="Nugegoda, Sri Lanka"
                     className="absolute inset-0 h-full w-full"
@@ -284,6 +285,7 @@ const ContactUsPage = () => {
           </div>
         </main>
       </div>
+      <Footer />
     </div>
   );
 };

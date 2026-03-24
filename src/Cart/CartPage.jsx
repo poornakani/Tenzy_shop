@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import gsap from "gsap";
 
-import Header from "../HomePage/Header";
 import { useCart } from "../Context/CartContext";
 import Navibar from "@/HomePage/Navibar";
 import Footer from "@/HomePage/Footer";
@@ -20,7 +19,6 @@ const CartPage = () => {
     cartCount,
     subtotal,
     savings,
-    originalTotal,
     incQty,
     decQty,
     setQty,
