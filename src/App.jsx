@@ -27,8 +27,23 @@ import PageTransition from "./Animation/PageTransition";
 import CustomerInfoPage from "./Policies/CustomerInfo";
 import BlogPage from "./BlogsPages/BlogPage";
 import BlogDetails from "./BlogsPages/BlogDetails";
-import SignInPage from "./Authenticator/Pages/SignInPage";
-import RegisterPage from "./Authenticator/Pages/RegisterPage";
+import AuthPage from "./Authenticator/Pages/AuthPage";
+
+// Admin
+import AdminLayout from "./adminportal/AdminLayout";
+import Dashboard from "./adminportal/pages/Dashboard";
+import Orders from "./adminportal/pages/Orders";
+import AdminProducts from "./adminportal/pages/AdminProducts";
+import BrandsPage from "./adminportal/pages/Brands";
+import Dispatch from "./adminportal/pages/Dispatch";
+import Customers from "./adminportal/pages/Customers";
+import Reviews from "./adminportal/pages/Reviews";
+import Reports from "./adminportal/pages/Reports";
+
+const AdminGuard = ({ children }) => {
+  const isAdmin = localStorage.getItem("adminAuth") === "true";
+  return isAdmin ? children : <Navigate to="/signin" replace />;
+};
 
 const Home = () => {
   return (
@@ -65,8 +80,24 @@ const App = () => {
                 <Route path="/help" element={<CustomerInfoPage />} />
                 <Route path="/blog" element={<BlogPage />} />
                 <Route path="/blog/:id" element={<BlogDetails />} />
-                <Route path="/signin" element={<SignInPage />} />
-                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/signin" element={<AuthPage />} />
+                <Route path="/register" element={<AuthPage defaultMode="signup" />} />
+
+                {/* Admin Portal */}
+                <Route
+                  path="/admin"
+                  element={<AdminGuard><AdminLayout /></AdminGuard>}
+                >
+                  <Route index element={<Dashboard />} />
+                  <Route path="orders" element={<Orders />} />
+                  <Route path="products" element={<AdminProducts />} />
+                  <Route path="brands" element={<BrandsPage />} />
+                  <Route path="dispatch" element={<Dispatch />} />
+                  <Route path="customers" element={<Customers />} />
+                  <Route path="reviews" element={<Reviews />} />
+                  <Route path="reports" element={<Reports />} />
+                </Route>
+
                 <Route path="*" element={<Navigate to="/home" replace />} />
               </Routes>
               <CartToastStack />

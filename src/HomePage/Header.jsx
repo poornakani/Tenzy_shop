@@ -1,121 +1,231 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { slides } from "@/const";
 
-// ─── Scroll-Expansion Hero ──────────────────────────────────────────────────
-
+// ─── Scroll-Expansion Hero ───────────────────────────────────────────────────
+//
+// Performance design:
+//   • scrollProgress, mediaFullyExpanded, touchStartY  →  useRef  (zero re-renders)
+//   • All visual updates applied imperatively in requestAnimationFrame
+//   • Event listeners attached ONCE (empty deps / stable callback deps)
+//   • will-change + translateZ(0) on animated elements → GPU compositing
+//   • contain: layout paint on the card → isolates reflow from the rest of the page
+//
 const ScrollExpandHero = ({ bgSlides = [], children }) => {
   const navigate = useNavigate();
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [showContent, setShowContent] = useState(false);
-  const [mediaFullyExpanded, setMediaFullyExpanded] = useState(false);
-  const [touchStartY, setTouchStartY] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
-  const [slideIndex, setSlideIndex] = useState(0);
 
-  const sectionRef = useRef(null);
+  // ── State — triggers React renders only when needed ──────────────────────
+  const [showContent, setShowContent]   = useState(false);
+  const [isMobile, setIsMobile]         = useState(false);
+  const [slideIndex, setSlideIndex]     = useState(0);
 
-  // ── Carousel auto-advance (pauses once expansion begins) ──────────────────
+  // ── Refs — updated every frame without re-rendering ──────────────────────
+  const progressRef     = useRef(0);
+  const expandedRef     = useRef(false);
+  const showContentRef  = useRef(false);
+  const touchStartYRef  = useRef(0);
+  const isMobileRef     = useRef(false);
+  const rafScheduled    = useRef(false);
+
+  // ── DOM node refs for imperative style updates ────────────────────────────
+  const bgRef        = useRef(null);   // background carousel wrapper
+  const cardRef      = useRef(null);   // expanding card
+  const mediaRef     = useRef(null);   // iframe / mobile image wrapper
+  const overlayRef   = useRef(null);   // dark shade over card
+  const titleRef     = useRef(null);   // title + button container
+  const word1Ref     = useRef(null);   // first word span
+  const word2Ref     = useRef(null);   // rest words span
+  const dotsRef      = useRef(null);   // slide indicator dots
+
+  // ── Keep isMobileRef in sync ──────────────────────────────────────────────
   useEffect(() => {
-    if (scrollProgress > 0) return; // pause while user is expanding
-    const id = setInterval(
-      () => setSlideIndex((p) => (p + 1) % bgSlides.length),
-      4500,
-    );
-    return () => clearInterval(id);
-  }, [bgSlides.length, scrollProgress]);
-
-  // ── Detect mobile ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const check = () => {
+      const mob = window.innerWidth < 768;
+      isMobileRef.current = mob;
+      setIsMobile(mob);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // ── Wheel + touch scroll interception ────────────────────────────────────
+  // ── Carousel auto-advance ─────────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (progressRef.current > 0) return; // paused while user is expanding
+      setSlideIndex((p) => (p + 1) % bgSlides.length);
+    }, 4500);
+    return () => clearInterval(id);
+  }, [bgSlides.length]);
+
+  // ── Apply all visual changes directly to the DOM ──────────────────────────
+  const applyProgress = useCallback(() => {
+    rafScheduled.current = false;
+    const p    = progressRef.current;
+    const mob  = isMobileRef.current;
+
+    // Card dimensions
+    const w = mob ? 300 + p * 680 : 750 + p * 830;
+    const h = mob ? 380 + p * 220 : 600 + p * 200;
+
+    if (cardRef.current) {
+      cardRef.current.style.width  = `${w}px`;
+      cardRef.current.style.height = `${h}px`;
+    }
+
+    // Media (iframe / images) — cover card like object-cover
+    if (mediaRef.current) {
+      const iw = Math.max(w, (h * 16) / 9);
+      const ih = Math.max(h, (w * 9) / 16);
+      mediaRef.current.style.width  = `${iw}px`;
+      mediaRef.current.style.height = `${ih}px`;
+    }
+
+    // Dark overlay — full opacity at rest, fades as card expands
+    if (overlayRef.current) {
+      overlayRef.current.style.opacity = String(Math.max(0, 1 - p * 1.1));
+    }
+
+    // Background carousel — fades out as card expands
+    if (bgRef.current) {
+      bgRef.current.style.opacity = String(Math.max(0, 1 - p));
+    }
+
+    // Title + button container — fades out quickly
+    const titleOpacity = Math.max(0, 1 - p * 1.8);
+    if (titleRef.current) {
+      titleRef.current.style.opacity = String(titleOpacity);
+    }
+
+    // Word split — slides apart
+    const shift = p * (mob ? 160 : 140);
+    if (word1Ref.current) {
+      word1Ref.current.style.transform = `translateX(-${shift}vw)`;
+    }
+    if (word2Ref.current) {
+      word2Ref.current.style.transform = `translateX(${shift}vw)`;
+    }
+
+    // Dots
+    if (dotsRef.current) {
+      dotsRef.current.style.opacity = String(Math.max(0, 1 - p * 2));
+    }
+  }, []);
+
+  const scheduleUpdate = useCallback(() => {
+    if (!rafScheduled.current) {
+      rafScheduled.current = true;
+      requestAnimationFrame(applyProgress);
+    }
+  }, [applyProgress]);
+
+  // ── Wheel + touch handlers — added ONCE (no scroll-driven deps) ──────────
   useEffect(() => {
     const handleWheel = (e) => {
-      if (mediaFullyExpanded && e.deltaY < 0 && window.scrollY <= 5) {
-        setMediaFullyExpanded(false);
+      if (expandedRef.current) {
+        if (e.deltaY < 0 && window.scrollY <= 5) {
+          expandedRef.current = false;
+          progressRef.current = 0;
+          scheduleUpdate();
+          e.preventDefault();
+        }
+        // else: page scrolls normally
+      } else {
         e.preventDefault();
-      } else if (!mediaFullyExpanded) {
-        e.preventDefault();
-        const next = Math.min(
-          Math.max(scrollProgress + e.deltaY * 0.0009, 0),
-          1,
-        );
-        setScrollProgress(next);
-        if (next >= 1) {
-          setMediaFullyExpanded(true);
+        const next = Math.min(Math.max(progressRef.current + e.deltaY * 0.0009, 0), 1);
+        progressRef.current = next;
+        scheduleUpdate();
+
+        if (next >= 1 && !showContentRef.current) {
+          showContentRef.current = true;
+          expandedRef.current    = true;
           setShowContent(true);
-        } else if (next < 0.75) setShowContent(false);
+        } else if (next < 0.75 && showContentRef.current) {
+          showContentRef.current = false;
+          setShowContent(false);
+        }
       }
     };
 
-    const handleTouchStart = (e) => setTouchStartY(e.touches[0].clientY);
+    const handleTouchStart = (e) => {
+      touchStartYRef.current = e.touches[0].clientY;
+    };
 
     const handleTouchMove = (e) => {
-      if (!touchStartY) return;
+      if (!touchStartYRef.current) return;
       const touchY = e.touches[0].clientY;
-      const deltaY = touchStartY - touchY;
-      if (mediaFullyExpanded && deltaY < -20 && window.scrollY <= 5) {
-        setMediaFullyExpanded(false);
-        e.preventDefault();
-      } else if (!mediaFullyExpanded) {
+      const deltaY = touchStartYRef.current - touchY;
+
+      if (expandedRef.current) {
+        if (deltaY < -20 && window.scrollY <= 5) {
+          expandedRef.current    = false;
+          progressRef.current    = 0;
+          scheduleUpdate();
+          e.preventDefault();
+        }
+      } else {
         e.preventDefault();
         const factor = deltaY < 0 ? 0.008 : 0.005;
-        const next = Math.min(Math.max(scrollProgress + deltaY * factor, 0), 1);
-        setScrollProgress(next);
-        if (next >= 1) {
-          setMediaFullyExpanded(true);
+        const next = Math.min(Math.max(progressRef.current + deltaY * factor, 0), 1);
+        progressRef.current = next;
+        touchStartYRef.current = touchY;
+        scheduleUpdate();
+
+        if (next >= 1 && !showContentRef.current) {
+          showContentRef.current = true;
+          expandedRef.current    = true;
           setShowContent(true);
-        } else if (next < 0.75) setShowContent(false);
-        setTouchStartY(touchY);
+        } else if (next < 0.75 && showContentRef.current) {
+          showContentRef.current = false;
+          setShowContent(false);
+        }
       }
     };
 
-    const handleTouchEnd = () => setTouchStartY(0);
+    const handleTouchEnd = () => { touchStartYRef.current = 0; };
+
     const handleScroll = () => {
-      if (!mediaFullyExpanded) window.scrollTo(0, 0);
+      if (!expandedRef.current) window.scrollTo(0, 0);
     };
 
-    window.addEventListener("wheel", handleWheel, { passive: false });
-    window.addEventListener("scroll", handleScroll);
-    window.addEventListener("touchstart", handleTouchStart, { passive: false });
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("wheel",      handleWheel,      { passive: false });
+    window.addEventListener("scroll",     handleScroll);
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove",  handleTouchMove,  { passive: false });
+    window.addEventListener("touchend",   handleTouchEnd);
 
     return () => {
-      window.removeEventListener("wheel", handleWheel);
-      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("wheel",      handleWheel);
+      window.removeEventListener("scroll",     handleScroll);
       window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchmove",  handleTouchMove);
+      window.removeEventListener("touchend",   handleTouchEnd);
     };
-  }, [scrollProgress, mediaFullyExpanded, touchStartY]);
+  }, [scheduleUpdate]); // stable — never changes
 
-  // ── Derived values ────────────────────────────────────────────────────────
-  const mediaW = isMobile ? 300 + scrollProgress * 680 : 750 + scrollProgress * 830;
-  const mediaH = isMobile ? 380 + scrollProgress * 220 : 600 + scrollProgress * 200;
-  const shiftVw = scrollProgress * (isMobile ? 160 : 140);
+  // ── Initial card dimensions (before any scroll) ───────────────────────────
+  const initW = isMobile ? 300 : 750;
+  const initH = isMobile ? 380 : 600;
 
-  const current = bgSlides[slideIndex] ?? {};
+  const current   = bgSlides[slideIndex] ?? {};
   const firstWord = (current.title ?? "").split(" ")[0];
-  const rest = (current.title ?? "").split(" ").slice(1).join(" ");
+  const rest      = (current.title ?? "").split(" ").slice(1).join(" ");
+
+  const fontSize  = isMobile ? "clamp(3.5rem,14vw,5rem)" : "clamp(5rem,9vw,8rem)";
+  const textShadow = "0 4px 32px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,1)";
 
   return (
-    <div ref={sectionRef} className="overflow-x-hidden">
+    <div className="overflow-x-hidden">
       <section className="relative flex flex-col items-center justify-start min-h-dvh">
         <div className="relative w-full flex flex-col items-center min-h-dvh">
-          {/* ── Background carousel ──────────────────────────────────────── */}
-          <motion.div
+
+          {/* ── Background carousel ────────────────────────────────────────── */}
+          <div
+            ref={bgRef}
             className="absolute inset-0 z-0"
-            animate={{ opacity: 1 - scrollProgress }}
-            transition={{ duration: 0.1 }}
+            style={{ willChange: "opacity" }}
           >
-            {/* Crossfading slide images */}
             {bgSlides.map((slide, i) => (
               <motion.div
                 key={slide.image}
@@ -131,23 +241,25 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                 />
               </motion.div>
             ))}
-
-            {/* Gradient overlay — dark at edges, lighter in centre */}
             <div className="absolute inset-0 bg-linear-to-b from-black/60 via-black/30 to-black/60" />
-          </motion.div>
+          </div>
 
-          {/* ── Main layout ──────────────────────────────────────────────── */}
+          {/* ── Main layout ──────────────────────────────────────────────────── */}
           <div className="container mx-auto flex flex-col items-center justify-start relative z-10">
             <div className="flex flex-col items-center justify-center w-full h-dvh relative">
-              {/* ── Expanding media card ──────────────────────────────────── */}
+
+              {/* ── Expanding card ─────────────────────────────────────────── */}
               <div
+                ref={cardRef}
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl overflow-hidden"
                 style={{
-                  width: `${mediaW}px`,
-                  height: `${mediaH}px`,
+                  width: `${initW}px`,
+                  height: `${initH}px`,
                   maxWidth: "95vw",
                   maxHeight: "85vh",
                   boxShadow: "0 8px 80px rgba(0,0,0,0.5)",
+                  willChange: "width, height",
+                  contain: "layout paint",
                 }}
               >
                 {/* Mobile: crossfading slide images */}
@@ -166,6 +278,7 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                 {/* Tablet / Desktop: YouTube video */}
                 {!isMobile && (
                   <iframe
+                    ref={mediaRef}
                     title="Hero video"
                     src="https://www.youtube.com/embed/lnTWVAyMHg0?autoplay=1&mute=1&loop=1&playlist=lnTWVAyMHg0&controls=0&rel=0&modestbranding=1&playsinline=1"
                     allow="autoplay; encrypted-media"
@@ -173,62 +286,50 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                     style={{
                       top: "50%",
                       left: "50%",
-                      width: `${Math.max(mediaW, (mediaH * 16) / 9)}px`,
-                      height: `${Math.max(mediaH, (mediaW * 9) / 16)}px`,
-                      transform: "translate(-50%, -50%)",
+                      width: `${Math.max(initW, (initH * 16) / 9)}px`,
+                      height: `${Math.max(initH, (initW * 9) / 16)}px`,
+                      transform: "translate(-50%,-50%) translateZ(0)",
+                      willChange: "width, height",
                     }}
                   />
                 )}
 
-                {/* Dark shade — full at rest so text/button are readable, clears as card expands */}
-                <motion.div
-                  className="absolute inset-0"
+                {/* Dark shade — fades as card expands */}
+                <div
+                  ref={overlayRef}
+                  className="absolute inset-0 pointer-events-none"
                   style={{
                     background:
-                      "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.82) 50%, rgba(0,0,0,0.65) 100%)",
+                      "linear-gradient(to bottom,rgba(0,0,0,0.55) 0%,rgba(0,0,0,0.82) 50%,rgba(0,0,0,0.65) 100%)",
+                    willChange: "opacity",
                   }}
-                  animate={{ opacity: Math.max(0, 1 - scrollProgress * 1.1) }}
-                  transition={{ duration: 0.15 }}
                 />
               </div>
 
-              {/* ── Split title ─────────────────────────────────────────── */}
+              {/* ── Split title ─────────────────────────────────────────────── */}
               <div
+                ref={titleRef}
                 className="relative z-10 flex flex-col items-center justify-center w-full gap-1"
-                style={{ opacity: Math.max(0, 1 - scrollProgress * 1.8) }}
+                style={{ willChange: "opacity" }}
               >
-                {/* Words — no pointer events so they don't block card clicks */}
                 <span
+                  ref={word1Ref}
                   className="block font-bold text-white leading-none tracking-tight pointer-events-none select-none"
-                  style={{
-                    fontSize: isMobile
-                      ? "clamp(3.5rem,14vw,5rem)"
-                      : "clamp(5rem,9vw,8rem)",
-                    textShadow:
-                      "0 4px 32px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,1)",
-                    transform: `translateX(-${shiftVw}vw)`,
-                  }}
+                  style={{ fontSize, textShadow, willChange: "transform" }}
                 >
                   {firstWord}
                 </span>
 
                 {rest && (
                   <span
+                    ref={word2Ref}
                     className="block font-bold text-white leading-none tracking-tight pointer-events-none select-none"
-                    style={{
-                      fontSize: isMobile
-                        ? "clamp(3.5rem,14vw,5rem)"
-                        : "clamp(5rem,9vw,8rem)",
-                      textShadow:
-                        "0 4px 32px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,1)",
-                      transform: `translateX(${shiftVw}vw)`,
-                    }}
+                    style={{ fontSize, textShadow, willChange: "transform" }}
                   >
                     {rest}
                   </span>
                 )}
 
-                {/* Slide description */}
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={slideIndex}
@@ -243,7 +344,6 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                   </motion.p>
                 </AnimatePresence>
 
-                {/* Skin Consultation button — visible on the hero before scrolling */}
                 <motion.button
                   onClick={() => navigate("/contact")}
                   className="mt-6 w-[85vw] sm:w-auto rounded-full border-2 border-tenzy-teal text-tenzy-teal text-sm sm:text-base md:text-lg font-bold px-8 sm:px-10 md:px-14 py-3.5 sm:py-4 md:py-5 hover:bg-tenzy-teal hover:text-white transition-all active:scale-95 backdrop-blur-sm bg-white/5 shadow-lg shadow-tenzy-teal/20"
@@ -256,10 +356,11 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                 </motion.button>
               </div>
 
-              {/* ── Slide indicator dots ─────────────────────────────────── */}
-              <motion.div
+              {/* ── Slide indicator dots ────────────────────────────────────── */}
+              <div
+                ref={dotsRef}
                 className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20"
-                animate={{ opacity: Math.max(0, 1 - scrollProgress * 2) }}
+                style={{ willChange: "opacity" }}
               >
                 {bgSlides.map((_, i) => (
                   <button
@@ -271,10 +372,10 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
                     }`}
                   />
                 ))}
-              </motion.div>
+              </div>
             </div>
 
-            {/* ── Content revealed after full expansion ─────────────────── */}
+            {/* ── Content after full expansion ─────────────────────────────── */}
             <motion.div
               className="w-full px-6 pb-16 md:px-16 lg:pb-24"
               initial={{ opacity: 0 }}
@@ -299,25 +400,16 @@ const HeroContent = () => {
       className="w-full rounded-3xl overflow-hidden relative"
       style={{ background: "linear-gradient(135deg,#1f0805 0%,#06201f 100%)" }}
     >
-      {/* Orange glow — left */}
       <div
         className="absolute top-0 left-0 w-[480px] h-[480px] rounded-full blur-[110px] pointer-events-none"
-        style={{
-          background: "rgba(232,82,42,0.22)",
-          transform: "translate(-30%,-30%)",
-        }}
+        style={{ background: "rgba(232,82,42,0.22)", transform: "translate(-30%,-30%)" }}
       />
-      {/* Teal glow — right */}
       <div
         className="absolute bottom-0 right-0 w-[480px] h-[480px] rounded-full blur-[110px] pointer-events-none"
-        style={{
-          background: "rgba(43,185,180,0.18)",
-          transform: "translate(30%,30%)",
-        }}
+        style={{ background: "rgba(43,185,180,0.18)", transform: "translate(30%,30%)" }}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 md:min-h-[580px] relative z-10">
-        {/* Left: text */}
         <motion.div
           className="flex flex-col justify-center px-6 py-10 sm:px-10 sm:py-14 md:py-16 lg:px-16 xl:px-20"
           initial={{ opacity: 0, x: -55 }}
@@ -330,8 +422,7 @@ const HeroContent = () => {
             Premium Beauty · Sri Lanka
           </span>
           <h2 className="font-serif text-4xl md:text-5xl lg:text-[3.4rem] text-white leading-tight">
-            Your glow,
-            <br />
+            Your glow,<br />
             <span className="text-tenzy-orange italic">your story.</span>
           </h2>
           <p className="mt-5 text-white/60 text-base md:text-lg leading-relaxed max-w-sm">
@@ -353,12 +444,7 @@ const HeroContent = () => {
             </button>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/35">
-            {[
-              "Free shipping over LKR 50,000",
-              "100% Authentic",
-              "CocoPay installments",
-              "Easy returns",
-            ].map((t) => (
+            {["Free shipping over LKR 50,000", "100% Authentic", "CocoPay installments", "Easy returns"].map((t) => (
               <span key={t} className="flex items-center gap-1.5">
                 <span className="h-1 w-1 rounded-full bg-tenzy-orange/70" />
                 {t}
@@ -367,7 +453,6 @@ const HeroContent = () => {
           </div>
         </motion.div>
 
-        {/* Right: image slides in from behind the right edge */}
         <div className="relative overflow-hidden min-h-[380px] md:min-h-0">
           <motion.div
             className="absolute inset-0"
@@ -383,10 +468,7 @@ const HeroContent = () => {
             />
             <div
               className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(to right,rgba(31,8,5,0.75) 0%,rgba(31,8,5,0.15) 30%,transparent 60%)",
-              }}
+              style={{ background: "linear-gradient(to right,rgba(31,8,5,0.75) 0%,rgba(31,8,5,0.15) 30%,transparent 60%)" }}
             />
           </motion.div>
         </div>
@@ -395,7 +477,7 @@ const HeroContent = () => {
   );
 };
 
-// ─── Header ─────────────────────────────────────────────────────────────────
+// ─── Header ──────────────────────────────────────────────────────────────────
 
 const Header = () => (
   <ScrollExpandHero bgSlides={slides}>

@@ -16,10 +16,15 @@ export default function SignInPage() {
   const onEmailPasswordSignIn = async (e) => {
     e.preventDefault();
 
+    // Admin login
+    if (form.email === "poorna@ggmail.com" && form.password === "1234") {
+      localStorage.setItem("adminAuth", "true");
+      navigate("/admin");
+      return;
+    }
+
     // TODO: connect to backend or Firebase
     console.log("Sign in:", form, { remember });
-
-    // Example: navigate after success
     navigate("/");
   };
 
