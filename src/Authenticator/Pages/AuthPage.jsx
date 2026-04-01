@@ -347,7 +347,12 @@ export default function AuthPage({ defaultMode = "signin" }) {
         navigate("/home");
       }
     } catch (err) {
-      setSignInError(err.message || "Invalid email or password.");
+      const msg = err.message ?? "";
+      if (!msg || msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+        setSignInError("Unable to sign in. Please check your connection and try again.");
+      } else {
+        setSignInError(msg);
+      }
     } finally {
       setLoading(false);
     }

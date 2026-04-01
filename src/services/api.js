@@ -10,19 +10,23 @@ function authHeaders() {
 }
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(),
-      ...(options.headers || {}),
-    },
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+        ...(options.headers || {}),
+      },
+    });
+  } catch {
+    throw new Error('Unable to reach the server. Please check your connection.');
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.title || err.Message || `HTTP ${res.status}`);
+    throw new Error(err.message || err.Message || err.title || `Request failed (${res.status})`);
   }
 
   const data = await res.json();
