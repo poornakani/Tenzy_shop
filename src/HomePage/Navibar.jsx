@@ -9,12 +9,16 @@ import { SellingProducts, concerns } from "@/ProductsJson";
 import MobileProductSearchDropdown from "@/Widgets/MobileProductSearchDropdown";
 import { useCart } from "@/Context/CartContext";
 import { useIconHover } from "@/Animation/IconAnimation";
+import { useAuth } from "@/Context/AuthContext";
 
 gsap.registerPlugin(ScrollTrigger);
 
 const Navibar = () => {
   const [open, setOpen] = useState(false);
   const { cartCount } = useCart();
+  const { user, logout, isAdmin } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   // Separate states so mobile search doesn't open desktop dropdown behind
   const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
@@ -106,12 +110,25 @@ const Navibar = () => {
     return () => document.removeEventListener("mousedown", onDown);
   }, [concernOpen]);
 
+  // close profile dropdown when clicking outside
+  useEffect(() => {
+    const onDown = (e) => {
+      if (!profileOpen) return;
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [profileOpen]);
+
   //  When mobile menu opens/closes, ensure desktop dropdown never renders behind it
   useEffect(() => {
     if (open) {
       setDesktopSearchOpen(false);
       setMobileSearchOpen(false);
       setMobileQuery("");
+      setProfileOpen(false);
     }
   }, [open]);
 
@@ -302,14 +319,78 @@ const Navibar = () => {
               )}
             </button>
 
-            <button
-              ref={accountRef}
-              className="p-2"
-              aria-label="Account"
-              onClick={() => navigate("/signin")}
-            >
-              <img src={assets.man} className="h-6 w-6" alt="Account" />
-            </button>
+            {/* Account / Profile */}
+            <div ref={profileRef} className="relative">
+              <button
+                ref={accountRef}
+                className="p-2 flex items-center gap-2"
+                aria-label="Account"
+                onClick={() => user ? setProfileOpen((v) => !v) : navigate("/signin")}
+              >
+                {user ? (
+                  <div className="w-7 h-7 rounded-full bg-tenzy-teal flex items-center justify-center text-white text-xs font-bold ring-2 ring-white/30">
+                    {(user.userName ?? user.email ?? "U").charAt(0).toUpperCase()}
+                  </div>
+                ) : (
+                  <img src={assets.man} className="h-6 w-6" alt="Account" />
+                )}
+              </button>
+
+              {profileOpen && user && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-white/15 bg-[#111827]/95 backdrop-blur-xl shadow-2xl overflow-hidden z-50">
+                  {/* User info */}
+                  <div className="px-4 py-4 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-tenzy-teal flex items-center justify-center text-white font-bold text-sm shrink-0">
+                        {(user.userName ?? user.email ?? "U").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{user.userName ?? "Customer"}</p>
+                        <p className="text-xs text-white/50 truncate">{user.email}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Menu items */}
+                  <div className="p-2">
+                    <button onClick={() => { navigate("/orders"); setProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/90 hover:bg-white/10 transition text-left">
+                      <span className="text-base">📦</span> My Orders
+                    </button>
+                    <button onClick={() => { navigate("/wishlist"); setProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/90 hover:bg-white/10 transition text-left">
+                      <span className="text-base">♥</span> Wishlist
+                      {wishlistCount > 0 && (
+                        <span className="ml-auto text-xs font-bold bg-tenzy-orange text-white px-2 py-0.5 rounded-full">{wishlistCount}</span>
+                      )}
+                    </button>
+                    <button onClick={() => { navigate("/cart"); setProfileOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/90 hover:bg-white/10 transition text-left">
+                      <span className="text-base">🛒</span> Cart
+                      {cartCount > 0 && (
+                        <span className="ml-auto text-xs font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{cartCount}</span>
+                      )}
+                    </button>
+                    {isAdmin && (
+                      <button onClick={() => { navigate("/admin"); setProfileOpen(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/90 hover:bg-white/10 transition text-left">
+                        <span className="text-base">⚙️</span> Admin Portal
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sign out */}
+                  <div className="p-2 border-t border-white/10">
+                    <button
+                      onClick={() => { logout(); setProfileOpen(false); navigate("/home"); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition text-left font-semibold"
+                    >
+                      <span className="text-base">↩</span> Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Hamburger (Mobile only) */}
             <button
@@ -493,8 +574,48 @@ const Navibar = () => {
                   </Link>
                 </div>
 
+                {/* User section */}
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  {user ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/10">
+                        <div className="w-9 h-9 rounded-full bg-tenzy-teal flex items-center justify-center text-white font-bold text-sm shrink-0">
+                          {(user.userName ?? user.email ?? "U").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{user.userName ?? "Customer"}</p>
+                          <p className="text-xs text-white/50 truncate">{user.email}</p>
+                        </div>
+                      </div>
+                      <Link to="/orders" onClick={() => setOpen(false)}
+                        className="flex items-center gap-3 rounded-2xl px-4 py-3 bg-white/10 hover:bg-white/15 transition text-sm text-white">
+                        <span>📦</span> My Orders
+                      </Link>
+                      {isAdmin && (
+                        <Link to="/admin" onClick={() => setOpen(false)}
+                          className="flex items-center gap-3 rounded-2xl px-4 py-3 bg-white/10 hover:bg-white/15 transition text-sm text-white">
+                          <span>⚙️</span> Admin Portal
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => { logout(); setOpen(false); navigate("/home"); }}
+                        className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-red-500/10 hover:bg-red-500/20 transition text-sm text-red-400 font-semibold"
+                      >
+                        <span>↩</span> Sign Out
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { navigate("/signin"); setOpen(false); }}
+                      className="w-full rounded-2xl px-4 py-3 bg-tenzy-teal text-white text-sm font-semibold hover:opacity-90 transition"
+                    >
+                      Sign In / Register
+                    </button>
+                  )}
+                </div>
+
                 {/* Footer */}
-                <div className="mt-6 pt-4 text-xs text-white/50 text-center">
+                <div className="mt-4 pt-4 text-xs text-white/50 text-center">
                   Velvet Pour • Tenzy Shop
                 </div>
               </div>
