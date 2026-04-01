@@ -79,7 +79,7 @@ const Divider = () => (
 );
 
 // ─── Sign-in form ─────────────────────────────────────────────────────────────
-const SignInForm = ({ data, onChange, remember, setRemember, onSubmit, onForgot, onSwitch }) => (
+const SignInForm = ({ data, onChange, remember, setRemember, onSubmit, onForgot, onSwitch, error, loading }) => (
   <div className="w-full max-w-xs flex flex-col items-center gap-5">
     <div className="text-center">
       <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Sign In</h2>
@@ -88,6 +88,13 @@ const SignInForm = ({ data, onChange, remember, setRemember, onSubmit, onForgot,
 
     <SocialRow />
     <Divider />
+
+    {error && (
+      <div className="w-full flex items-start gap-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3.5 py-3 rounded-xl">
+        <span className="mt-0.5 shrink-0 text-rose-500">⚠</span>
+        <span>{error}</span>
+      </div>
+    )}
 
     <form onSubmit={onSubmit} className="w-full flex flex-col gap-3.5">
       <Field label="Email" type="email" value={data.email}
@@ -110,11 +117,15 @@ const SignInForm = ({ data, onChange, remember, setRemember, onSubmit, onForgot,
         </button>
       </div>
 
-      <button type="submit"
+      <button type="submit" disabled={loading}
         className="w-full py-3 bg-[#2BB9B4] text-white text-sm font-bold rounded-xl
-                   hover:bg-[#24a09b] transition-all active:scale-[0.98]
+                   hover:bg-[#24a09b] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed
                    shadow-lg shadow-[#2BB9B4]/25 flex items-center justify-center gap-2 mt-1">
-        Sign In <ArrowRight size={14} />
+        {loading ? (
+          <><span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Signing in…</>
+        ) : (
+          <>Sign In <ArrowRight size={14} /></>
+        )}
       </button>
     </form>
 
@@ -129,7 +140,7 @@ const SignInForm = ({ data, onChange, remember, setRemember, onSubmit, onForgot,
 );
 
 // ─── Sign-up form ─────────────────────────────────────────────────────────────
-const SignUpForm = ({ data, onChange, agree, setAgree, error, onSubmit, onSwitch }) => (
+const SignUpForm = ({ data, onChange, agree, setAgree, error, onSubmit, onSwitch, loading }) => (
   <div className="w-full max-w-xs flex flex-col items-center gap-4">
     <div className="text-center">
       <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Create Account</h2>
@@ -173,11 +184,15 @@ const SignUpForm = ({ data, onChange, agree, setAgree, error, onSubmit, onSwitch
         </span>
       </label>
 
-      <button type="submit"
+      <button type="submit" disabled={loading}
         className="w-full py-3 bg-[#2BB9B4] text-white text-sm font-bold rounded-xl
-                   hover:bg-[#24a09b] transition-all active:scale-[0.98]
+                   hover:bg-[#24a09b] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed
                    shadow-lg shadow-[#2BB9B4]/25 flex items-center justify-center gap-2 mt-1">
-        Create Account <ArrowRight size={14} />
+        {loading ? (
+          <><span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Creating…</>
+        ) : (
+          <>Create Account <ArrowRight size={14} /></>
+        )}
       </button>
     </form>
 
@@ -379,21 +394,15 @@ export default function AuthPage({ defaultMode = "signin" }) {
 
             {/* Left: Sign-In form (always mounted) */}
             <div className="w-1/2 bg-white flex items-center justify-center py-14">
-              <div className="w-full max-w-xs flex flex-col items-center gap-5">
-                <SignInForm
-                  data={signIn} onChange={setSignIn}
-                  remember={remember} setRemember={setRemember}
-                  onSubmit={handleSignIn}
-                  onForgot={() => setForgotOpen(true)}
-                  onSwitch={() => setMode("signup")}
-                />
-                {signInError && (
-                  <div className="w-full bg-rose-50 border border-rose-200 text-rose-600 text-xs px-3.5 py-2.5 rounded-xl -mt-2">
-                    {signInError}
-                  </div>
-                )}
-                {loading && <p className="text-xs text-slate-400">Please wait…</p>}
-              </div>
+              <SignInForm
+                data={signIn} onChange={setSignIn}
+                remember={remember} setRemember={setRemember}
+                onSubmit={handleSignIn}
+                onForgot={() => setForgotOpen(true)}
+                onSwitch={() => setMode("signup")}
+                error={signInError}
+                loading={loading && mode === "signin"}
+              />
             </div>
 
             {/* Right: Sign-Up form (always mounted) */}
@@ -404,6 +413,7 @@ export default function AuthPage({ defaultMode = "signin" }) {
                 error={error}
                 onSubmit={handleSignUp}
                 onSwitch={() => setMode("signin")}
+                loading={loading && mode === "signup"}
               />
             </div>
 
@@ -474,6 +484,8 @@ export default function AuthPage({ defaultMode = "signin" }) {
                       onSubmit={handleSignIn}
                       onForgot={() => setForgotOpen(true)}
                       onSwitch={() => setMode("signup")}
+                      error={signInError}
+                      loading={loading && mode === "signin"}
                     />
                   ) : (
                     <SignUpForm
@@ -482,6 +494,7 @@ export default function AuthPage({ defaultMode = "signin" }) {
                       error={error}
                       onSubmit={handleSignUp}
                       onSwitch={() => setMode("signin")}
+                      loading={loading && mode === "signup"}
                     />
                   )}
                 </motion.div>
