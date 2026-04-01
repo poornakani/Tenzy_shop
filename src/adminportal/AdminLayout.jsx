@@ -3,18 +3,19 @@ import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users,
   BarChart2, LogOut, Menu, X, Bell, ChevronRight,
-  Settings, Store, Tag, Star,
+  Settings, Store, Tag, Star, PackagePlus,
 } from "lucide-react";
 
 const NAV = [
-  { to: "/admin",           label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/orders",    label: "Orders",    icon: ShoppingCart },
-  { to: "/admin/products",  label: "Products",  icon: Package },
-  { to: "/admin/brands",    label: "Brands",    icon: Tag },
-  { to: "/admin/dispatch",  label: "Dispatch",  icon: Truck },
-  { to: "/admin/customers", label: "Customers", icon: Users },
-  { to: "/admin/reviews",   label: "Reviews",   icon: Star },
-  { to: "/admin/reports",   label: "Reports",   icon: BarChart2 },
+  { to: "/admin",              label: "Dashboard",   icon: LayoutDashboard, end: true },
+  { to: "/admin/orders",       label: "Orders",      icon: ShoppingCart },
+  { to: "/admin/products",     label: "Products",    icon: Package },
+  { to: "/admin/procurement",  label: "Procurement", icon: PackagePlus },
+  { to: "/admin/brands",       label: "Brands",      icon: Tag },
+  { to: "/admin/dispatch",     label: "Dispatch",    icon: Truck },
+  { to: "/admin/customers",    label: "Customers",   icon: Users },
+  { to: "/admin/reviews",      label: "Reviews",     icon: Star },
+  { to: "/admin/reports",      label: "Reports",     icon: BarChart2 },
 ];
 
 const BOTTOM_NAV = [
@@ -100,7 +101,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* ── Desktop Sidebar ──────────────────────────────────────────────── */}
-      <aside className="hidden md:flex w-56 flex-shrink-0 flex-col bg-slate-900 fixed inset-y-0 left-0 z-30">
+      <aside className="hidden md:flex w-56 shrink-0 flex-col bg-slate-900 fixed inset-y-0 left-0 z-30">
         <SidebarContent />
       </aside>
 

@@ -1,28 +1,28 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Search, X, Plus, Edit2, Trash2, AlertTriangle, Star, StarOff,
   ChevronUp, ChevronDown, ImagePlus, Tag, Package, DollarSign,
   Info, MessageSquare, CreditCard,
 } from "lucide-react";
 import {
-  ADMIN_PRODUCTS, BRANDS, CATEGORIES, CONCERN_TYPES, PAYMENT_TYPES,
-} from "../dummydata/index";
+  productsApi, brandsApi, categoriesApi, concernsApi, paymentApi,
+} from "../../services/api";
 
 const fmt = (n) => new Intl.NumberFormat("en-LK").format(n);
 
-const stockStatus = (p) => {
-  if (p.stock === 0)  return { label: "Out of Stock", cls: "bg-red-100 text-red-600" };
-  if (p.stock < 15)   return { label: "Low Stock",    cls: "bg-amber-100 text-amber-700" };
-  return               { label: "In Stock",           cls: "bg-emerald-100 text-emerald-700" };
+const stockStatus = (stock) => {
+  const s = parseInt(stock ?? 0, 10);
+  if (s === 0) return { label: "Out of Stock", cls: "bg-red-100 text-red-600" };
+  if (s < 15)  return { label: "Low Stock",    cls: "bg-amber-100 text-amber-700" };
+  return              { label: "In Stock",     cls: "bg-emerald-100 text-emerald-700" };
 };
 
-const primaryImage = (p) =>
-  p.images.find((i) => i.IsPrimary)?.ImageUrl ?? p.images[0]?.ImageUrl ?? null;
+const primaryImage = (images) =>
+  (images ?? []).find((i) => i.isPrimary ?? i.IsPrimary)?.imageUrl
+  ?? (images ?? [])[0]?.imageUrl
+  ?? (images ?? []).find((i) => i.IsPrimary)?.ImageUrl
+  ?? null;
 
-const brandName  = (id) => BRANDS.find((b) => b.Brandid === id)?.name ?? "—";
-const catName    = (id) => CATEGORIES.find((c) => c.catagoryID === id)?.categorytype ?? "—";
-
-// ── Section header inside the drawer ─────────────────────────────────────────
 const Section = ({ icon: Icon, title, children }) => (
   <div className="space-y-3">
     <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
@@ -49,7 +49,7 @@ const Input = ({ ...props }) => (
   />
 );
 
-const Select = ({ children, ...props }) => (
+const Sel = ({ children, ...props }) => (
   <select
     className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition"
     {...props}
@@ -58,125 +58,185 @@ const Select = ({ children, ...props }) => (
   </select>
 );
 
-// ── Empty form state ──────────────────────────────────────────────────────────
 const emptyForm = () => ({
-  name: "", brandid: 1, categoryid: 1, description: "", weight: "",
-  insale: false,
-  stock: "",
-  price: "", discountrate: "0", StartUTC: new Date().toISOString().slice(0, 10), EndUTC: "",
-  images: [],
-  concerns: [],
-  paymentOptions: [],
-  faqs: [],
+  name: "", brandId: "", categoryId: "", description: "", weight: "",
+  inSale: false, stock: "", price: "", discountRate: "0",
+  startUTC: new Date().toISOString().slice(0, 10), endUTC: "",
+  images: [], concerns: [], paymentOptions: [], faqs: [],
 });
 
 export default function AdminProducts() {
-  const [products, setProducts]     = useState(ADMIN_PRODUCTS);
-  const [search, setSearch]         = useState("");
-  const [catFilter, setCatFilter]   = useState(0); // 0 = All
-  const [drawer, setDrawer]         = useState(null); // null | "add" | "edit"
-  const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm]             = useState(emptyForm());
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [newImageUrl, setNewImageUrl] = useState("");
+  const [products,       setProducts]       = useState([]);
+  const [brands,         setBrands]         = useState([]);
+  const [categories,     setCategories]     = useState([]);
+  const [concernTypes,   setConcernTypes]   = useState([]);
+  const [paymentTypes,   setPaymentTypes]   = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [search,         setSearch]         = useState("");
+  const [catFilter,      setCatFilter]      = useState(0);
+  const [drawer,         setDrawer]         = useState(null);
+  const [editTarget,     setEditTarget]     = useState(null);
+  const [form,           setForm]           = useState(emptyForm());
+  const [deleteConfirm,  setDeleteConfirm]  = useState(null);
+  const [newImageUrl,    setNewImageUrl]    = useState("");
+  const [saving,         setSaving]         = useState(false);
+
+  const loadAll = useCallback(() => {
+    setLoading(true);
+    Promise.allSettled([
+      productsApi.getAll(),
+      brandsApi.getAll(),
+      categoriesApi.getAll(),
+      concernsApi.getAll(),
+      paymentApi.getAll(),
+    ]).then(([pR, bR, cR, conR, ptR]) => {
+      if (pR.status   === "fulfilled") setProducts(Array.isArray(pR.value)   ? pR.value   : []);
+      if (bR.status   === "fulfilled") setBrands(Array.isArray(bR.value)     ? bR.value   : []);
+      if (cR.status   === "fulfilled") setCategories(Array.isArray(cR.value) ? cR.value   : []);
+      if (conR.status === "fulfilled") setConcernTypes(Array.isArray(conR.value) ? conR.value : []);
+      if (ptR.status  === "fulfilled") setPaymentTypes(Array.isArray(ptR.value)  ? ptR.value  : []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const brandName = (id) => brands.find((b) => (b.brandId ?? b.Brandid) === id)?.name ?? "—";
+  const catName   = (id) => categories.find((c) => (c.categoryId ?? c.catagoryID) === id)?.categoryType ?? categories.find((c) => (c.categoryId ?? c.catagoryID) === id)?.categorytype ?? "—";
 
   const filtered = useMemo(() =>
     products.filter((p) => {
       const q = search.toLowerCase();
-      const matchSearch = p.name.toLowerCase().includes(q) || brandName(p.brandid).toLowerCase().includes(q);
-      const matchCat = catFilter === 0 || p.categoryid === catFilter;
+      const bid = p.brandId ?? p.brandid;
+      const cid = p.categoryId ?? p.categoryid;
+      const matchSearch = (p.name ?? "").toLowerCase().includes(q) || brandName(bid).toLowerCase().includes(q);
+      const matchCat    = catFilter === 0 || cid === catFilter;
       return matchSearch && matchCat;
     }),
-    [products, search, catFilter]
+    [products, search, catFilter, brands, categories]
   );
 
-  // ── Drawer open/close ───────────────────────────────────────────────────────
   const openAdd = () => {
-    setForm(emptyForm());
+    const firstBrand = brands[0];
+    const firstCat   = categories[0];
+    setForm({
+      ...emptyForm(),
+      brandId:    firstBrand ? (firstBrand.brandId ?? firstBrand.Brandid) : "",
+      categoryId: firstCat   ? (firstCat.categoryId ?? firstCat.catagoryID) : "",
+    });
     setEditTarget(null);
     setDrawer("add");
   };
+
   const openEdit = (p) => {
     setForm({
-      ...p,
-      weight: String(p.weight ?? ""),
-      stock: String(p.stock),
-      price: String(p.price),
-      discountrate: String(p.discountrate),
-      EndUTC: p.EndUTC ?? "",
-      images: p.images.map((img) => ({ ...img })),
-      concerns: [...p.concerns],
-      paymentOptions: p.paymentOptions.map((po) => ({ ...po })),
-      faqs: p.faqs.map((f) => ({ ...f })),
+      name:         p.name ?? "",
+      brandId:      p.brandId    ?? p.brandid    ?? "",
+      categoryId:   p.categoryId ?? p.categoryid ?? "",
+      description:  p.description ?? "",
+      weight:       String(p.weight ?? ""),
+      inSale:       p.inSale     ?? p.insale     ?? false,
+      stock:        String(p.stock ?? ""),
+      price:        String(p.price ?? ""),
+      discountRate: String(p.discountRate ?? p.discountrate ?? 0),
+      startUTC:     (p.startUTC ?? p.StartUTC ?? new Date().toISOString()).slice(0, 10),
+      endUTC:       (p.endUTC   ?? p.EndUTC   ?? "").slice(0, 10),
+      images:       (p.images ?? []).map((img) => ({
+        imageId:   img.imageId   ?? img.ImageId   ?? Date.now(),
+        imageUrl:  img.imageUrl  ?? img.ImageUrl  ?? "",
+        isPrimary: img.isPrimary ?? img.IsPrimary ?? false,
+        sortOrder: img.sortOrder ?? img.SortOrder ?? 1,
+      })),
+      concerns:       (p.concerns ?? []).map((c) => c.concernTypeId ?? c.ConcernTypeId ?? c),
+      paymentOptions: (p.paymentOptions ?? []).map((po) => ({
+        paymentTypeId: po.paymentTypeId ?? po.PaymentTypeId,
+        instalment:    po.instalment ?? null,
+      })),
+      faqs: (p.faqs ?? []).map((f) => ({
+        faqId:    f.faqId    ?? f.FAQId    ?? Date.now(),
+        question: f.question ?? f.Question ?? "",
+        answer:   f.answer   ?? f.Answer   ?? "",
+      })),
     });
     setEditTarget(p);
     setDrawer("edit");
   };
+
   const closeDrawer = () => { setDrawer(null); setEditTarget(null); setNewImageUrl(""); };
 
-  // ── Save ────────────────────────────────────────────────────────────────────
-  const handleSave = () => {
-    if (!form.name.trim() || !form.price || !form.stock) return;
-    const entry = {
-      ...form,
-      productid: drawer === "add" ? Date.now() : editTarget.productid,
-      weight: form.weight ? parseFloat(form.weight) : null,
-      stock: parseInt(form.stock, 10),
-      price: parseFloat(form.price),
-      discountrate: parseFloat(form.discountrate) || 0,
-      EndUTC: form.EndUTC || null,
-      sold: drawer === "add" ? 0 : editTarget.sold,
-    };
-    if (drawer === "add") {
-      setProducts((prev) => [entry, ...prev]);
-    } else {
-      setProducts((prev) => prev.map((p) => (p.productid === editTarget.productid ? entry : p)));
-    }
-    closeDrawer();
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.price || !form.stock || saving) return;
+    setSaving(true);
+    try {
+      const body = {
+        name:         form.name.trim(),
+        brandId:      parseInt(form.brandId, 10),
+        categoryId:   parseInt(form.categoryId, 10),
+        description:  form.description,
+        weight:       form.weight ? parseFloat(form.weight) : null,
+        inSale:       form.inSale,
+        stock:        parseInt(form.stock, 10),
+        price:        parseFloat(form.price),
+        discountRate: parseFloat(form.discountRate) || 0,
+        startUTC:     form.startUTC || null,
+        endUTC:       form.endUTC   || null,
+        images:       form.images,
+        concerns:     form.concerns,
+        paymentOptions: form.paymentOptions,
+        faqs:         form.faqs,
+      };
+      if (drawer === "add") {
+        await productsApi.create(body);
+      } else {
+        const pid = editTarget.productId ?? editTarget.productid;
+        await productsApi.update(pid, body);
+      }
+      loadAll();
+      closeDrawer();
+    } catch (err) { alert(err.message); }
+    finally { setSaving(false); }
   };
 
-  const handleDelete = (id) => {
-    setProducts((prev) => prev.filter((p) => p.productid !== id));
+  const handleDelete = async (id) => {
+    try {
+      await productsApi.remove(id);
+      setProducts((prev) => prev.filter((p) => (p.productId ?? p.productid) !== id));
+    } catch (err) { alert(err.message); }
     setDeleteConfirm(null);
   };
 
-  // ── Image helpers ────────────────────────────────────────────────────────────
+  // Image helpers
   const addImage = () => {
     const url = newImageUrl.trim();
     if (!url) return;
     const isFirst = form.images.length === 0;
     setForm((f) => ({
       ...f,
-      images: [...f.images, { ImageId: Date.now(), ImageUrl: url, IsPrimary: isFirst, SortOrder: f.images.length + 1 }],
+      images: [...f.images, { imageId: Date.now(), imageUrl: url, isPrimary: isFirst, sortOrder: f.images.length + 1 }],
     }));
     setNewImageUrl("");
   };
   const setPrimary = (imgId) => {
-    setForm((f) => ({
-      ...f,
-      images: f.images.map((img) => ({ ...img, IsPrimary: img.ImageId === imgId })),
-    }));
+    setForm((f) => ({ ...f, images: f.images.map((img) => ({ ...img, isPrimary: img.imageId === imgId })) }));
   };
   const removeImage = (imgId) => {
     setForm((f) => {
-      const next = f.images.filter((img) => img.ImageId !== imgId);
-      // ensure at least one primary if images remain
-      if (next.length > 0 && !next.some((i) => i.IsPrimary)) next[0].IsPrimary = true;
-      return { ...f, images: next.map((img, idx) => ({ ...img, SortOrder: idx + 1 })) };
+      const next = f.images.filter((img) => img.imageId !== imgId);
+      if (next.length > 0 && !next.some((i) => i.isPrimary)) next[0].isPrimary = true;
+      return { ...f, images: next.map((img, idx) => ({ ...img, sortOrder: idx + 1 })) };
     });
   };
   const moveImage = (imgId, dir) => {
     setForm((f) => {
       const arr = [...f.images];
-      const idx = arr.findIndex((i) => i.ImageId === imgId);
-      const to = idx + dir;
+      const idx = arr.findIndex((i) => i.imageId === imgId);
+      const to  = idx + dir;
       if (to < 0 || to >= arr.length) return f;
       [arr[idx], arr[to]] = [arr[to], arr[idx]];
-      return { ...f, images: arr.map((img, i) => ({ ...img, SortOrder: i + 1 })) };
+      return { ...f, images: arr.map((img, i) => ({ ...img, sortOrder: i + 1 })) };
     });
   };
 
-  // ── Concern toggle ───────────────────────────────────────────────────────────
+  // Concern toggle
   const toggleConcern = (id) => {
     setForm((f) => ({
       ...f,
@@ -184,15 +244,15 @@ export default function AdminProducts() {
     }));
   };
 
-  // ── Payment option toggle ────────────────────────────────────────────────────
+  // Payment option toggle
   const togglePayment = (id) => {
     setForm((f) => {
-      const exists = f.paymentOptions.find((p) => p.PaymentTypeId === id);
+      const exists = f.paymentOptions.find((p) => p.paymentTypeId === id);
       return {
         ...f,
         paymentOptions: exists
-          ? f.paymentOptions.filter((p) => p.PaymentTypeId !== id)
-          : [...f.paymentOptions, { PaymentTypeId: id, instalment: null }],
+          ? f.paymentOptions.filter((p) => p.paymentTypeId !== id)
+          : [...f.paymentOptions, { paymentTypeId: id, instalment: null }],
       };
     });
   };
@@ -200,29 +260,30 @@ export default function AdminProducts() {
     setForm((f) => ({
       ...f,
       paymentOptions: f.paymentOptions.map((p) =>
-        p.PaymentTypeId === id ? { ...p, instalment: val ? parseInt(val, 10) : null } : p
+        p.paymentTypeId === id ? { ...p, instalment: val ? parseInt(val, 10) : null } : p
       ),
     }));
   };
 
-  // ── FAQ helpers ──────────────────────────────────────────────────────────────
-  const addFaq = () => {
-    setForm((f) => ({ ...f, faqs: [...f.faqs, { FAQId: Date.now(), Question: "", Answer: "" }] }));
-  };
-  const updateFaq = (faqId, field, val) => {
-    setForm((f) => ({ ...f, faqs: f.faqs.map((fq) => fq.FAQId === faqId ? { ...fq, [field]: val } : fq) }));
-  };
-  const removeFaq = (faqId) => {
-    setForm((f) => ({ ...f, faqs: f.faqs.filter((fq) => fq.FAQId !== faqId) }));
-  };
+  // FAQ helpers
+  const addFaq    = () => setForm((f) => ({ ...f, faqs: [...f.faqs, { faqId: Date.now(), question: "", answer: "" }] }));
+  const updateFaq = (faqId, field, val) => setForm((f) => ({ ...f, faqs: f.faqs.map((fq) => fq.faqId === faqId ? { ...fq, [field]: val } : fq) }));
+  const removeFaq = (faqId) => setForm((f) => ({ ...f, faqs: f.faqs.filter((fq) => fq.faqId !== faqId) }));
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
+    </div>
+  );
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900">Products</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{products.length} products · {products.filter(p => p.stock === 0).length} out of stock</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {products.length} products · {products.filter((p) => parseInt(p.stock ?? 0, 10) === 0).length} out of stock
+          </p>
         </div>
         <button onClick={openAdd}
           className="flex items-center gap-2 bg-tenzy-teal text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 transition active:scale-95 shadow-lg shadow-tenzy-teal/20">
@@ -230,7 +291,6 @@ export default function AdminProducts() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100 space-y-3">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -241,43 +301,51 @@ export default function AdminProducts() {
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           <button onClick={() => setCatFilter(0)}
-            className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${catFilter === 0 ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"}`}>
+            className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${catFilter === 0 ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"}`}>
             All
           </button>
-          {CATEGORIES.map((c) => (
-            <button key={c.catagoryID} onClick={() => setCatFilter(c.catagoryID)}
-              className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${catFilter === c.catagoryID ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"}`}>
-              {c.categorytype}
-            </button>
-          ))}
+          {categories.map((c) => {
+            const cid  = c.categoryId ?? c.catagoryID;
+            const ctype = c.categoryType ?? c.categorytype ?? "—";
+            return (
+              <button key={cid} onClick={() => setCatFilter(cid)}
+                className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${catFilter === cid ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"}`}>
+                {ctype}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Product Table (desktop) + Cards (mobile) */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         {/* Mobile cards */}
         <div className="md:hidden divide-y divide-slate-50">
           {filtered.length === 0 && <p className="text-sm text-slate-400 text-center py-12">No products found.</p>}
           {filtered.map((p) => {
-            const st = stockStatus(p);
-            const img = primaryImage(p);
+            const pid  = p.productId ?? p.productid;
+            const bid  = p.brandId   ?? p.brandid;
+            const cid  = p.categoryId ?? p.categoryid;
+            const st   = stockStatus(p.stock);
+            const img  = primaryImage(p.images);
             return (
-              <div key={p.productid} className="p-4 flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+              <div key={pid} className="p-4 flex items-center gap-3">
+                <div className="w-14 h-14 rounded-xl bg-slate-100 overflow-hidden shrink-0">
                   {img && <img src={img} alt={p.name} className="w-full h-full object-cover" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-slate-800 truncate">{p.name}</p>
-                  <p className="text-[10px] text-slate-400">{brandName(p.brandid)} · {catName(p.categoryid)}</p>
+                  <p className="text-[10px] text-slate-400">{brandName(bid)} · {catName(cid)}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs font-bold text-tenzy-teal">LKR {fmt(p.price)}</span>
-                    {p.discountrate > 0 && <span className="text-[10px] text-tenzy-orange font-semibold">-{p.discountrate}%</span>}
+                    {(p.discountRate ?? p.discountrate ?? 0) > 0 && (
+                      <span className="text-[10px] text-tenzy-orange font-semibold">-{p.discountRate ?? p.discountrate}%</span>
+                    )}
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <div className="flex flex-col gap-1.5 shrink-0">
                   <button onClick={() => openEdit(p)} className="p-2 rounded-lg bg-slate-100 hover:bg-tenzy-teal hover:text-white transition"><Edit2 size={13} /></button>
-                  <button onClick={() => setDeleteConfirm(p.productid)} className="p-2 rounded-lg bg-slate-100 hover:bg-red-500 hover:text-white transition"><Trash2 size={13} /></button>
+                  <button onClick={() => setDeleteConfirm(pid)} className="p-2 rounded-lg bg-slate-100 hover:bg-red-500 hover:text-white transition"><Trash2 size={13} /></button>
                 </div>
               </div>
             );
@@ -299,35 +367,42 @@ export default function AdminProducts() {
                 <tr><td colSpan={9} className="text-center py-12 text-sm text-slate-400">No products found.</td></tr>
               )}
               {filtered.map((p) => {
-                const st  = stockStatus(p);
-                const img = primaryImage(p);
+                const pid  = p.productId ?? p.productid;
+                const bid  = p.brandId   ?? p.brandid;
+                const cid  = p.categoryId ?? p.categoryid;
+                const st   = stockStatus(p.stock);
+                const img  = primaryImage(p.images);
+                const disc = p.discountRate ?? p.discountrate ?? 0;
+                const sale = p.inSale ?? p.insale ?? false;
                 return (
-                  <tr key={p.productid} className="hover:bg-slate-50 transition-colors">
+                  <tr key={pid} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">
                           {img && <img src={img} alt={p.name} className="w-full h-full object-cover" />}
                         </div>
                         <p className="text-xs font-semibold text-slate-800 max-w-[160px] truncate">{p.name}</p>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{brandName(p.brandid)}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{catName(p.categoryid)}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{brandName(bid)}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{catName(cid)}</td>
                     <td className="px-4 py-3 text-xs font-bold text-slate-800">LKR {fmt(p.price)}</td>
-                    <td className="px-4 py-3 text-xs text-tenzy-orange font-semibold">{p.discountrate > 0 ? `${p.discountrate}%` : "—"}</td>
+                    <td className="px-4 py-3 text-xs text-tenzy-orange font-semibold">{disc > 0 ? `${disc}%` : "—"}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>{p.stock} · {st.label}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${p.insale ? "bg-tenzy-orange/10 text-tenzy-orange" : "bg-slate-100 text-slate-400"}`}>
-                        {p.insale ? "On Sale" : "Regular"}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sale ? "bg-tenzy-orange/10 text-tenzy-orange" : "bg-slate-100 text-slate-400"}`}>
+                        {sale ? "On Sale" : "Regular"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{p.images.length} img{p.images.length !== 1 ? "s" : ""}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">
+                      {(p.images ?? []).length} img{(p.images ?? []).length !== 1 ? "s" : ""}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-tenzy-teal hover:text-white text-slate-500 transition"><Edit2 size={13} /></button>
-                        <button onClick={() => setDeleteConfirm(p.productid)} className="p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-slate-500 transition"><Trash2 size={13} /></button>
+                        <button onClick={() => setDeleteConfirm(pid)} className="p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-slate-500 transition"><Trash2 size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -338,45 +413,45 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* ── Add/Edit Drawer ──────────────────────────────────────────────────── */}
+      {/* Add/Edit Drawer */}
       {drawer && (
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={closeDrawer} />
           <div className="fixed inset-y-0 right-0 w-full sm:w-[480px] bg-white z-50 flex flex-col shadow-2xl">
-            {/* Drawer header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <p className="font-bold text-slate-900">{drawer === "add" ? "Add Product" : "Edit Product"}</p>
               <button onClick={closeDrawer} className="p-1.5 rounded-full hover:bg-slate-100"><X size={18} /></button>
             </div>
 
-            {/* Scrollable form */}
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
-
-              {/* 1. Basic Info */}
               <Section icon={Info} title="Basic Info">
                 <Field label="Product Name" required>
                   <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. CeraVe Moisturizing Cream" />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Brand" required>
-                    <Select value={form.brandid} onChange={(e) => setForm({ ...form, brandid: parseInt(e.target.value) })}>
-                      {BRANDS.map((b) => <option key={b.Brandid} value={b.Brandid}>{b.name}</option>)}
-                    </Select>
+                    <Sel value={form.brandId} onChange={(e) => setForm({ ...form, brandId: parseInt(e.target.value) })}>
+                      {brands.map((b) => {
+                        const bid = b.brandId ?? b.Brandid;
+                        return <option key={bid} value={bid}>{b.name}</option>;
+                      })}
+                    </Sel>
                   </Field>
                   <Field label="Category" required>
-                    <Select value={form.categoryid} onChange={(e) => setForm({ ...form, categoryid: parseInt(e.target.value) })}>
-                      {CATEGORIES.map((c) => <option key={c.catagoryID} value={c.catagoryID}>{c.categorytype}</option>)}
-                    </Select>
+                    <Sel value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: parseInt(e.target.value) })}>
+                      {categories.map((c) => {
+                        const cid   = c.categoryId ?? c.catagoryID;
+                        const ctype = c.categoryType ?? c.categorytype ?? "—";
+                        return <option key={cid} value={cid}>{ctype}</option>;
+                      })}
+                    </Sel>
                   </Field>
                 </div>
                 <Field label="Description">
-                  <textarea
-                    rows={3}
-                    value={form.description}
+                  <textarea rows={3} value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     placeholder="Product description…"
-                    className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition resize-none"
-                  />
+                    className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition resize-none" />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Weight (g)">
@@ -384,20 +459,16 @@ export default function AdminProducts() {
                   </Field>
                   <Field label="On Sale">
                     <div className="flex items-center gap-3 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, insale: !form.insale })}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${form.insale ? "bg-tenzy-orange" : "bg-slate-200"}`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${form.insale ? "translate-x-5" : "translate-x-0"}`} />
+                      <button type="button" onClick={() => setForm({ ...form, inSale: !form.inSale })}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${form.inSale ? "bg-tenzy-orange" : "bg-slate-200"}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${form.inSale ? "translate-x-5" : "translate-x-0"}`} />
                       </button>
-                      <span className="text-xs font-semibold text-slate-600">{form.insale ? "Yes" : "No"}</span>
+                      <span className="text-xs font-semibold text-slate-600">{form.inSale ? "Yes" : "No"}</span>
                     </div>
                   </Field>
                 </div>
               </Section>
 
-              {/* 2. Inventory & Pricing */}
               <Section icon={DollarSign} title="Inventory & Pricing">
                 <Field label="Stock Quantity" required>
                   <Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="0" />
@@ -407,117 +478,99 @@ export default function AdminProducts() {
                     <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" />
                   </Field>
                   <Field label="Discount Rate (%)">
-                    <Input type="number" min="0" max="100" value={form.discountrate} onChange={(e) => setForm({ ...form, discountrate: e.target.value })} placeholder="0" />
+                    <Input type="number" min="0" max="100" value={form.discountRate} onChange={(e) => setForm({ ...form, discountRate: e.target.value })} placeholder="0" />
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Pricing Start Date">
-                    <Input type="date" value={form.StartUTC} onChange={(e) => setForm({ ...form, StartUTC: e.target.value })} />
+                    <Input type="date" value={form.startUTC} onChange={(e) => setForm({ ...form, startUTC: e.target.value })} />
                   </Field>
                   <Field label="Pricing End Date">
-                    <Input type="date" value={form.EndUTC} onChange={(e) => setForm({ ...form, EndUTC: e.target.value })} />
+                    <Input type="date" value={form.endUTC} onChange={(e) => setForm({ ...form, endUTC: e.target.value })} />
                   </Field>
                 </div>
-                {form.price && form.discountrate > 0 && (
+                {form.price && parseFloat(form.discountRate) > 0 && (
                   <div className="bg-tenzy-teal/10 rounded-xl px-3 py-2 text-xs text-tenzy-teal font-semibold">
-                    Sale price: LKR {fmt(Math.round(parseFloat(form.price) * (1 - parseFloat(form.discountrate) / 100)))}
+                    Sale price: LKR {fmt(Math.round(parseFloat(form.price) * (1 - parseFloat(form.discountRate) / 100)))}
                   </div>
                 )}
               </Section>
 
-              {/* 3. Product Images */}
               <Section icon={ImagePlus} title="Product Images">
                 <div className="space-y-2">
                   {form.images.length === 0 && (
                     <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-xl">No images yet. Add one below.</p>
                   )}
                   {form.images.map((img, idx) => (
-                    <div key={img.ImageId} className="flex items-center gap-2 bg-slate-50 rounded-xl p-2">
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0">
-                        <img src={img.ImageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = "none"; }} />
+                    <div key={img.imageId} className="flex items-center gap-2 bg-slate-50 rounded-xl p-2">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-200 shrink-0">
+                        <img src={img.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = "none"; }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] text-slate-500 truncate">{img.ImageUrl}</p>
-                        <p className="text-[10px] text-slate-400">Sort #{img.SortOrder}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{img.imageUrl}</p>
+                        <p className="text-[10px] text-slate-400">Sort #{img.sortOrder}</p>
                       </div>
                       <div className="flex flex-col gap-0.5">
-                        <button onClick={() => moveImage(img.ImageId, -1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronUp size={12} /></button>
-                        <button onClick={() => moveImage(img.ImageId, 1)} disabled={idx === form.images.length - 1} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronDown size={12} /></button>
+                        <button onClick={() => moveImage(img.imageId, -1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronUp size={12} /></button>
+                        <button onClick={() => moveImage(img.imageId, 1)} disabled={idx === form.images.length - 1} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronDown size={12} /></button>
                       </div>
-                      <button
-                        onClick={() => setPrimary(img.ImageId)}
-                        title={img.IsPrimary ? "Primary image" : "Set as primary"}
-                        className={`p-1.5 rounded-lg transition ${img.IsPrimary ? "bg-amber-100 text-amber-500" : "bg-slate-100 text-slate-400 hover:text-amber-500"}`}
-                      >
-                        {img.IsPrimary ? <Star size={13} fill="currentColor" /> : <StarOff size={13} />}
+                      <button onClick={() => setPrimary(img.imageId)} title={img.isPrimary ? "Primary image" : "Set as primary"}
+                        className={`p-1.5 rounded-lg transition ${img.isPrimary ? "bg-amber-100 text-amber-500" : "bg-slate-100 text-slate-400 hover:text-amber-500"}`}>
+                        {img.isPrimary ? <Star size={13} fill="currentColor" /> : <StarOff size={13} />}
                       </button>
-                      <button onClick={() => removeImage(img.ImageId)} className="p-1.5 rounded-lg hover:bg-red-100 hover:text-red-500 text-slate-400 transition"><X size={13} /></button>
+                      <button onClick={() => removeImage(img.imageId)} className="p-1.5 rounded-lg hover:bg-red-100 hover:text-red-500 text-slate-400 transition"><X size={13} /></button>
                     </div>
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <Input
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
+                  <Input value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)}
                     placeholder="Paste image URL…"
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addImage())}
-                  />
-                  <button onClick={addImage} className="flex-shrink-0 px-3 py-2 bg-tenzy-teal text-white rounded-xl text-xs font-semibold hover:opacity-90 transition">
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addImage())} />
+                  <button onClick={addImage} className="shrink-0 px-3 py-2 bg-tenzy-teal text-white rounded-xl text-xs font-semibold hover:opacity-90 transition">
                     <Plus size={15} />
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  ★ = Primary image shown in the shop. First image added becomes primary automatically.
-                </p>
+                <p className="text-[10px] text-slate-400">★ = Primary image shown in the shop.</p>
               </Section>
 
-              {/* 4. Skin Concerns */}
               <Section icon={Tag} title="Skin Concerns">
                 <div className="flex flex-wrap gap-2">
-                  {CONCERN_TYPES.map((c) => {
-                    const active = form.concerns.includes(c.ConcernTypeId);
+                  {concernTypes.map((c) => {
+                    const cid    = c.concernTypeId ?? c.ConcernTypeId;
+                    const ctype  = c.concernType   ?? c.ConcernType ?? "—";
+                    const active = form.concerns.includes(cid);
                     return (
-                      <button
-                        key={c.ConcernTypeId}
-                        type="button"
-                        onClick={() => toggleConcern(c.ConcernTypeId)}
+                      <button key={cid} type="button" onClick={() => toggleConcern(cid)}
                         className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
                           active ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"
-                        }`}
-                      >
-                        {c.ConcernType}
+                        }`}>
+                        {ctype}
                       </button>
                     );
                   })}
                 </div>
               </Section>
 
-              {/* 5. Payment Options */}
               <Section icon={CreditCard} title="Payment Options">
                 <div className="space-y-2">
-                  {PAYMENT_TYPES.map((pt) => {
-                    const selected = form.paymentOptions.find((p) => p.PaymentTypeId === pt.PaymentTypeId);
+                  {paymentTypes.map((pt) => {
+                    const pid      = pt.paymentTypeId ?? pt.PaymentTypeId;
+                    const ptName   = pt.name ?? pt.Name ?? pt.paymentType ?? pt.PaymentType ?? "—";
+                    const selected = form.paymentOptions.find((p) => p.paymentTypeId === pid);
                     return (
-                      <div key={pt.PaymentTypeId} className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => togglePayment(pt.PaymentTypeId)}
-                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${
+                      <div key={pid} className="flex items-center gap-3">
+                        <button type="button" onClick={() => togglePayment(pid)}
+                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition ${
                             selected ? "bg-tenzy-teal border-tenzy-teal" : "border-slate-300"
-                          }`}
-                        >
+                          }`}>
                           {selected && <span className="text-white text-[10px] font-bold">✓</span>}
                         </button>
-                        <span className="text-xs text-slate-700 flex-1">{pt.PaymentType}</span>
-                        {selected && pt.PaymentTypeId !== 1 && (
-                          <input
-                            type="number"
-                            min="1"
-                            value={selected.instalment ?? ""}
-                            onChange={(e) => setInstalment(pt.PaymentTypeId, e.target.value)}
+                        <span className="text-xs text-slate-700 flex-1">{ptName}</span>
+                        {selected && pid !== 1 && (
+                          <input type="number" min="1" value={selected.instalment ?? ""}
+                            onChange={(e) => setInstalment(pid, e.target.value)}
                             placeholder="Months"
-                            className="w-20 text-xs px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-tenzy-teal/30"
-                          />
+                            className="w-20 text-xs px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-tenzy-teal/30" />
                         )}
                       </div>
                     );
@@ -525,27 +578,19 @@ export default function AdminProducts() {
                 </div>
               </Section>
 
-              {/* 6. FAQ */}
               <Section icon={MessageSquare} title="Product FAQ">
                 <div className="space-y-3">
                   {form.faqs.map((fq) => (
-                    <div key={fq.FAQId} className="bg-slate-50 rounded-xl p-3 space-y-2">
+                    <div key={fq.faqId} className="bg-slate-50 rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-semibold text-slate-400 uppercase">Q&amp;A</span>
-                        <button onClick={() => removeFaq(fq.FAQId)} className="text-slate-400 hover:text-red-500"><X size={13} /></button>
+                        <button onClick={() => removeFaq(fq.faqId)} className="text-slate-400 hover:text-red-500"><X size={13} /></button>
                       </div>
-                      <Input
-                        value={fq.Question}
-                        onChange={(e) => updateFaq(fq.FAQId, "Question", e.target.value)}
-                        placeholder="Question…"
-                      />
-                      <textarea
-                        rows={2}
-                        value={fq.Answer}
-                        onChange={(e) => updateFaq(fq.FAQId, "Answer", e.target.value)}
+                      <Input value={fq.question} onChange={(e) => updateFaq(fq.faqId, "question", e.target.value)} placeholder="Question…" />
+                      <textarea rows={2} value={fq.answer}
+                        onChange={(e) => updateFaq(fq.faqId, "answer", e.target.value)}
                         placeholder="Answer…"
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition resize-none"
-                      />
+                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition resize-none" />
                     </div>
                   ))}
                   <button onClick={addFaq}
@@ -556,22 +601,20 @@ export default function AdminProducts() {
               </Section>
             </div>
 
-            {/* Drawer footer */}
             <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
               <button onClick={closeDrawer}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
                 Cancel
               </button>
-              <button onClick={handleSave}
-                className="flex-1 py-2.5 rounded-xl bg-tenzy-teal text-white text-sm font-bold hover:opacity-90 transition">
-                {drawer === "add" ? "Add Product" : "Save Changes"}
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-tenzy-teal text-white text-sm font-bold hover:opacity-90 transition disabled:opacity-60">
+                {saving ? "Saving…" : drawer === "add" ? "Add Product" : "Save Changes"}
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* Delete Confirm */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />

@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Testimonials } from "@/const";
-import { BrandsList } from "@/ProductsJson";
+import { brandsApi } from "@/services/api";
 
 const Stars = ({ value = 5 }) => (
   <div className="flex items-center gap-0.5">
@@ -36,8 +36,18 @@ const Avatar = ({ name }) => {
 const Brands = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [comment, setComment] = useState({ name: "", quote: "", rating: 5 });
+  const [brandData, setBrandData] = useState([]);
 
-  const logos = useMemo(() => [...BrandsList, ...BrandsList], []);
+  useEffect(() => {
+    brandsApi.getAll()
+      .then(data => setBrandData(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  }, []);
+
+  const logos = useMemo(() => {
+    const list = brandData.filter(b => b.brandImage).map(b => ({ name: b.name, logo: b.brandImage }));
+    return list.length ? [...list, ...list] : [];
+  }, [brandData]);
 
   const topRow = useMemo(() => {
     const half = Math.ceil(Testimonials.length / 2);

@@ -15,6 +15,7 @@ import Footer from "./HomePage/Footer";
 import FAQ from "./HomePage/FAQ";
 import { WishlistProvider } from "./Context/WishlistContext";
 import { CartProvider } from "./Context/CartContext";
+import { AuthProvider } from "./Context/AuthContext";
 import WishlistPage from "./Wishlist/WishlistPage";
 import ProductDetails from "./Products/ProductDetails";
 import ProductsPage from "./Products/ProductsPage";
@@ -39,6 +40,7 @@ import Dispatch from "./adminportal/pages/Dispatch";
 import Customers from "./adminportal/pages/Customers";
 import Reviews from "./adminportal/pages/Reviews";
 import Reports from "./adminportal/pages/Reports";
+import Procurement from "./adminportal/pages/Procurement";
 
 const AdminGuard = ({ children }) => {
   const isAdmin = localStorage.getItem("adminAuth") === "true";
@@ -65,6 +67,7 @@ const App = () => {
   return (
     <BrowserRouter>
       <PageTransition>
+        <AuthProvider>
         <WishlistProvider>
           <ToastProvider>
             <CartProvider>
@@ -91,6 +94,7 @@ const App = () => {
                   <Route index element={<Dashboard />} />
                   <Route path="orders" element={<Orders />} />
                   <Route path="products" element={<AdminProducts />} />
+                  <Route path="procurement" element={<Procurement />} />
                   <Route path="brands" element={<BrandsPage />} />
                   <Route path="dispatch" element={<Dispatch />} />
                   <Route path="customers" element={<Customers />} />
@@ -104,6 +108,7 @@ const App = () => {
             </CartProvider>
           </ToastProvider>
         </WishlistProvider>
+        </AuthProvider>
       </PageTransition>
     </BrowserRouter>
   );

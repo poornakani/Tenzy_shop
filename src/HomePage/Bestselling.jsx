@@ -4,10 +4,10 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import QuickViewModal from "@/Widgets/QuickViewModal";
 import { useWishlist } from "@/Context/WishlistContext";
 import { Heart, Eye, ShoppingBag, ChevronRight } from "lucide-react";
-import { SellingProducts } from "@/ProductsJson";
 import { useCart } from "@/Context/CartContext";
 import { useToast } from "@/Context/ToastContext";
 import { useNavigate } from "react-router-dom";
+import { productsApi } from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -43,10 +43,34 @@ function Stars({ value }) {
 
 /* ── Derive filter tabs from product data ─────────────────────────── */
 const CAT_LABELS = { Skin: "Skin Care", Face: "Face Care", Body: "Body Care", Head: "Head Care", Hand: "Hand Care", Lips: "Lip Care", Sun: "Sun Care", Acne: "Acne Care" };
-const ALL_CATS = ["All", ...new Set(SellingProducts.map(p => p.category))];
+
+function normalizeProd(raw) {
+  const id    = raw.productId ?? raw.id ?? 0;
+  const price = raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0;
+  const disc  = raw.discountPercent ?? 0;
+  const stock = raw.stockQty ?? raw.stockCount ?? 0;
+  const rawImgs = Array.isArray(raw.images) ? raw.images : [];
+  const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
+  const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
+  return {
+    id,
+    name:            raw.name ?? "",
+    price,
+    discountPercent: disc,
+    discountedPrice: Math.round(price * (1 - disc / 100)),
+    inSale:          disc > 0,
+    stockCount:      stock,
+    outOfStock:      stock === 0,
+    image:           primary?.imageUrl ?? imgUrls[0] ?? null,
+    category:        raw.categoryName ?? raw.categoryType ?? raw.category ?? "",
+    brand:           raw.brandName ?? raw.brand ?? "",
+    brandId:         raw.brandId ?? 0,
+  };
+}
 
 /* ══════════════════════════════════════════════════════════════════ */
 const BestSelling = () => {
+  const [allProducts,   setAllProducts]   = useState([]);
   const [quickViewOpen,   setQuickViewOpen]   = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeFilter,    setActiveFilter]    = useState("All");
@@ -56,12 +80,20 @@ const BestSelling = () => {
   const navigate       = useNavigate();
   const wrapRef        = useRef(null);
 
+  useEffect(() => {
+    productsApi.getAll()
+      .then(data => setAllProducts((Array.isArray(data) ? data : []).map(normalizeProd)))
+      .catch(console.error);
+  }, []);
+
+  const ALL_CATS = useMemo(() => ["All", ...new Set(allProducts.map(p => p.category).filter(Boolean))], [allProducts]);
+
   /* filtered list, max 10 */
-  const displayed = (
+  const displayed = useMemo(() => (
     activeFilter === "All"
-      ? SellingProducts
-      : SellingProducts.filter(p => p.category === activeFilter)
-  ).slice(0, 10);
+      ? allProducts
+      : allProducts.filter(p => p.category === activeFilter)
+  ).slice(0, 10), [allProducts, activeFilter]);
 
   /* scroll-in animation */
   useEffect(() => {
@@ -126,12 +158,11 @@ const BestSelling = () => {
         {/* ── Product grid ────────────────────────────────────────── */}
         <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {displayed.map(p => {
-            const discounted = calcDiscounted(p.price, p.discountPercent);
-            const pw         = { ...p, discountedPrice: discounted };
+            const pw         = p;
             const rating     = parseFloat(mockRating(p.id));
             const reviews    = mockReviews(p.id);
             const isLow      = p.stockCount > 0 && p.stockCount <= 5;
-            const wishlisted = isWishlisted(pw.id);
+            const wishlisted = isWishlisted(p.id);
 
             return (
               <article

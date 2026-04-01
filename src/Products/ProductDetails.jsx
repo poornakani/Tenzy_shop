@@ -4,15 +4,10 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useCart } from "@/Context/CartContext";
 
-import {
-  productReviews as reviewsTable,
-  productFaq as faqTable,
-} from "@/ProductsJson";
-
 import { useWishlist } from "../Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
 import Footer from "@/HomePage/Footer";
-import { SellingProducts } from "@/ProductsJson";
+import { productsApi, reviewsApi } from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -49,75 +44,66 @@ const ProductDetails = () => {
   const productId = Number(id);
   const { toggleWishlist, isWishlisted } = useWishlist();
 
-  //  Find product + compute discountedPrice + normalize images
-  const product = useMemo(() => {
-    const found = SellingProducts.find((p) => p.id === productId);
-    if (!found) return null;
+  const [product,        setProduct]        = useState(null);
+  const [productLoading, setProductLoading] = useState(true);
+  const [productReviews, setProductReviews] = useState([]);
+  const [activeImg,      setActiveImg]      = useState(0);
 
-    const discountedPrice = calcDiscounted(found.price, found.discountPercent);
-
-    // support single image OR images array
-    const images =
-      Array.isArray(found.images) && found.images.length
-        ? found.images
-        : [found.image];
-
-    return {
-      ...found,
-      discountedPrice,
-      images,
-      // optional safe defaults (if you didn't add them)
-      category: found.category || "Skincare",
-      brand: found.brand || "Premium",
-      sku: found.sku || `SKU-${found.id}`,
-      description:
-        found.description ||
-        "A premium product designed to fit beautifully into a modern routine.",
-      size: found.size || "N/A",
-      weight: found.weight || "N/A",
-    };
-  }, [productId]);
-
-  const [activeImg, setActiveImg] = useState(0);
-
-  // reset on product change
   useEffect(() => {
+    setProductLoading(true);
     setActiveImg(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    Promise.allSettled([
+      productsApi.getById(productId),
+      reviewsApi.getByProduct(productId),
+    ]).then(([prodR, revR]) => {
+      if (prodR.status === "fulfilled" && prodR.value) {
+        const raw  = prodR.value;
+        const price = raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0;
+        const disc  = raw.discountPercent ?? 0;
+        const stock = raw.stockQty ?? raw.stockCount ?? 0;
+        const rawImgs = Array.isArray(raw.images) ? raw.images : [];
+        const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
+        const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
+        setProduct({
+          id:              raw.productId ?? raw.id,
+          name:            raw.name ?? "",
+          price,
+          discountPercent: disc,
+          discountedPrice: Math.round(price * (1 - disc / 100)),
+          inSale:          disc > 0,
+          stockCount:      stock,
+          outOfStock:      stock === 0,
+          image:           primary?.imageUrl ?? imgUrls[0] ?? null,
+          images:          imgUrls.length ? imgUrls : (primary?.imageUrl ? [primary.imageUrl] : []),
+          category:        raw.categoryName ?? raw.categoryType ?? raw.category ?? "Skincare",
+          brand:           raw.brandName ?? raw.brand ?? "Premium",
+          sku:             raw.sku ?? `SKU-${raw.productId ?? raw.id}`,
+          description:     raw.description ?? "A premium product for your routine.",
+          size:            raw.size ?? "N/A",
+          weight:          raw.weight ?? raw.weightGrams ?? "N/A",
+          faqs:            Array.isArray(raw.faqs) ? raw.faqs : [],
+        });
+      }
+      if (revR.status === "fulfilled") {
+        setProductReviews(Array.isArray(revR.value) ? revR.value : []);
+      }
+    }).finally(() => setProductLoading(false));
   }, [productId]);
 
-  //  Reviews by productId (from separate table)
-  const productReviews = useMemo(() => {
-    return (reviewsTable || []).filter(
-      (r) => Number(r.productId) === productId
-    );
-  }, [productId]);
-
-  // FAQs by productId (from separate table)
-  const productFaqs = useMemo(() => {
-    return (faqTable || []).filter((f) => Number(f.productId) === productId);
-  }, [productId]);
+  // FAQs come from the product object
+  const productFaqs = product?.faqs ?? [];
 
   //  rating
   const avgRating = useMemo(() => {
     if (!productReviews.length) return 0;
-    const sum = productReviews.reduce((a, b) => a + Number(b.rating || 0), 0);
+    const sum = productReviews.reduce((a, b) => a + Number(b.rating ?? b.rate ?? 0), 0);
     return sum / productReviews.length;
   }, [productReviews]);
 
-  // Similar products (by category)
-  const similarProducts = useMemo(() => {
-    if (!product) return [];
-    return SellingProducts.filter(
-      (p) =>
-        p.id !== product.id && (p.category || "Skincare") === product.category
-    )
-      .slice(0, 6)
-      .map((p) => ({
-        ...p,
-        discountedPrice: calcDiscounted(p.price, p.discountPercent),
-      }));
-  }, [product]);
+  // Similar products: not loaded to keep it simple
+  const similarProducts = [];
 
   //  GSAP animations
   useEffect(() => {
@@ -148,25 +134,30 @@ const ProductDetails = () => {
     return () => ctx.revert();
   }, []);
 
+  if (productLoading) {
+    return (
+      <div className="w-full overflow-hidden">
+        <Navibar />
+        <div className="h-24" />
+        <div className="flex items-center justify-center py-24">
+          <div className="w-10 h-10 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
   if (!product) {
     return (
       <div className="w-full overflow-hidden">
         <Navibar />
         <div className="h-24 bg-linear-to-b from-slate-900/80 to-transparent" />
-
         <main className="mx-auto max-w-7xl px-4 sm:px-6 py-10">
           <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center">
-            <h2 className="text-xl font-semibold text-slate-900">
-              Product not found
-            </h2>
-            <p className="mt-2 text-slate-600 text-sm">
-              The product you are looking for doesn’t exist.
-            </p>
-            <button
-              onClick={() => navigate("/home")}
+            <h2 className="text-xl font-semibold text-slate-900">Product not found</h2>
+            <p className="mt-2 text-slate-600 text-sm">The product you are looking for doesn’t exist.</p>
+            <button onClick={() => navigate("/home")}
               className="mt-5 rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90"
-              style={{ background: "#2BB9B4", color: "white" }}
-            >
+              style={{ background: "#2BB9B4", color: "white" }}>
               Back to Home
             </button>
           </div>
@@ -396,20 +387,20 @@ const ProductDetails = () => {
 
           <div className="mt-5 grid gap-3">
             {productFaqs.length ? (
-              productFaqs.map((f) => (
+              productFaqs.map((f, i) => (
                 <details
-                  key={f.id}
+                  key={f.faqId ?? f.id ?? i}
                   className="group rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                 >
                   <summary className="cursor-pointer list-none flex items-center justify-between gap-4">
                     <span className="text-sm font-semibold text-slate-900">
-                      {f.q}
+                      {f.question ?? f.q}
                     </span>
                     <span className="text-slate-500 group-open:rotate-45 transition">
                       +
                     </span>
                   </summary>
-                  <p className="mt-2 text-sm text-slate-700">{f.a}</p>
+                  <p className="mt-2 text-sm text-slate-700">{f.answer ?? f.a}</p>
                 </details>
               ))
             ) : (
@@ -449,24 +440,21 @@ const ProductDetails = () => {
             {productReviews.length ? (
               productReviews.map((r) => (
                 <div
-                  key={r.id}
+                  key={r.reviewId ?? r.id ?? r.ID}
                   className="rounded-2xl border border-slate-200 bg-white p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
-                        {r.name}{" "}
-                        {r.verified && (
-                          <span className="ml-2 text-[11px] font-semibold text-emerald-600">
-                            Verified
-                          </span>
-                        )}
+                        {r.customerName ?? r.name ?? "Customer"}
                       </p>
                       <div className="mt-1">
-                        <StarRow value={Number(r.rating || 0)} />
+                        <StarRow value={Number(r.rating ?? r.rate ?? 0)} />
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500">{r.date}</p>
+                    <p className="text-xs text-slate-500">
+                      {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : r.date ?? ""}
+                    </p>
                   </div>
 
                   <p className="mt-2 text-sm text-slate-700 leading-relaxed">
@@ -496,10 +484,7 @@ const ProductDetails = () => {
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {(similarProducts.length
-              ? similarProducts
-              : SellingProducts.slice(0, 4)
-            ).map((sp) => (
+            {similarProducts.map((sp) => (
               <button
                 key={sp.id}
                 type="button"

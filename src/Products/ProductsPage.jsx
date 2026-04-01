@@ -13,13 +13,49 @@ import {
   Tag,
 } from "lucide-react";
 
-import { BrandsList } from "@/ProductsJson";
 import { useWishlist } from "../Context/WishlistContext";
-import { SellingProducts } from "@/ProductsJson";
 import Navibar from "@/HomePage/Navibar";
 import { useCart } from "@/Context/CartContext";
 import { useToast } from "@/Context/ToastContext";
 import Footer from "@/HomePage/Footer";
+import { productsApi } from "../services/api";
+
+function normalizeApiProduct(raw) {
+  const id    = raw.productId ?? raw.id ?? 0;
+  const price = raw.priceLkr  ?? raw.priceLKR ?? raw.price ?? 0;
+  const disc  = raw.discountPercent ?? 0;
+  const stock = raw.stockQty ?? raw.stockCount ?? 0;
+  const rawImgs = Array.isArray(raw.images) ? raw.images : [];
+  const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
+  const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
+  const mainImg = primary?.imageUrl ?? imgUrls[0] ?? null;
+  return {
+    id,
+    productId: id,
+    name:            raw.name ?? "",
+    price,
+    discountPercent: disc,
+    discountedPrice: Math.round(price * (1 - disc / 100)),
+    inSale:          disc > 0,
+    stockCount:      stock,
+    outOfStock:      stock === 0,
+    image:           mainImg,
+    images:          imgUrls.length ? imgUrls : (mainImg ? [mainImg] : []),
+    category:        raw.categoryName ?? raw.categoryType ?? raw.category ?? "",
+    categoryId:      raw.categoryId ?? 0,
+    brand:           raw.brandName ?? raw.brand ?? "",
+    brandId:         raw.brandId ?? 0,
+    brandName:       raw.brandName ?? raw.brand ?? "",
+    brandLogo:       raw.brandImage ?? "",
+    sku:             raw.sku ?? `SKU-${id}`,
+    description:     raw.description ?? "",
+    size:            raw.size ?? "N/A",
+    weight:          raw.weight ?? raw.weightGrams ?? "N/A",
+    concernIds:      Array.isArray(raw.concernIds) ? raw.concernIds : [],
+    paymentProvider: raw.paymentProvider ?? "CocoPay",
+    minInstallments: raw.minInstallments ?? 3,
+  };
+}
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -104,70 +140,27 @@ const ProductsPage = () => {
     searchParams.get("concernID") || searchParams.get("concern");
   const activeConcernID = concernIDParam ? Number(concernIDParam) : null;
 
-  // -------- Prepare normalized product list --------
-  const products = useMemo(() => {
-    return (SellingProducts || []).map((p) => {
-      const discountedPrice = calcDiscounted(p.price, p.discountPercent);
+  // -------- API product list --------
+  const [rawProducts,     setRawProducts]     = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
-      const rawBrandId =
-        p.brandId ?? p.BrandID ?? p.brandID ?? p.brand_id ?? p.brand ?? null;
-
-      let brandObj = null;
-
-      if (rawBrandId !== null && typeof rawBrandId !== "undefined") {
-        brandObj =
-          BrandsList?.find(
-            (b) => String(b.id ?? b.BrandID) === String(rawBrandId)
-          ) || null;
-      }
-
-      if (!brandObj && p.brand && typeof p.brand === "string") {
-        brandObj =
-          BrandsList?.find(
-            (b) =>
-              String(b.name ?? b.BrandName ?? "")
-                .trim()
-                .toLowerCase() === String(p.brand).trim().toLowerCase()
-          ) || null;
-      }
-
-      const normalizedBrandId =
-        brandObj?.id ??
-        brandObj?.BrandID ??
-        (rawBrandId !== null && typeof rawBrandId !== "undefined"
-          ? Number(rawBrandId)
-          : undefined);
-
-      const brandName =
-        brandObj?.name ??
-        brandObj?.BrandName ??
-        (typeof p.brand === "string" ? p.brand : "Unknown");
-      const brandLogo = brandObj?.logo ?? brandObj?.BrandLogo ?? "";
-
-      return {
-        ...p,
-        discountedPrice,
-        category: p.category || "Skin",
-        brand: brandName,
-        brandId: normalizedBrandId,
-        brandName,
-        brandLogo,
-        sku: p.sku || `SKU-${p.id}`,
-        description:
-          p.description ||
-          "Premium quality product with a clean modern feel. Comfortable daily use.",
-        images:
-          Array.isArray(p.images) && p.images.length ? p.images : [p.image],
-        concernIds: Array.isArray(p.concernIds) ? p.concernIds : undefined,
-        concernID:
-          typeof p.concernID === "number"
-            ? p.concernID
-            : typeof p.concernID === "string"
-              ? Number(p.concernID)
-              : undefined,
-      };
-    });
+  useEffect(() => {
+    productsApi.getAll()
+      .then((data) => setRawProducts(Array.isArray(data) ? data : []))
+      .catch(console.error)
+      .finally(() => setLoadingProducts(false));
   }, []);
+
+  const products = useMemo(() => rawProducts.map(normalizeApiProduct), [rawProducts]);
+
+  // Unique brand list derived from loaded products (for the brand filter)
+  const brandsList = useMemo(() => {
+    const seen = new Map();
+    products.forEach((p) => {
+      if (p.brandId && !seen.has(p.brandId)) seen.set(p.brandId, p.brandName);
+    });
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [products]);
 
   const uniqueCats = useMemo(() => {
     const set = new Set(products.map((p) => p.category).filter(Boolean));
@@ -316,11 +309,9 @@ const ProductsPage = () => {
 
   const activeBrandName = useMemo(() => {
     if (selectedBrandId === "All") return null;
-    const b = BrandsList.find(
-      (b) => String(b.id ?? b.BrandID) === String(selectedBrandId)
-    );
-    return b?.name ?? b?.BrandName ?? selectedBrandId;
-  }, [selectedBrandId]);
+    const b = brandsList.find((b) => String(b.id) === String(selectedBrandId));
+    return b?.name ?? selectedBrandId;
+  }, [selectedBrandId, brandsList]);
 
   // -------- GSAP animations --------
   useEffect(() => {
@@ -389,6 +380,15 @@ const ProductsPage = () => {
   /* ════════════════════════════════════════════════════════════════
      RENDER
   ════════════════════════════════════════════════════════════════ */
+  if (loadingProducts) return (
+    <div className="w-full min-h-screen flex flex-col">
+      <Navibar />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
+      </div>
+    </div>
+  );
+
   return (
     <div ref={wrapRef} className="w-full overflow-hidden bg-zinc-50 min-h-screen">
       <Navibar />
@@ -758,14 +758,9 @@ const ProductsPage = () => {
                       className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 pr-9 text-sm font-medium text-zinc-800 outline-none transition focus:border-tenzy-teal/40"
                     >
                       <option value="All">All Brands</option>
-                      {BrandsList.map((b) => {
-                        const id = b.id ?? b.BrandID ?? b.brandId ?? b.brandID;
-                        return (
-                          <option key={id ?? b.name} value={String(id)}>
-                            {b.name ?? b.BrandName}
-                          </option>
-                        );
-                      })}
+                      {brandsList.map((b) => (
+                        <option key={b.id} value={String(b.id)}>{b.name}</option>
+                      ))}
                     </select>
                     <ChevronDown
                       size={13}

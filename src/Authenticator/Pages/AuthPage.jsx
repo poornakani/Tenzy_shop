@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../Context/AuthContext";
+import { authApi } from "../../services/api";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Eye, EyeOff, Mail, Lock, User, Sparkles,
@@ -304,34 +306,53 @@ const OverlayContent = ({ mode, onSwitch }) => {
 // ─── Main AuthPage (auth-switch) ──────────────────────────────────────────────
 export default function AuthPage({ defaultMode = "signin" }) {
   const navigate = useNavigate();
+  const { login, register } = useAuth();
 
   const [mode, setMode]   = useState(defaultMode);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [signIn, setSignIn]     = useState({ email: "", password: "" });
   const [remember, setRemember] = useState(false);
+  const [signInError, setSignInError] = useState("");
 
   const [signUp, setSignUp]     = useState({ username: "", email: "", password: "", confirm: "" });
   const [agree, setAgree]       = useState(false);
   const [error, setError]       = useState("");
 
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault();
-    if (signIn.email === "poorna@ggmail.com" && signIn.password === "1234") {
-      localStorage.setItem("adminAuth", "true");
-      navigate("/admin");
-      return;
+    setSignInError("");
+    setLoading(true);
+    try {
+      const user = await login(signIn.email, signIn.password);
+      if (user?.roleId === 1) {
+        navigate("/admin");
+      } else {
+        navigate("/home");
+      }
+    } catch (err) {
+      setSignInError(err.message || "Invalid email or password.");
+    } finally {
+      setLoading(false);
     }
-    navigate("/home");
   };
 
-  const handleSignUp = (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault();
     setError("");
-    if (signUp.password.length < 6)        return setError("Password must be at least 6 characters.");
+    if (signUp.password.length < 8)        return setError("Password must be at least 8 characters.");
     if (signUp.password !== signUp.confirm) return setError("Passwords do not match.");
     if (!agree)                             return setError("Please accept the terms to continue.");
-    navigate("/home");
+    setLoading(true);
+    try {
+      await register(signUp.email, signUp.password, signUp.username);
+      navigate("/home");
+    } catch (err) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isSignIn = mode === "signin";
@@ -358,13 +379,21 @@ export default function AuthPage({ defaultMode = "signin" }) {
 
             {/* Left: Sign-In form (always mounted) */}
             <div className="w-1/2 bg-white flex items-center justify-center py-14">
-              <SignInForm
-                data={signIn} onChange={setSignIn}
-                remember={remember} setRemember={setRemember}
-                onSubmit={handleSignIn}
-                onForgot={() => setForgotOpen(true)}
-                onSwitch={() => setMode("signup")}
-              />
+              <div className="w-full max-w-xs flex flex-col items-center gap-5">
+                <SignInForm
+                  data={signIn} onChange={setSignIn}
+                  remember={remember} setRemember={setRemember}
+                  onSubmit={handleSignIn}
+                  onForgot={() => setForgotOpen(true)}
+                  onSwitch={() => setMode("signup")}
+                />
+                {signInError && (
+                  <div className="w-full bg-rose-50 border border-rose-200 text-rose-600 text-xs px-3.5 py-2.5 rounded-xl -mt-2">
+                    {signInError}
+                  </div>
+                )}
+                {loading && <p className="text-xs text-slate-400">Please wait…</p>}
+              </div>
             </div>
 
             {/* Right: Sign-Up form (always mounted) */}
@@ -473,7 +502,9 @@ export default function AuthPage({ defaultMode = "signin" }) {
       <ForgotPasswordModal
         open={forgotOpen}
         onClose={() => setForgotOpen(false)}
-        onSubmit={async (email) => console.log("Reset:", email)}
+        onSubmit={async (email) => {
+          await authApi.forgotPassword(email);
+        }}
       />
     </>
   );
