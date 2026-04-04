@@ -112,17 +112,23 @@ async function request(path, options = {}, _isRetry = false) {
       }
     }
 
+    // For ASP.NET Core ProblemDetails (model validation), prefer the field-level errors
+    // over the generic title so the user sees exactly which field failed.
+    const fieldErrors =
+      err?.errors && typeof err.errors === "object" && !Array.isArray(err.errors)
+        ? Object.values(err.errors).flat().join(", ")
+        : "";
+
     const message =
       err?.message ||
       err?.Message ||
+      fieldErrors ||
+      (Array.isArray(err?.errors) ? err.errors.join(", ") : "") ||
+      (typeof err?.errors === "string" ? err.errors : "") ||
       err?.title ||
       err?.error ||
       err?.detail ||
       err?.response?.message ||
-      (Array.isArray(err?.errors) ? err.errors.join(", ") : "") ||
-      (typeof err?.errors === "string" ? err.errors : "") ||
-      (err?.errors && typeof err.errors === "object" && !Array.isArray(err.errors)
-        ? Object.values(err.errors).flat().join(", ") : "") ||
       (raw && !raw.trim().startsWith("<") ? raw : "");
 
     throw new Error(message || `Request failed (${res.status})`);
