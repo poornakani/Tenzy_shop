@@ -168,11 +168,6 @@ export const api = {
   get: (path) => request(path),
   post: (path, body) =>
     request(path, { method: "POST", body: JSON.stringify(body) }),
-  put: (path, body) =>
-    request(path, { method: "PUT", body: JSON.stringify(body) }),
-  patch: (path, body) =>
-    request(path, { method: "PATCH", body: JSON.stringify(body) }),
-  delete: (path) => request(path, { method: "DELETE" }),
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -199,8 +194,8 @@ export const productsApi = {
   getAllAdmin: () => api.get("/api/products/admin"),
   getById: (id) => api.get(`/api/products/${id}`),
   create: (body) => api.post("/api/products", body),
-  update: (id, b) => api.put(`/api/products/${id}`, b),
-  remove: (id) => api.delete(`/api/products/${id}`),
+  update: (id, b) => api.post(`/api/products/${id}/update`, b),
+  remove: (id) => api.post(`/api/products/${id}/delete`, {}),
 };
 
 // ── Brands ────────────────────────────────────────────────────────────────────
@@ -208,7 +203,7 @@ export const brandsApi = {
   getAll: () => api.get("/api/brands"),
   getById: (id) => api.get(`/api/brands/${id}`),
   create: (body) => api.post("/api/brands", body),
-  update: (body) => api.put("/api/brands", body),
+  update: (body) => api.post("/api/brands/update", body),
   deactivate: (id) => api.post(`/api/brands/${id}`),
 };
 
@@ -216,7 +211,7 @@ export const brandsApi = {
 export const categoriesApi = {
   getAll: () => api.get("/api/categories"),
   create: (body) => api.post("/api/categories", body),
-  update: (body) => api.put("/api/categories", body),
+  update: (body) => api.post("/api/categories/update", body),
   activate: (id) => api.post(`/api/categories/${id}/activate`),
   deactivate: (id) => api.post(`/api/categories/${id}`),
 };
@@ -236,7 +231,7 @@ export const ordersApi = {
   getMyOrders: (page = 1) => api.get(`/api/orders/my?page=${page}`),
   create: (body) => api.post("/api/orders", body),
   updateStatus: (id, status) =>
-    api.patch(`/api/orders/${id}/status`, { status }),
+    api.post(`/api/orders/${id}/status`, { status }),
 };
 
 // ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -244,7 +239,7 @@ export const dispatchApi = {
   getPending: () => api.get("/api/dispatch/pending"),
   upsert: (body) => api.post("/api/dispatch", body),
   markDelivered: (orderId) =>
-    api.patch(`/api/dispatch/${orderId}/delivered`, {}),
+    api.post(`/api/dispatch/${orderId}/delivered`, {}),
 };
 
 // ── Procurement ───────────────────────────────────────────────────────────────
@@ -252,7 +247,7 @@ export const procurementApi = {
   getAll: () => api.get("/api/procurement"),
   getById: (id) => api.get(`/api/procurement/${id}`),
   create: (body) => api.post("/api/procurement", body),
-  updateStatus: (id, b) => api.patch(`/api/procurement/${id}/status`, b),
+  updateStatus: (id, b) => api.post(`/api/procurement/${id}/status`, b),
 };
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
@@ -264,7 +259,7 @@ export const reviewsApi = {
   getByProduct: (productId) => api.get(`/api/reviews/product/${productId}`),
   create: (body) => api.post("/api/reviews", body),
   moderate: (id, isApproved) =>
-    api.patch(`/api/reviews/${id}/moderate`, { isApproved }),
+    api.post(`/api/reviews/${id}/moderate`, { isApproved }),
 };
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -328,7 +323,7 @@ export const productImageApi = {
     );
   },
   create: (body) => api.post("/api/productimage", body),
-  deactivate: (id) => api.put(`/api/productimage/deactive/${id}`, {}),
+  deactivate: (id) => api.post(`/api/productimage/deactive/${id}`, {}),
 };
 
 // ── Image Upload (ImgBB) ──────────────────────────────────────────────────────
