@@ -5,11 +5,12 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import ProductSearchDropdown from "@/Widgets/ProductSearchDropdown";
 import { useWishlist } from "@/Context/WishlistContext";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { SellingProducts, concerns } from "@/ProductsJson";
+import { SellingProducts } from "@/ProductsJson";
 import MobileProductSearchDropdown from "@/Widgets/MobileProductSearchDropdown";
 import { useCart } from "@/Context/CartContext";
 import { useIconHover } from "@/Animation/IconAnimation";
 import { useAuth } from "@/Context/AuthContext";
+import { concernsApi } from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -26,6 +27,7 @@ const Navibar = () => {
 
   const [concernOpen, setConcernOpen] = useState(false);
   const [mobileQuery, setMobileQuery] = useState("");
+  const [concernItems, setConcernItems] = useState([]);
 
   const { wishlistCount } = useWishlist();
   const navigate = useNavigate();
@@ -122,6 +124,30 @@ const Navibar = () => {
     return () => document.removeEventListener("mousedown", onDown);
   }, [profileOpen]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    concernsApi.getAll()
+      .then((rows) => {
+        if (cancelled) return;
+        setConcernItems(
+          (Array.isArray(rows) ? rows : [])
+            .map((row) => ({
+              concernID: Number(row.concernTypeId ?? row.ConcernTypeId ?? row.concernID ?? row.ConcernID ?? 0),
+              concernType: String(row.name ?? row.Name ?? row.concernType ?? row.ConcernType ?? "").trim(),
+            }))
+            .filter((row) => row.concernID > 0 && row.concernType)
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setConcernItems([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   //  When mobile menu opens/closes, ensure desktop dropdown never renders behind it
   useEffect(() => {
     if (open) {
@@ -143,7 +169,7 @@ const Navibar = () => {
   };
 
   const concernLabel =
-    concerns.find((c) => c.concernID === selectedConcernInt)?.concernType ||
+    concernItems.find((c) => c.concernID === selectedConcernInt)?.concernType ||
     "Concerns";
 
   const isConcernActive = Boolean(selectedConcernId);
@@ -213,7 +239,7 @@ const Navibar = () => {
                   className="absolute left-1/2 -translate-x-1/2 mt-3 w-64 rounded-2xl border border-white/20 bg-black/95 backdrop-blur-xl shadow-2xl overflow-hidden"
                 >
                   <div className="p-2">
-                    {concerns.map((c) => {
+                    {concernItems.map((c) => {
                       const active = c.concernID === selectedConcernInt;
                       return (
                         <button
@@ -519,7 +545,7 @@ const Navibar = () => {
 
                     <div className="px-3 pb-3 pt-2">
                       <div className="grid grid-cols-1 gap-2">
-                        {concerns.map((c) => {
+                        {concernItems.map((c) => {
                           const active = c.concernID === selectedConcernInt;
                           return (
                             <button

@@ -82,7 +82,7 @@ const emptyForm = () => ({
 
 const toApiDate = (value) => (value ? `${value}T00:00:00Z` : null);
 const normalizeFaqDraft = (faq) => ({
-  faqId: faq.faqId ?? faq.FAQId ?? 0,
+  faqId: faq.faqId ?? faq.fAQId ?? faq.FAQId ?? 0,
   question: String(faq.question ?? faq.Question ?? "").trim(),
   answer: String(faq.answer ?? faq.Answer ?? "").trim(),
 });
@@ -269,7 +269,7 @@ export default function AdminProducts() {
         ...prev,
         images: imgs.map(normalizeProductImage),
         faqs: faqs.map((faq) => ({
-          faqId: faq.faqId ?? faq.FAQId,
+          faqId: faq.faqId ?? faq.fAQId ?? faq.FAQId,
           question: faq.question ?? faq.Question ?? "",
           answer: faq.answer ?? faq.Answer ?? "",
         })),
@@ -334,16 +334,16 @@ export default function AdminProducts() {
   const syncProductFaqs = async (productId, drafts) => {
     const existingFaqs = await productFaqApi.getByProduct(productId);
     const existingIds = new Set(
-      existingFaqs.map((faq) => faq.faqId ?? faq.FAQId).filter((id) => Number.isInteger(id) && id > 0)
+      existingFaqs.map((faq) => faq.faqId ?? faq.fAQId ?? faq.FAQId).filter((id) => Number.isInteger(id) && id > 0)
     );
     const nextIds = new Set(
       drafts.map((faq) => faq.faqId).filter((id) => Number.isInteger(id) && existingIds.has(id))
     );
 
-    const removedFaqs = existingFaqs.filter((faq) => !nextIds.has(faq.faqId ?? faq.FAQId));
+    const removedFaqs = existingFaqs.filter((faq) => !nextIds.has(faq.faqId ?? faq.fAQId ?? faq.FAQId));
     if (removedFaqs.length > 0) {
       const results = await Promise.allSettled(
-        removedFaqs.map((faq) => productFaqApi.deactivate(faq.faqId ?? faq.FAQId))
+        removedFaqs.map((faq) => productFaqApi.deactivate(faq.faqId ?? faq.fAQId ?? faq.FAQId))
       );
       const failed = results.find((result) => result.status === "rejected");
       if (failed?.status === "rejected") throw failed.reason;
