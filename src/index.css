@@ -1,10 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Serif+Text:ital@0;1&family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Serif+Text:ital@0;1&family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap");
 @import "tailwindcss";
-
-@font-face {
-  font-family: "Modern Negra";
-  src: url("/fonts/Modern Negra Demo.ttf") format("truetype");
-}
 
 @theme {
   --color-yellow: #e7d393;
@@ -13,7 +8,7 @@
   --color-tenzy-orange: #E8522A;
   --color-tenzy-teal: #2BB9B4;
   --font-sans: "Mona Sans", sans-serif;
-  --font-modern-negra: "Modern Negra", sans-serif;
+  --font-modern-negra: "Cormorant Garamond", serif;
   --font-serif: "DM Serif Text", serif;
 
   --screen-sm: 640px;

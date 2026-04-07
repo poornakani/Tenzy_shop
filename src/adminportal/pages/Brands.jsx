@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Plus, Edit2, X, AlertTriangle, ImagePlus, PowerOff } from "lucide-react";
-import { brandsApi } from "../../services/api";
+import { brandsApi, uploadApi } from "../../services/api";
 
 const EMPTY = { name: "", brandImage: "" };
 
@@ -13,6 +13,7 @@ export default function BrandsPage() {
   const [deleteId,   setDeleteId]   = useState(null);
   const [previewErr, setPreviewErr] = useState(false);
   const [saving,     setSaving]     = useState(false);
+  const [uploading,  setUploading]  = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -32,6 +33,22 @@ export default function BrandsPage() {
     setPreviewErr(false);
   };
   const close = () => { setModal(null); setEditId(null); };
+
+  const handleImageFilePick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploading(true);
+    try {
+      const url = await uploadApi.uploadImage(file);
+      setForm((f) => ({ ...f, brandImage: url }));
+      setPreviewErr(false);
+    } catch (err) {
+      alert(err.message || "Image upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.name.trim() || saving) return;
@@ -144,12 +161,17 @@ export default function BrandsPage() {
                   className="w-full text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Brand Image URL</label>
-                <input value={form.brandImage}
-                  onChange={(e) => { setForm({ ...form, brandImage: e.target.value }); setPreviewErr(false); }}
-                  placeholder="https://…"
-                  className="w-full text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition" />
-                <p className="text-[10px] text-slate-400 mt-1">Paste a direct image URL. Preview updates automatically.</p>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Brand Image</label>
+                <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed cursor-pointer transition
+                  ${uploading ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed" : "border-tenzy-teal/40 hover:border-tenzy-teal hover:bg-tenzy-teal/5 text-tenzy-teal"}`}>
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+                    disabled={uploading} onChange={handleImageFilePick} />
+                  <ImagePlus size={15} />
+                  <span className="text-xs font-semibold">
+                    {uploading ? "Uploading…" : form.brandImage ? "Replace image" : "Choose image to upload"}
+                  </span>
+                </label>
+                <p className="text-[10px] text-slate-400 mt-1">JPEG, PNG, WebP or GIF · max 5 MB</p>
               </div>
               <div className="flex gap-3 pt-1">
                 <button onClick={close}

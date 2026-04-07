@@ -18,42 +18,99 @@ import Navibar from "@/HomePage/Navibar";
 import { useCart } from "@/Context/CartContext";
 import { useToast } from "@/Context/ToastContext";
 import Footer from "@/HomePage/Footer";
-import { productsApi } from "../services/api";
+import {
+  productsApi,
+  brandsApi,
+  categoriesApi,
+  productImageApi,
+} from "../services/api";
 
-function normalizeApiProduct(raw) {
-  const id    = raw.productId ?? raw.id ?? 0;
-  const price = raw.priceLkr  ?? raw.priceLKR ?? raw.price ?? 0;
-  const disc  = raw.discountPercent ?? 0;
-  const stock = raw.stockQty ?? raw.stockCount ?? 0;
-  const rawImgs = Array.isArray(raw.images) ? raw.images : [];
+function parseConcernIds(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+  }
+
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value > 0);
+  }
+
+  return [];
+}
+
+function normalizeApiProduct(raw, lookups = {}) {
+  const id = raw.productId ?? raw.ProductId ?? raw.id ?? 0;
+  const priceLkr = parseFloat(raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0);
+  const originalPrice = parseFloat(raw.originalPrice ?? raw.OriginalPrice ?? priceLkr);
+  const sellingPrice = parseFloat(raw.sellingPrice ?? raw.SellingPrice ?? priceLkr ?? originalPrice);
+  const basePrice = originalPrice > 0 ? originalPrice : sellingPrice;
+  const disc = Math.round(parseFloat(raw.discountRate ?? raw.DiscountRate ?? raw.discountPercent ?? 0))
+    || (basePrice > 0 && sellingPrice < basePrice ? Math.round((1 - sellingPrice / basePrice) * 100) : 0);
+  const stock = parseInt(raw.stockQuantity ?? raw.StockQuantity ?? raw.stockQty ?? raw.stockCount ?? raw.stock ?? 0, 10);
+  const rawImgs = Array.isArray(raw.images) && raw.images.length
+    ? raw.images
+    : (lookups.imagesByProductId?.get(id) ?? []);
   const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
   const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
-  const mainImg = primary?.imageUrl ?? imgUrls[0] ?? null;
+  const mainImg = raw.primaryImageUrl
+    ?? raw.PrimaryImageUrl
+    ?? raw.imageUrl
+    ?? raw.ImageUrl
+    ?? primary?.imageUrl
+    ?? primary?.ImageUrl
+    ?? imgUrls[0]
+    ?? null;
+  const isSale = raw.isSale ?? raw.IsSale ?? raw.inSale ?? raw.InSale ?? raw.insale ?? false;
   return {
     id,
     productId: id,
-    name:            raw.name ?? "",
-    price,
+    name:            raw.name ?? raw.Name ?? "",
+    price:           basePrice,
     discountPercent: disc,
-    discountedPrice: Math.round(price * (1 - disc / 100)),
-    inSale:          disc > 0,
+    discountedPrice: disc > 0 ? Math.round(basePrice * (1 - disc / 100)) : basePrice,
+    inSale:          Boolean(isSale),
     stockCount:      stock,
     outOfStock:      stock === 0,
     image:           mainImg,
     images:          imgUrls.length ? imgUrls : (mainImg ? [mainImg] : []),
-    category:        raw.categoryName ?? raw.categoryType ?? raw.category ?? "",
-    categoryId:      raw.categoryId ?? 0,
-    brand:           raw.brandName ?? raw.brand ?? "",
-    brandId:         raw.brandId ?? 0,
-    brandName:       raw.brandName ?? raw.brand ?? "",
+    category:        raw.categoryName
+      ?? raw.CategoryName
+      ?? raw.categoryType
+      ?? raw.CategoryType
+      ?? raw.category
+      ?? lookups.categoryNamesById?.get(raw.categoryId ?? raw.CategoryId)
+      ?? "",
+    categoryId:      raw.categoryId ?? raw.CategoryId ?? 0,
+    brand:           raw.brandName
+      ?? raw.BrandName
+      ?? raw.brand
+      ?? lookups.brandNamesById?.get(raw.brandId ?? raw.BrandId)
+      ?? "",
+    brandId:         raw.brandId ?? raw.BrandId ?? 0,
+    brandName:       raw.brandName
+      ?? raw.BrandName
+      ?? raw.brand
+      ?? lookups.brandNamesById?.get(raw.brandId ?? raw.BrandId)
+      ?? "",
     brandLogo:       raw.brandImage ?? "",
-    sku:             raw.sku ?? `SKU-${id}`,
-    description:     raw.description ?? "",
-    size:            raw.size ?? "N/A",
-    weight:          raw.weight ?? raw.weightGrams ?? "N/A",
-    concernIds:      Array.isArray(raw.concernIds) ? raw.concernIds : [],
-    paymentProvider: raw.paymentProvider ?? "CocoPay",
-    minInstallments: raw.minInstallments ?? 3,
+    sku:             raw.sku ?? raw.SKU ?? `SKU-${id}`,
+    description:     raw.description ?? raw.Description ?? "",
+    size:            raw.size ?? raw.Size ?? "N/A",
+    weight:          raw.weight ?? raw.weightGrams ?? raw.Weight ?? "N/A",
+    concernIds:      parseConcernIds(
+      raw.concernIds
+      ?? raw.ConcernIds
+      ?? raw.concernTypeIds
+      ?? raw.ConcernTypeIds
+      ?? raw.concernTypeIdsCsv
+      ?? raw.ConcernTypeIdsCsv
+    ),
+    paymentProvider: raw.paymentProvider ?? null,
+    minInstallments: raw.minInstallments ?? null,
   };
 }
 
@@ -143,15 +200,57 @@ const ProductsPage = () => {
   // -------- API product list --------
   const [rawProducts,     setRawProducts]     = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productLookups,  setProductLookups]  = useState({
+    brandNamesById: new Map(),
+    categoryNamesById: new Map(),
+    imagesByProductId: new Map(),
+  });
 
   useEffect(() => {
-    productsApi.getAll()
-      .then((data) => setRawProducts(Array.isArray(data) ? data : []))
+    Promise.allSettled([
+      productsApi.getAll(),
+      brandsApi.getAll(),
+      categoriesApi.getAll(),
+      productImageApi.getAll(),
+    ])
+      .then(([productsRes, brandsRes, categoriesRes, imagesRes]) => {
+        const products = Array.isArray(productsRes.value) ? productsRes.value : [];
+        const brands = Array.isArray(brandsRes.value) ? brandsRes.value : [];
+        const categories = Array.isArray(categoriesRes.value) ? categoriesRes.value : [];
+        const images = Array.isArray(imagesRes.value) ? imagesRes.value : [];
+
+        const brandNamesById = new Map(
+          brands.map((brand) => [
+            brand.brandId ?? brand.BrandId,
+            brand.name ?? brand.Name ?? brand.brandName ?? brand.BrandName ?? "",
+          ])
+        );
+        const categoryNamesById = new Map(
+          categories.map((category) => [
+            category.categoryId ?? category.CategoryId ?? category.catagoryID,
+            category.categoryType ?? category.CategoryType ?? category.name ?? category.Name ?? "",
+          ])
+        );
+        const imagesByProductId = images.reduce((map, image) => {
+          const productId = image.productId ?? image.ProductId;
+          if (productId == null || (image.isActive ?? image.IsActive) === false) return map;
+          const list = map.get(productId) ?? [];
+          list.push(image);
+          map.set(productId, list);
+          return map;
+        }, new Map());
+
+        setRawProducts(products);
+        setProductLookups({ brandNamesById, categoryNamesById, imagesByProductId });
+      })
       .catch(console.error)
       .finally(() => setLoadingProducts(false));
   }, []);
 
-  const products = useMemo(() => rawProducts.map(normalizeApiProduct), [rawProducts]);
+  const products = useMemo(
+    () => rawProducts.map((product) => normalizeApiProduct(product, productLookups)),
+    [rawProducts, productLookups]
+  );
 
   // Unique brand list derived from loaded products (for the brand filter)
   const brandsList = useMemo(() => {
@@ -477,11 +576,17 @@ const ProductsPage = () => {
                         className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-teal-50 transition group"
                       >
                         <div className="h-10 w-10 rounded-xl overflow-hidden border border-zinc-100 bg-zinc-50 shrink-0">
-                          <img
-                            src={p.image}
-                            alt={p.name}
-                            className="h-full w-full object-cover"
-                          />
+                          {p.image ? (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-300">
+                              No Img
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-tenzy-teal transition">
@@ -844,12 +949,18 @@ const ProductsPage = () => {
                           className="relative aspect-4/5 overflow-hidden cursor-pointer"
                           onClick={() => goToProduct(p)}
                         >
-                          <img
-                            src={p.image}
-                            alt={p.name}
-                            className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]
-                              ${outOfStock ? "blur-[2px] grayscale" : ""}`}
-                          />
+                          {p.image ? (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]
+                                ${outOfStock ? "blur-[2px] grayscale" : ""}`}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-zinc-100 text-sm font-semibold text-zinc-300">
+                              No image available
+                            </div>
+                          )}
 
                           {p.inSale && (
                             <div className="absolute top-3 left-3 rounded-xl bg-tenzy-orange px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-tenzy-orange/25">
@@ -937,24 +1048,30 @@ const ProductsPage = () => {
                               <p className="text-sm font-bold text-zinc-900">
                                 LKR {formatLKR(p.discountedPrice)}
                               </p>
-                              <p className="text-xs text-zinc-400 line-through">
-                                LKR {formatLKR(p.price)}
-                              </p>
+                              {p.inSale && (
+                                <p className="text-xs text-zinc-400 line-through">
+                                  LKR {formatLKR(p.price)}
+                                </p>
+                              )}
                             </div>
-                            <p className="text-xs font-bold text-tenzy-orange">
-                              -{p.discountPercent}%
-                            </p>
+                            {p.inSale && (
+                              <p className="text-xs font-bold text-tenzy-orange">
+                                -{p.discountPercent}%
+                              </p>
+                            )}
                           </div>
 
-                          <div className="mt-3 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2">
-                            <p className="text-[11px] text-zinc-500">
-                              Pay with{" "}
-                              <span className="font-semibold text-zinc-700">
-                                {p.paymentProvider}
-                              </span>{" "}
-                              • {p.minInstallments}+ instalments
-                            </p>
-                          </div>
+                          {p.paymentProvider && p.minInstallments && (
+                            <div className="mt-3 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2">
+                              <p className="text-[11px] text-zinc-500">
+                                Pay with{" "}
+                                <span className="font-semibold text-zinc-700">
+                                  {p.paymentProvider}
+                                </span>{" "}
+                                • {p.minInstallments}+ instalments
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </article>
                     );

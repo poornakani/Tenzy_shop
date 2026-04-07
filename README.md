@@ -1,16 +1,49 @@
-# React + Vite
+# Tenzy Shop Admin + Supply Chain
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This frontend now includes a dedicated cosmetic supply-chain workflow for:
 
-Currently, two official plugins are available:
+- UK procurement with item-level discount capture
+- UK-to-Sri-Lanka dispatch management
+- Sri Lanka arrival verification
+- Pricing approval from verified stock only
+- Report filtering and PDF export
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Admin routes
 
-## React Compiler
+- `/admin/procurement`
+- `/admin/dispatch`
+- `/admin/arrival`
+- `/admin/pricing`
+- `/admin/reports`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Frontend setup
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Verification commands
+
+```bash
+npm run build
+npm run test:supply-chain
+```
+
+To run the API smoke script, set credentials first:
+
+```bash
+export TENZY_API_BASE_URL="https://www.tenzyapitest.dotnetcloud.co.uk"
+export TENZY_ADMIN_EMAIL="admin@example.com"
+export TENZY_ADMIN_PASSWORD="your-password"
+npm run test:supply-chain:api
+```
+
+## Backend companion changes
+
+The backend migration and API implementation live in the sibling repo:
+
+- `/Users/poornakanishka/TenzyBackend/Database/migrations/011_supply_chain_management.sql`
+- `/Users/poornakanishka/TenzyBackend/TencyBackendApi/Controllers/SupplyChainController.cs`
+
+See `/Users/poornakanishka/TenzyBackend/SUPPLY_CHAIN_SETUP.md` for schema and API notes.

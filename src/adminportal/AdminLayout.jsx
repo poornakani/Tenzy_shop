@@ -3,7 +3,8 @@ import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users,
   BarChart2, LogOut, Menu, X, Bell, ChevronRight,
-  Settings, Store, Tag, Star, PackagePlus,
+  Settings, Store, Star, PackagePlus, Database, Percent,
+  BadgeCheck, Layers,
 } from "lucide-react";
 
 const NAV = [
@@ -11,11 +12,14 @@ const NAV = [
   { to: "/admin/orders",       label: "Orders",      icon: ShoppingCart },
   { to: "/admin/products",     label: "Products",    icon: Package },
   { to: "/admin/procurement",  label: "Procurement", icon: PackagePlus },
-  { to: "/admin/brands",       label: "Brands",      icon: Tag },
+  { to: "/admin/arrival",      label: "Arrival",     icon: BadgeCheck },
+  { to: "/admin/pricing",      label: "Pricing",     icon: Percent },
   { to: "/admin/dispatch",     label: "Dispatch",    icon: Truck },
+  { to: "/admin/stock",        label: "Stock",       icon: Layers },
   { to: "/admin/customers",    label: "Customers",   icon: Users },
   { to: "/admin/reviews",      label: "Reviews",     icon: Star },
   { to: "/admin/reports",      label: "Reports",     icon: BarChart2 },
+  { to: "/admin/reference",    label: "Reference",   icon: Database },
 ];
 
 const BOTTOM_NAV = [
@@ -57,11 +61,11 @@ export default function AdminLayout() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+        {NAV.map((item) => (
           <NavLink
-            key={to}
-            to={to}
-            end={end}
+            key={item.to}
+            to={item.to}
+            end={item.end}
             onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
@@ -71,8 +75,8 @@ export default function AdminLayout() {
               }`
             }
           >
-            <Icon size={18} />
-            <span>{label}</span>
+            <item.icon size={18} />
+            <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
@@ -160,19 +164,19 @@ export default function AdminLayout() {
 
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 flex">
-        {BOTTOM_NAV.map(({ to, label, icon: Icon, end }) => (
+        {BOTTOM_NAV.map((item) => (
           <NavLink
-            key={to}
-            to={to}
-            end={end}
+            key={item.to}
+            to={item.to}
+            end={item.end}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-medium transition-colors ${
                 isActive ? "text-tenzy-teal" : "text-slate-400"
               }`
             }
           >
-            <Icon size={20} />
-            <span>{label}</span>
+            <item.icon size={20} />
+            <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>

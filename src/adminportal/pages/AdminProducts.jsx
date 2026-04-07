@@ -5,8 +5,10 @@ import {
   Info, MessageSquare, CreditCard,
 } from "lucide-react";
 import {
-  productsApi, brandsApi, categoriesApi, concernsApi, paymentApi, uploadApi, productImageApi,
+  productsApi, brandsApi, categoriesApi, concernsApi, paymentApi, uploadApi, productImageApi, productFaqApi,
+  supplyChainApi,
 } from "../../services/api";
+
 
 const fmt = (n) => new Intl.NumberFormat("en-LK").format(n);
 
@@ -23,10 +25,23 @@ const primaryImage = (images) =>
   ?? (images ?? []).find((i) => i.IsPrimary)?.ImageUrl
   ?? null;
 
-const Section = ({ icon: Icon, title, children }) => (
+const pricingStatusMeta = (status) => {
+  switch (status) {
+    case "awaiting_stock_depletion":
+      return { label: "Waiting for stock finish", cls: "bg-violet-100 text-violet-700" };
+    case "pending_activation":
+      return { label: "Ready to activate", cls: "bg-blue-100 text-blue-700" };
+    case "draft":
+      return { label: "Draft pricing", cls: "bg-slate-100 text-slate-600" };
+    default:
+      return { label: "Pending price approval", cls: "bg-amber-100 text-amber-700" };
+  }
+};
+
+const Section = ({ icon, title, children }) => (
   <div className="space-y-3">
     <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-      <Icon size={15} className="text-tenzy-teal" />
+      {React.createElement(icon, { size: 15, className: "text-tenzy-teal" })}
       <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title}</h3>
     </div>
     {children}
@@ -65,22 +80,50 @@ const emptyForm = () => ({
   images: [], concerns: [], paymentOptions: [], faqs: [],
 });
 
+const toApiDate = (value) => (value ? `${value}T00:00:00Z` : null);
+const normalizeFaqDraft = (faq) => ({
+  faqId: faq.faqId ?? faq.FAQId ?? 0,
+  question: String(faq.question ?? faq.Question ?? "").trim(),
+  answer: String(faq.answer ?? faq.Answer ?? "").trim(),
+});
+const normalizeConcernIds = (concerns) => [...new Set(
+  (concerns ?? [])
+    .map((concern) => (
+      typeof concern === "object" && concern !== null
+        ? (concern.concernTypeId ?? concern.ConcernTypeId ?? concern.id ?? concern.Id)
+        : concern
+    ))
+    .map((id) => parseInt(id, 10))
+    .filter((id) => Number.isInteger(id) && id > 0)
+)];
+const normalizeProductImage = (img) => ({
+  imageId: img.imageId ?? img.ImageId,
+  productId: img.productId ?? img.ProductId,
+  imageUrl: img.imageUrl ?? img.ImageUrl ?? "",
+  isPrimary: img.isPrimary ?? img.IsPrimary ?? false,
+  sortOrder: img.sortOrder ?? img.SortOrder ?? 1,
+  isActive: img.isActive ?? img.IsActive ?? true,
+});
+
 export default function AdminProducts() {
   const [products,       setProducts]       = useState([]);
   const [brands,         setBrands]         = useState([]);
   const [categories,     setCategories]     = useState([]);
   const [concernTypes,   setConcernTypes]   = useState([]);
   const [paymentTypes,   setPaymentTypes]   = useState([]);
+  const [approvedShipments, setApprovedShipments] = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [search,         setSearch]         = useState("");
   const [catFilter,      setCatFilter]      = useState(0);
   const [concFilter,     setConcFilter]     = useState(0);
+  const [activeTab,      setActiveTab]      = useState("live");
   const [drawer,         setDrawer]         = useState(null);
   const [editTarget,     setEditTarget]     = useState(null);
   const [form,           setForm]           = useState(emptyForm());
   const [deleteConfirm,  setDeleteConfirm]  = useState(null);
   const [saving,         setSaving]         = useState(false);
   const [uploading,      setUploading]      = useState(false);
+  const [imageSaving,    setImageSaving]    = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
 
   const loadAll = useCallback(() => {
@@ -93,7 +136,8 @@ export default function AdminProducts() {
       concernsApi.getAll(),
       paymentApi.getAll(),
       productImageApi.getAll(),
-    ]).then(([pR, bR, cR, conR, ptR, imgR]) => {
+      supplyChainApi.getEligiblePricing(),
+    ]).then(([pR, bR, cR, conR, ptR, imgR, approvedR]) => {
       // Check if any auth-protected call got a session-expired error
       const expired = [pR, bR, cR, conR, ptR].some(
         (r) => r.status === "rejected" && r.reason?.message?.includes("Session expired")
@@ -104,6 +148,7 @@ export default function AdminProducts() {
       if (cR.status   === "fulfilled") setCategories(Array.isArray(cR.value) ? cR.value   : []);
       if (conR.status === "fulfilled") setConcernTypes(Array.isArray(conR.value) ? conR.value : []);
       if (ptR.status  === "fulfilled") setPaymentTypes(Array.isArray(ptR.value)  ? ptR.value  : []);
+      if (approvedR.status === "fulfilled") setApprovedShipments(Array.isArray(approvedR.value) ? approvedR.value : []);
 
       if (pR.status === "fulfilled") {
         const prods = Array.isArray(pR.value) ? pR.value : [];
@@ -126,11 +171,13 @@ export default function AdminProducts() {
 
   const bid_of    = (b) => b.brandId    ?? b.BrandId    ?? b.Brandid;
   const cid_of    = (c) => c.categoryId ?? c.CategoryId ?? c.catagoryID;
-  const brandName = (id) => brands.find((b) => bid_of(b) === id)?.name ?? brands.find((b) => bid_of(b) === id)?.Name ?? "—";
-  const catName   = (id) => {
+  const brandName = useCallback((id) => (
+    brands.find((b) => bid_of(b) === id)?.name ?? brands.find((b) => bid_of(b) === id)?.Name ?? "—"
+  ), [brands]);
+  const catName   = useCallback((id) => {
     const c = categories.find((c) => cid_of(c) === id);
     return c ? (c.categoryType ?? c.CategoryType ?? c.categorytype ?? "—") : "—";
-  };
+  }, [categories]);
 
   const filtered = useMemo(() =>
     products.filter((p) => {
@@ -144,8 +191,25 @@ export default function AdminProducts() {
       );
       return matchSearch && matchCat && matchConc;
     }),
-    [products, search, catFilter, concFilter, brands, categories]
+    [products, search, catFilter, concFilter, brandName]
   );
+
+  const pendingPriceRows = useMemo(() => (
+    approvedShipments.filter((item) => item.pricingReviewStatus !== "applied_live")
+  ), [approvedShipments]);
+
+  const filteredPendingPriceRows = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return pendingPriceRows.filter((item) => {
+      if (!q) return true;
+      return [
+        item.productName,
+        item.brandName,
+        item.categoryName,
+        item.dispatchReference,
+      ].some((value) => String(value ?? "").toLowerCase().includes(q));
+    });
+  }, [pendingPriceRows, search]);
 
   const openAdd = () => {
     const firstBrand = brands[0];
@@ -181,11 +245,9 @@ export default function AdminProducts() {
       startUTC:     (p.startUTC ?? p.StartUTC ?? new Date().toISOString()).slice(0, 10),
       endUTC:       (p.endUTC   ?? p.EndUTC   ?? "").slice(0, 10),
       images:       [],
-      concerns:       (p.concerns ?? []).map((c) => c.concernTypeId ?? c.ConcernTypeId ?? c),
-      paymentOptions: (p.paymentOptions ?? []).map((po) => ({
-        paymentTypeId: po.paymentTypeId ?? po.PaymentTypeId,
-        instalment:    po.instalment ?? null,
-      })),
+      // null = not yet loaded — backend will leave concerns/options unchanged on save
+      concerns:       null,
+      paymentOptions: null,
       faqs: (p.faqs ?? []).map((f) => ({
         faqId:    f.faqId    ?? f.FAQId    ?? Date.now(),
         question: f.question ?? f.Question ?? "",
@@ -195,26 +257,119 @@ export default function AdminProducts() {
     setEditTarget(p);
     setDrawer("edit");
 
-    // Load images asynchronously
+    // Load related data asynchronously
     try {
-      const imgs = await productImageApi.getByProduct(pid);
-      if (imgs.length > 0) {
-        setForm((prev) => ({
-          ...prev,
-          images: imgs.map((img) => ({
-            imageId:   img.imageId   ?? img.ImageId,
-            imageUrl:  img.imageUrl  ?? img.ImageUrl  ?? "",
-            isPrimary: img.isPrimary ?? img.IsPrimary ?? false,
-            sortOrder: img.sortOrder ?? img.SortOrder ?? 1,
-          })),
-        }));
-      }
+      const [imgs, faqs, concernIds, payOpts] = await Promise.all([
+        productImageApi.getByProduct(pid),
+        productFaqApi.getByProduct(pid),
+        productsApi.getConcerns(pid).catch(() => null),
+        productsApi.getPaymentOptions(pid).catch(() => null),
+      ]);
+      setForm((prev) => ({
+        ...prev,
+        images: imgs.map(normalizeProductImage),
+        faqs: faqs.map((faq) => ({
+          faqId: faq.faqId ?? faq.FAQId,
+          question: faq.question ?? faq.Question ?? "",
+          answer: faq.answer ?? faq.Answer ?? "",
+        })),
+        // Pre-populate concerns and payment options if the API returned data
+        ...(Array.isArray(concernIds)
+          ? { concerns: concernIds.filter((id) => Number.isInteger(id) && id > 0) }
+          : {}),
+        ...(Array.isArray(payOpts)
+          ? {
+              paymentOptions: payOpts.map((po) => ({
+                paymentTypeId: po.paymentTypeId ?? po.PaymentTypeId,
+                instalment:    po.instalment    ?? po.Instalment ?? null,
+              })).filter((po) => po.paymentTypeId > 0),
+            }
+          : {}),
+      }));
     } catch {
-      // images just won't be pre-populated
+      // related data just won't be pre-populated
     }
   };
 
   const closeDrawer = () => { setDrawer(null); setEditTarget(null); };
+
+  const syncProductImagesIntoList = useCallback((productId, images) => {
+    setProducts((prev) => prev.map((product) => {
+      const pid = product.productId ?? product.ProductId ?? product.productid;
+      if (pid !== productId) return product;
+      const nextPrimaryImage = primaryImage(images);
+      return {
+        ...product,
+        images,
+        primaryImageUrl: nextPrimaryImage,
+        PrimaryImageUrl: nextPrimaryImage,
+      };
+    }));
+  }, []);
+
+  const refreshProductImages = useCallback(async (productId) => {
+    const images = (await productImageApi.getByProduct(productId)).map(normalizeProductImage);
+    setForm((prev) => {
+      const activeEditId = editTarget?.productId ?? editTarget?.ProductId ?? editTarget?.productid;
+      return activeEditId === productId ? { ...prev, images } : prev;
+    });
+    syncProductImagesIntoList(productId, images);
+    return images;
+  }, [editTarget, syncProductImagesIntoList]);
+
+  const runImageMutation = useCallback(async (work) => {
+    if (imageSaving) return false;
+    setImageSaving(true);
+    try {
+      await work();
+      return true;
+    } catch (err) {
+      alert(err.message || "Image update failed.");
+      return false;
+    } finally {
+      setImageSaving(false);
+    }
+  }, [imageSaving]);
+
+  const syncProductFaqs = async (productId, drafts) => {
+    const existingFaqs = await productFaqApi.getByProduct(productId);
+    const existingIds = new Set(
+      existingFaqs.map((faq) => faq.faqId ?? faq.FAQId).filter((id) => Number.isInteger(id) && id > 0)
+    );
+    const nextIds = new Set(
+      drafts.map((faq) => faq.faqId).filter((id) => Number.isInteger(id) && existingIds.has(id))
+    );
+
+    const removedFaqs = existingFaqs.filter((faq) => !nextIds.has(faq.faqId ?? faq.FAQId));
+    if (removedFaqs.length > 0) {
+      const results = await Promise.allSettled(
+        removedFaqs.map((faq) => productFaqApi.deactivate(faq.faqId ?? faq.FAQId))
+      );
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+    }
+
+    if (drafts.length > 0) {
+      const results = await Promise.allSettled(
+        drafts.map((faq) => {
+          const isExisting = existingIds.has(faq.faqId);
+          const body = {
+            productId,
+            question: faq.question,
+            answer: faq.answer,
+            createdUtc: new Date().toISOString(),
+            isActive: true,
+          };
+          if (isExisting) {
+            return productFaqApi.update(faq.faqId, { ...body, faqId: faq.faqId });
+          }
+          return productFaqApi.create(body);
+        })
+      );
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+    }
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { alert("Product name is required."); return; }
@@ -225,6 +380,18 @@ export default function AdminProducts() {
     if (saving) return;
     setSaving(true);
     try {
+      const normalizedFaqs = form.faqs.map(normalizeFaqDraft);
+      // null means not yet loaded — send null so backend leaves them unchanged
+      const concernTypeIds = form.concerns === null ? null : normalizeConcernIds(form.concerns);
+      const hasIncompleteFaq = normalizedFaqs.some(
+        (faq) => (faq.question || faq.answer) && (!faq.question || !faq.answer)
+      );
+      if (hasIncompleteFaq) {
+        alert("Each FAQ must have both a question and an answer.");
+        return;
+      }
+      const faqsToSave = normalizedFaqs.filter((faq) => faq.question && faq.answer);
+
       const originalPrice  = parseFloat(form.price) || 0;
       const discountRate   = parseFloat(form.discountRate) || 0;
       const sellingPrice   = Math.round(originalPrice * (1 - discountRate / 100) * 100) / 100;
@@ -238,10 +405,11 @@ export default function AdminProducts() {
         stockQuantity: parseInt(form.stock, 10),
         sellingPrice,
         originalPrice,
-        images:          form.images,
-        concernTypeIds:  form.concerns,
+        startUTC:      toApiDate(form.startUTC),
+        endUTC:        toApiDate(form.endUTC),
+        concernTypeIds,
         paymentOptions:  form.paymentOptions,
-        faqs:          form.faqs,
+        faqs:            faqsToSave,
       };
       if (drawer === "add") {
         const result = await productsApi.create(body);
@@ -258,23 +426,13 @@ export default function AdminProducts() {
             )
           );
         }
+        if (newId) {
+          await syncProductFaqs(newId, faqsToSave);
+        }
       } else {
         const pid = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
         await productsApi.update(pid, body);
-        // Save any newly added images (Date.now()-based IDs are > 1e12)
-        const newImgs = form.images.filter((img) => img.imageId > 1_000_000_000_000);
-        if (newImgs.length > 0) {
-          await Promise.allSettled(
-            newImgs.map((img) =>
-              productImageApi.create({
-                productId: pid,
-                imageUrl:  img.imageUrl,
-                isPrimary: img.isPrimary,
-                sortOrder: img.sortOrder,
-              })
-            )
-          );
-        }
+        await syncProductFaqs(pid, faqsToSave);
       }
       loadAll();
       closeDrawer();
@@ -291,8 +449,22 @@ export default function AdminProducts() {
   };
 
   // Image helpers
-  const addImageUrl = (url) => {
+  const addImageUrl = async (url) => {
     if (!url) return;
+    if (drawer === "edit" && editTarget) {
+      const productId = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
+      await runImageMutation(async () => {
+        await productImageApi.create({
+          productId,
+          imageUrl: url,
+          isPrimary: form.images.length === 0,
+          sortOrder: form.images.length + 1,
+        });
+        await refreshProductImages(productId);
+      });
+      return;
+    }
+
     const isFirst = form.images.length === 0;
     setForm((f) => ({
       ...f,
@@ -307,24 +479,106 @@ export default function AdminProducts() {
     setUploading(true);
     try {
       const url = await uploadApi.uploadImage(file);
-      addImageUrl(url);
+      await addImageUrl(url);
     } catch (err) {
       alert(err.message || "Image upload failed.");
     } finally {
       setUploading(false);
     }
   };
-  const setPrimary = (imgId) => {
+  const setPrimary = async (imgId) => {
+    if (drawer === "edit" && editTarget) {
+      const productId = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
+      const image = form.images.find((img) => img.imageId === imgId);
+      if (!image || image.isPrimary) return;
+      await runImageMutation(async () => {
+        await productImageApi.update({
+          imageId: image.imageId,
+          productId,
+          imageUrl: image.imageUrl,
+          isPrimary: true,
+          sortOrder: image.sortOrder,
+          isActive: image.isActive ?? true,
+        });
+        await refreshProductImages(productId);
+      });
+      return;
+    }
+
     setForm((f) => ({ ...f, images: f.images.map((img) => ({ ...img, isPrimary: img.imageId === imgId })) }));
   };
-  const removeImage = (imgId) => {
+  const removeImage = async (imgId) => {
+    if (drawer === "edit" && editTarget) {
+      const productId = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
+      const currentImages = [...form.images];
+      const removedImage = currentImages.find((img) => img.imageId === imgId);
+      if (!removedImage) return;
+
+      await runImageMutation(async () => {
+        await productImageApi.deactivate(imgId);
+
+        const remainingImages = currentImages
+          .filter((img) => img.imageId !== imgId)
+          .map((img, index) => ({
+            ...img,
+            isPrimary: removedImage.isPrimary ? index === 0 : img.isPrimary,
+            sortOrder: index + 1,
+          }));
+
+        for (const image of remainingImages) {
+          const original = currentImages.find((img) => img.imageId === image.imageId);
+          if (!original) continue;
+          const changedPrimary = Boolean(original.isPrimary) !== Boolean(image.isPrimary);
+          const changedSort = (original.sortOrder ?? 0) !== image.sortOrder;
+          if (!changedPrimary && !changedSort) continue;
+          await productImageApi.update({
+            imageId: image.imageId,
+            productId,
+            imageUrl: image.imageUrl,
+            isPrimary: image.isPrimary,
+            sortOrder: image.sortOrder,
+            isActive: image.isActive ?? true,
+          });
+        }
+
+        await refreshProductImages(productId);
+      });
+      return;
+    }
+
     setForm((f) => {
       const next = f.images.filter((img) => img.imageId !== imgId);
       if (next.length > 0 && !next.some((i) => i.isPrimary)) next[0].isPrimary = true;
       return { ...f, images: next.map((img, idx) => ({ ...img, sortOrder: idx + 1 })) };
     });
   };
-  const moveImage = (imgId, dir) => {
+  const moveImage = async (imgId, dir) => {
+    if (drawer === "edit" && editTarget) {
+      const productId = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
+      const arr = [...form.images];
+      const idx = arr.findIndex((img) => img.imageId === imgId);
+      const to = idx + dir;
+      if (idx < 0 || to < 0 || to >= arr.length) return;
+
+      [arr[idx], arr[to]] = [arr[to], arr[idx]];
+      const reordered = arr.map((img, index) => ({ ...img, sortOrder: index + 1 }));
+
+      await runImageMutation(async () => {
+        for (const image of reordered) {
+          await productImageApi.update({
+            imageId: image.imageId,
+            productId,
+            imageUrl: image.imageUrl,
+            isPrimary: image.isPrimary,
+            sortOrder: image.sortOrder,
+            isActive: image.isActive ?? true,
+          });
+        }
+        await refreshProductImages(productId);
+      });
+      return;
+    }
+
     setForm((f) => {
       const arr = [...f.images];
       const idx = arr.findIndex((i) => i.imageId === imgId);
@@ -335,23 +589,27 @@ export default function AdminProducts() {
     });
   };
 
-  // Concern toggle
+  // Concern toggle — coerce null → [] on first interaction
   const toggleConcern = (id) => {
-    setForm((f) => ({
-      ...f,
-      concerns: f.concerns.includes(id) ? f.concerns.filter((c) => c !== id) : [...f.concerns, id],
-    }));
+    setForm((f) => {
+      const list = f.concerns ?? [];
+      return {
+        ...f,
+        concerns: list.includes(id) ? list.filter((c) => c !== id) : [...list, id],
+      };
+    });
   };
 
-  // Payment option toggle
+  // Payment option toggle — coerce null → [] on first interaction
   const togglePayment = (id) => {
     setForm((f) => {
-      const exists = f.paymentOptions.find((p) => p.paymentTypeId === id);
+      const opts = f.paymentOptions ?? [];
+      const exists = opts.find((p) => p.paymentTypeId === id);
       return {
         ...f,
         paymentOptions: exists
-          ? f.paymentOptions.filter((p) => p.paymentTypeId !== id)
-          : [...f.paymentOptions, { paymentTypeId: id, instalment: null }],
+          ? opts.filter((p) => p.paymentTypeId !== id)
+          : [...opts, { paymentTypeId: id, instalment: null }],
       };
     });
   };
@@ -391,7 +649,9 @@ export default function AdminProducts() {
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900">Products</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {products.length} products · {products.filter((p) => parseInt(p.stockQuantity ?? p.StockQuantity ?? p.stock ?? 0, 10) === 0).length} out of stock
+            {activeTab === "live"
+              ? `${products.length} products · ${products.filter((p) => parseInt(p.stockQuantity ?? p.StockQuantity ?? p.stock ?? 0, 10) === 0).length} out of stock`
+              : `${pendingPriceRows.length} items waiting on pricing decisions`}
           </p>
         </div>
         <button onClick={openAdd}
@@ -401,143 +661,250 @@ export default function AdminProducts() {
       </div>
 
       <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: "live", label: "Live Products", count: products.length },
+            { id: "pending", label: "Pending Price Approve", count: pendingPriceRows.length },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                activeTab === tab.id
+                  ? "bg-tenzy-teal text-white shadow-lg shadow-tenzy-teal/20"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {tab.label} · {tab.count}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "pending" && (
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Pending Price Approval</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Approved arrivals stay here until pricing decides whether they should merge into live stock now or wait for the current stock to finish.
+                </p>
+              </div>
+              <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                {pendingPriceRows.length} pending items
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products or brand…"
+            placeholder={activeTab === "live" ? "Search products or brand…" : "Search pending price items…"}
             className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition" />
           {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={14} className="text-slate-400" /></button>}
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <select
-            value={catFilter}
-            onChange={(e) => setCatFilter(parseInt(e.target.value))}
-            className="flex-1 text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition">
-            <option value={0}>All Categories</option>
-            {categories.map((c) => {
-              const cid   = cid_of(c);
-              const ctype = c.categoryType ?? c.categorytype ?? "—";
-              return <option key={cid} value={cid}>{ctype}</option>;
-            })}
-          </select>
-          <select
-            value={concFilter}
-            onChange={(e) => setConcFilter(parseInt(e.target.value))}
-            className="flex-1 text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition">
-            <option value={0}>All Skin Concerns</option>
-            {concernTypes.map((c) => {
-              const cid   = c.concernTypeId ?? c.ConcernTypeId;
-              const ctype = c.concernType   ?? c.ConcernType ?? "—";
-              return <option key={cid} value={cid}>{ctype}</option>;
-            })}
-          </select>
-        </div>
+        {activeTab === "live" && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select
+              value={catFilter}
+              onChange={(e) => setCatFilter(parseInt(e.target.value))}
+              className="flex-1 text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition">
+              <option value={0}>All Categories</option>
+              {categories.map((c) => {
+                const cid   = cid_of(c);
+                const ctype = c.categoryType ?? c.categorytype ?? "—";
+                return <option key={cid} value={cid}>{ctype}</option>;
+              })}
+            </select>
+            <select
+              value={concFilter}
+              onChange={(e) => setConcFilter(parseInt(e.target.value))}
+              className="flex-1 text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition">
+              <option value={0}>All Skin Concerns</option>
+              {concernTypes.map((c) => {
+                const cid   = c.concernTypeId ?? c.ConcernTypeId;
+                const ctype = c.name ?? c.Name ?? c.concernType ?? c.ConcernType ?? "—";
+                return <option key={cid} value={cid}>{ctype}</option>;
+              })}
+            </select>
+          </div>
+        )}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        {/* Mobile cards */}
-        <div className="md:hidden divide-y divide-slate-50">
-          {filtered.length === 0 && <p className="text-sm text-slate-400 text-center py-12">No products found.</p>}
-          {filtered.map((p) => {
-            const pid   = p.productId ?? p.ProductId ?? p.productid;
-            const bid   = bid_of(p);
-            const cid   = cid_of(p);
-            const stk   = p.stockQuantity ?? p.StockQuantity ?? p.stock;
-            const st    = stockStatus(stk);
-            const img   = p.primaryImageUrl ?? primaryImage(p.images);
-            const prc   = p.sellingPrice  ?? p.SellingPrice  ?? p.price;
-            const spric = parseFloat(p.sellingPrice  ?? p.SellingPrice  ?? 0);
-            const opric = parseFloat(p.originalPrice ?? p.OriginalPrice ?? 0);
-            const disc  = Math.round(parseFloat(p.discountRate ?? p.DiscountRate ?? 0)) || (opric > 0 && spric < opric ? Math.round((1 - spric / opric) * 100) : 0);
-            return (
-              <div key={pid} className="p-4 flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl bg-slate-100 overflow-hidden shrink-0">
-                  {img && <img src={img} alt={p.name} className="w-full h-full object-cover" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800 truncate">{p.name}</p>
-                  <p className="text-[10px] text-slate-400">{brandName(bid)} · {catName(cid)}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs font-bold text-tenzy-teal">LKR {fmt(prc)}</span>
-                    {disc > 0 && (
-                      <span className="text-[10px] text-tenzy-orange font-semibold">-{disc}%</span>
-                    )}
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+      {activeTab === "live" ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="md:hidden divide-y divide-slate-50">
+            {filtered.length === 0 && <p className="text-sm text-slate-400 text-center py-12">No products found.</p>}
+            {filtered.map((p) => {
+              const pid   = p.productId ?? p.ProductId ?? p.productid;
+              const bid   = bid_of(p);
+              const cid   = cid_of(p);
+              const stk   = p.stockQuantity ?? p.StockQuantity ?? p.stock;
+              const st    = stockStatus(stk);
+              const img   = p.primaryImageUrl ?? primaryImage(p.images);
+              const prc   = p.sellingPrice  ?? p.SellingPrice  ?? p.price;
+              const spric = parseFloat(p.sellingPrice  ?? p.SellingPrice  ?? 0);
+              const opric = parseFloat(p.originalPrice ?? p.OriginalPrice ?? 0);
+              const disc  = Math.round(parseFloat(p.discountRate ?? p.DiscountRate ?? 0)) || (opric > 0 && spric < opric ? Math.round((1 - spric / opric) * 100) : 0);
+              return (
+                <div key={pid} className="p-4 flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-slate-100 overflow-hidden shrink-0">
+                    {img && <img src={img} alt={p.name} className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 truncate">{p.name}</p>
+                    <p className="text-[10px] text-slate-400">{brandName(bid)} · {catName(cid)}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-bold text-tenzy-teal">LKR {fmt(prc)}</span>
+                      {disc > 0 && (
+                        <span className="text-[10px] text-tenzy-orange font-semibold">-{disc}%</span>
+                      )}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button onClick={() => openEdit(p)} className="p-2 rounded-lg bg-slate-100 hover:bg-tenzy-teal hover:text-white transition"><Edit2 size={13} /></button>
+                    <button onClick={() => setDeleteConfirm(pid)} className="p-2 rounded-lg bg-slate-100 hover:bg-red-500 hover:text-white transition"><Trash2 size={13} /></button>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button onClick={() => openEdit(p)} className="p-2 rounded-lg bg-slate-100 hover:bg-tenzy-teal hover:text-white transition"><Edit2 size={13} /></button>
-                  <button onClick={() => setDeleteConfirm(pid)} className="p-2 rounded-lg bg-slate-100 hover:bg-red-500 hover:text-white transition"><Trash2 size={13} /></button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
 
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                {["Product", "Brand", "Category", "Price", "Discount", "Stock", "Sale", "Images", "Actions"].map((h) => (
-                  <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filtered.length === 0 && (
-                <tr><td colSpan={9} className="text-center py-12 text-sm text-slate-400">No products found.</td></tr>
-              )}
-              {filtered.map((p) => {
-                const pid   = p.productId ?? p.ProductId ?? p.productid;
-                const bid   = bid_of(p);
-                const cid   = cid_of(p);
-                const stk   = p.stockQuantity ?? p.StockQuantity ?? p.stock;
-                const prc   = p.sellingPrice  ?? p.SellingPrice  ?? p.price;
-                const spric = parseFloat(p.sellingPrice  ?? p.SellingPrice  ?? 0);
-                const opric = parseFloat(p.originalPrice ?? p.OriginalPrice ?? 0);
-                const disc  = Math.round(parseFloat(p.discountRate ?? p.DiscountRate ?? 0)) || (opric > 0 && spric < opric ? Math.round((1 - spric / opric) * 100) : 0);
-                const sale = p.inSale        ?? p.InSale        ?? p.insale ?? false;
-                const st   = stockStatus(stk);
-                const img  = p.primaryImageUrl ?? primaryImage(p.images);
-                return (
-                  <tr key={pid} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">
-                          {img && <img src={img} alt={p.name} className="w-full h-full object-cover" />}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  {["Product", "Brand", "Category", "Price", "Discount", "Stock", "Sale", "Images", "Actions"].map((h) => (
+                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filtered.length === 0 && (
+                  <tr><td colSpan={9} className="text-center py-12 text-sm text-slate-400">No products found.</td></tr>
+                )}
+                {filtered.map((p) => {
+                  const pid   = p.productId ?? p.ProductId ?? p.productid;
+                  const bid   = bid_of(p);
+                  const cid   = cid_of(p);
+                  const stk   = p.stockQuantity ?? p.StockQuantity ?? p.stock;
+                  const prc   = p.sellingPrice  ?? p.SellingPrice  ?? p.price;
+                  const spric = parseFloat(p.sellingPrice  ?? p.SellingPrice  ?? 0);
+                  const opric = parseFloat(p.originalPrice ?? p.OriginalPrice ?? 0);
+                  const disc  = Math.round(parseFloat(p.discountRate ?? p.DiscountRate ?? 0)) || (opric > 0 && spric < opric ? Math.round((1 - spric / opric) * 100) : 0);
+                  const sale = p.inSale        ?? p.InSale        ?? p.insale ?? false;
+                  const st   = stockStatus(stk);
+                  const img  = p.primaryImageUrl ?? primaryImage(p.images);
+                  return (
+                    <tr key={pid} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">
+                            {img && <img src={img} alt={p.name} className="w-full h-full object-cover" />}
+                          </div>
+                          <p className="text-xs font-semibold text-slate-800 max-w-[160px] truncate">{p.name}</p>
                         </div>
-                        <p className="text-xs font-semibold text-slate-800 max-w-[160px] truncate">{p.name}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{brandName(bid)}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{catName(cid)}</td>
-                    <td className="px-4 py-3 text-xs font-bold text-slate-800">LKR {fmt(prc)}</td>
-                    <td className="px-4 py-3 text-xs text-tenzy-orange font-semibold">{disc > 0 ? `${disc}%` : "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>{stk} · {st.label}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sale ? "bg-tenzy-orange/10 text-tenzy-orange" : "bg-slate-100 text-slate-400"}`}>
-                        {sale ? "On Sale" : "Regular"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">
-                      {(p.images ?? []).length} img{(p.images ?? []).length !== 1 ? "s" : ""}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-tenzy-teal hover:text-white text-slate-500 transition"><Edit2 size={13} /></button>
-                        <button onClick={() => setDeleteConfirm(pid)} className="p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-slate-500 transition"><Trash2 size={13} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{brandName(bid)}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{catName(cid)}</td>
+                      <td className="px-4 py-3 text-xs font-bold text-slate-800">LKR {fmt(prc)}</td>
+                      <td className="px-4 py-3 text-xs text-tenzy-orange font-semibold">{disc > 0 ? `${disc}%` : "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>{stk} · {st.label}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sale ? "bg-tenzy-orange/10 text-tenzy-orange" : "bg-slate-100 text-slate-400"}`}>
+                          {sale ? "On Sale" : "Regular"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {(p.images ?? []).length} img{(p.images ?? []).length !== 1 ? "s" : ""}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-tenzy-teal hover:text-white text-slate-500 transition"><Edit2 size={13} /></button>
+                          <button onClick={() => setDeleteConfirm(pid)} className="p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-slate-500 transition"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="md:hidden divide-y divide-slate-50">
+            {filteredPendingPriceRows.length === 0 && <p className="text-sm text-slate-400 text-center py-12">No pending price items found.</p>}
+            {filteredPendingPriceRows.map((item) => {
+              const status = pricingStatusMeta(item.pricingReviewStatus);
+              return (
+                <div key={item.arrivalItemId} className="p-4 space-y-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{item.productName}</p>
+                    <p className="text-[10px] text-slate-400">{item.brandName} · {item.categoryName}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className={`rounded-full px-2 py-0.5 font-semibold ${status.cls}`}>{status.label}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">Qty {item.approvedQuantity}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">Live stock {item.currentStockQuantity ?? 0}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a href="/#/admin/pricing" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-tenzy-teal hover:text-tenzy-teal">
+                      Open pricing
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  {["Dispatch", "Product", "Approved Qty", "Current Live Price", "Current Live Stock", "Decision", "Action"].map((h) => (
+                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredPendingPriceRows.length === 0 && (
+                  <tr><td colSpan={7} className="text-center py-12 text-sm text-slate-400">No pending price items found.</td></tr>
+                )}
+                {filteredPendingPriceRows.map((item) => {
+                  const status = pricingStatusMeta(item.pricingReviewStatus);
+                  return (
+                    <tr key={item.arrivalItemId} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-700">{item.dispatchReference}</td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-800">{item.productName}</p>
+                          <p className="text-[11px] text-slate-500">{item.brandName} · {item.categoryName}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{item.approvedQuantity}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">LKR {fmt(item.currentSellingPrice ?? 0)}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{item.currentStockQuantity ?? 0}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <a href="/#/admin/pricing" className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-tenzy-teal hover:text-tenzy-teal">
+                          Open pricing
+                        </a>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Drawer */}
       {drawer && (
@@ -627,6 +994,11 @@ export default function AdminProducts() {
                   {form.images.length === 0 && (
                     <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-xl">No images yet. Add one below.</p>
                   )}
+                  {drawer === "edit" && (
+                    <p className="text-[10px] text-slate-400 bg-slate-50 rounded-xl px-3 py-2">
+                      Image changes save immediately and are independent from the main product save button.
+                    </p>
+                  )}
                   {form.images.map((img, idx) => (
                     <div key={img.imageId} className="flex items-center gap-2 bg-slate-50 rounded-xl p-2">
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-200 shrink-0">
@@ -637,35 +1009,38 @@ export default function AdminProducts() {
                         <p className="text-[10px] text-slate-400">Sort #{img.sortOrder}</p>
                       </div>
                       <div className="flex flex-col gap-0.5">
-                        <button onClick={() => moveImage(img.imageId, -1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronUp size={12} /></button>
-                        <button onClick={() => moveImage(img.imageId, 1)} disabled={idx === form.images.length - 1} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronDown size={12} /></button>
+                        <button onClick={() => moveImage(img.imageId, -1)} disabled={imageSaving || idx === 0} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronUp size={12} /></button>
+                        <button onClick={() => moveImage(img.imageId, 1)} disabled={imageSaving || idx === form.images.length - 1} className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronDown size={12} /></button>
                       </div>
-                      <button onClick={() => setPrimary(img.imageId)} title={img.isPrimary ? "Primary image" : "Set as primary"}
+                      <button onClick={() => setPrimary(img.imageId)} disabled={imageSaving} title={img.isPrimary ? "Primary image" : "Set as primary"}
                         className={`p-1.5 rounded-lg transition ${img.isPrimary ? "bg-amber-100 text-amber-500" : "bg-slate-100 text-slate-400 hover:text-amber-500"}`}>
                         {img.isPrimary ? <Star size={13} fill="currentColor" /> : <StarOff size={13} />}
                       </button>
-                      <button onClick={() => removeImage(img.imageId)} className="p-1.5 rounded-lg hover:bg-red-100 hover:text-red-500 text-slate-400 transition"><X size={13} /></button>
+                      <button onClick={() => removeImage(img.imageId)} disabled={imageSaving} className="p-1.5 rounded-lg hover:bg-red-100 hover:text-red-500 text-slate-400 transition disabled:opacity-30"><X size={13} /></button>
                     </div>
                   ))}
                 </div>
                 <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed cursor-pointer transition
-                  ${uploading ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed" : "border-tenzy-teal/40 hover:border-tenzy-teal hover:bg-tenzy-teal/5 text-tenzy-teal"}`}>
+                  ${uploading || imageSaving ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed" : "border-tenzy-teal/40 hover:border-tenzy-teal hover:bg-tenzy-teal/5 text-tenzy-teal"}`}>
                   <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
-                    disabled={uploading} onChange={handleImageFilePick} />
+                    disabled={uploading || imageSaving} onChange={handleImageFilePick} />
                   <ImagePlus size={15} />
                   <span className="text-xs font-semibold">
-                    {uploading ? "Uploading…" : "Choose image to upload"}
+                    {uploading ? "Uploading…" : imageSaving ? "Saving image changes…" : "Choose image to upload"}
                   </span>
                 </label>
                 <p className="text-[10px] text-slate-400">JPEG, PNG, WebP or GIF · max 5 MB · ★ = primary shown in shop</p>
               </Section>
 
               <Section icon={Tag} title="Skin Concerns">
+                {form.concerns === null && (
+                  <p className="text-xs text-slate-400 italic">Loading existing concerns…</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {concernTypes.map((c) => {
                     const cid    = c.concernTypeId ?? c.ConcernTypeId;
-                    const ctype  = c.concernType   ?? c.ConcernType ?? "—";
-                    const active = form.concerns.includes(cid);
+                    const ctype  = c.name ?? c.Name ?? c.concernType ?? c.ConcernType ?? "—";
+                    const active = (form.concerns ?? []).includes(cid);
                     return (
                       <button key={cid} type="button" onClick={() => toggleConcern(cid)}
                         className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
@@ -679,11 +1054,14 @@ export default function AdminProducts() {
               </Section>
 
               <Section icon={CreditCard} title="Payment Options">
+                {form.paymentOptions === null && (
+                  <p className="text-xs text-slate-400 italic">Loading existing payment options…</p>
+                )}
                 <div className="space-y-2">
                   {paymentTypes.map((pt) => {
                     const pid      = pt.paymentTypeId ?? pt.PaymentTypeId;
                     const ptName   = pt.name ?? pt.Name ?? pt.paymentType ?? pt.PaymentType ?? "—";
-                    const selected = form.paymentOptions.find((p) => p.paymentTypeId === pid);
+                    const selected = (form.paymentOptions ?? []).find((p) => p.paymentTypeId === pid);
                     return (
                       <div key={pid} className="flex items-center gap-3">
                         <button type="button" onClick={() => togglePayment(pid)}

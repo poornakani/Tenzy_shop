@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:supply-chain": "node --test tests/supply-chain.test.mjs",
+    "test:supply-chain:api": "node scripts/supply-chain-api-smoke.mjs",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"

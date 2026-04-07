@@ -640,15 +640,15 @@ export const concerns = [
 ];
 
 export const BrandsList = [
-  { id: 1, name: "The Ordinary", logo: "./images/Brandslogo/brand1.png" },
-  { id: 2, name: "CeraVe", logo: "./images/Brandslogo/brand2.png" },
-  { id: 3, name: "Aveeno", logo: "./images/Brandslogo/brand3.png" },
-  { id: 4, name: "L'Oréal", logo: "./images/Brandslogo/brand4.png" },
+  { id: 1, name: "The Ordinary", logo: null },
+  { id: 2, name: "CeraVe", logo: null },
+  { id: 3, name: "Aveeno", logo: null },
+  { id: 4, name: "L'Oréal", logo: null },
   {
     id: 5,
     name: "Madagascar Centella",
-    logo: "./images/Brandslogo/brand1.png",
+    logo: null,
   },
-  { id: 6, name: "Vita C", logo: "./images/Brandslogo/brand2.png" },
-  { id: 7, name: "Prévense", logo: "./images/Brandslogo/brand3.png" },
+  { id: 6, name: "Vita C", logo: null },
+  { id: 7, name: "Prévense", logo: null },
 ];

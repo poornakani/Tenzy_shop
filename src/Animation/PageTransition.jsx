@@ -214,7 +214,7 @@ export default function PageTransition({ children }) {
           <h1
             ref={brandRef}
             style={{
-              fontFamily: '"Modern Negra", "Mona Sans", sans-serif',
+              fontFamily: '"Cormorant Garamond", "DM Serif Text", serif',
               fontSize:   "clamp(2rem, 5vw, 2.8rem)",
               fontWeight: 800,
               letterSpacing: "0.38em",

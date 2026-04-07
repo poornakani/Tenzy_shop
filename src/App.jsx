@@ -35,16 +35,25 @@ import AdminLayout from "./adminportal/AdminLayout";
 import Dashboard from "./adminportal/pages/Dashboard";
 import Orders from "./adminportal/pages/Orders";
 import AdminProducts from "./adminportal/pages/AdminProducts";
-import BrandsPage from "./adminportal/pages/Brands";
 import Dispatch from "./adminportal/pages/Dispatch";
 import Customers from "./adminportal/pages/Customers";
 import Reviews from "./adminportal/pages/Reviews";
 import Reports from "./adminportal/pages/Reports";
 import Procurement from "./adminportal/pages/Procurement";
+import ReferenceData from "./adminportal/pages/ReferenceData";
+import ArrivalVerification from "./adminportal/pages/ArrivalVerification";
+import PricingManagement from "./adminportal/pages/PricingManagement";
+import Stock from "./adminportal/pages/Stock";
 
 const AdminGuard = ({ children }) => {
-  const isAdmin = localStorage.getItem("adminAuth") === "true";
-  return isAdmin ? children : <Navigate to="/signin" replace />;
+  const hasAdminFlag = localStorage.getItem("adminAuth") === "true";
+  const hasToken     = !!localStorage.getItem("authToken");
+  if (hasAdminFlag && hasToken) return children;
+  // Clear stale flags so the login page starts clean
+  localStorage.removeItem("adminAuth");
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("authUser");
+  return <Navigate to="/signin" replace />;
 };
 
 const Home = () => {
@@ -95,11 +104,14 @@ const App = () => {
                   <Route path="orders" element={<Orders />} />
                   <Route path="products" element={<AdminProducts />} />
                   <Route path="procurement" element={<Procurement />} />
-                  <Route path="brands" element={<BrandsPage />} />
+                  <Route path="arrival" element={<ArrivalVerification />} />
+                  <Route path="pricing" element={<PricingManagement />} />
                   <Route path="dispatch" element={<Dispatch />} />
+                  <Route path="stock" element={<Stock />} />
                   <Route path="customers" element={<Customers />} />
                   <Route path="reviews" element={<Reviews />} />
                   <Route path="reports" element={<Reports />} />
+                  <Route path="reference" element={<ReferenceData />} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/home" replace />} />

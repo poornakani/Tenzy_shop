@@ -33,6 +33,30 @@ const Avatar = ({ name }) => {
   );
 };
 
+const BrandBadge = ({ name }) => {
+  const initials = name
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-white shadow-sm border border-gray-100 transition hover:-translate-y-0.5 hover:shadow-md">
+      <div
+        className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white"
+        style={{ background: "linear-gradient(135deg, #E8522A, #2BB9B4)" }}
+      >
+        {initials}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800 truncate">{name}</p>
+        <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Tenzy Brand</p>
+      </div>
+    </div>
+  );
+};
+
 const Brands = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [comment, setComment] = useState({ name: "", quote: "", rating: 5 });
@@ -45,7 +69,9 @@ const Brands = () => {
   }, []);
 
   const logos = useMemo(() => {
-    const list = brandData.filter(b => b.brandImage).map(b => ({ name: b.name, logo: b.brandImage }));
+    const list = brandData
+      .map((brand) => ({ name: brand.name }))
+      .filter((brand) => Boolean(brand.name));
     return list.length ? [...list, ...list] : [];
   }, [brandData]);
 
@@ -115,18 +141,7 @@ const Brands = () => {
             style={{ animationName: "marqueeLeft", animationDuration: "60s" }}
           >
             {logos.map((brand, index) => (
-              <div
-                key={`${brand.name}-${index}`}
-                className="flex items-center justify-center rounded-xl px-4 py-2.5 bg-white shadow-sm border border-gray-100 transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <img
-                  src={brand.logo}
-                  alt={brand.name}
-                  className="h-7 sm:h-9 w-auto opacity-80 hover:opacity-100 transition"
-                  draggable={false}
-                  loading="lazy"
-                />
-              </div>
+              <BrandBadge key={`${brand.name}-${index}`} name={brand.name} />
             ))}
           </div>
         </div>

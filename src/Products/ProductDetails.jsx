@@ -2,12 +2,20 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 
 import { useWishlist } from "../Context/WishlistContext";
 import Navibar from "@/HomePage/Navibar";
 import Footer from "@/HomePage/Footer";
-import { productsApi, reviewsApi } from "@/services/api";
+import {
+  productsApi,
+  reviewsApi,
+  brandsApi,
+  categoriesApi,
+  productImageApi,
+  productFaqApi,
+} from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -35,6 +43,63 @@ const StarRow = ({ value = 0 }) => {
   );
 };
 
+function normalizeProduct(raw, lookups = {}) {
+  const priceLkr = parseFloat(raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0);
+  const originalPrice = parseFloat(raw.originalPrice ?? raw.OriginalPrice ?? priceLkr);
+  const sellingPrice = parseFloat(raw.sellingPrice ?? raw.SellingPrice ?? priceLkr ?? originalPrice);
+  const basePrice = originalPrice > 0 ? originalPrice : sellingPrice;
+  const discountPercent = Math.round(parseFloat(raw.discountRate ?? raw.DiscountRate ?? raw.discountPercent ?? 0))
+    || (basePrice > 0 && sellingPrice < basePrice ? Math.round((1 - sellingPrice / basePrice) * 100) : 0);
+  const inSale = raw.inSale ?? raw.InSale ?? raw.isSale ?? raw.IsSale ?? raw.insale ?? discountPercent > 0;
+  const stockCount = parseInt(raw.stockQuantity ?? raw.StockQuantity ?? raw.stockQty ?? raw.stockCount ?? raw.stock ?? 0, 10);
+  const rawImages = Array.isArray(raw.images) && raw.images.length
+    ? raw.images
+    : (lookups.images ?? []);
+  const sortedImages = [...rawImages].sort((a, b) => {
+    const aPrimary = a.isPrimary || a.IsPrimary ? 1 : 0;
+    const bPrimary = b.isPrimary || b.IsPrimary ? 1 : 0;
+    if (bPrimary !== aPrimary) return bPrimary - aPrimary;
+    return (a.sortOrder ?? a.SortOrder ?? 0) - (b.sortOrder ?? b.SortOrder ?? 0);
+  });
+  const imageUrls = sortedImages.map((img) => img.imageUrl ?? img.ImageUrl).filter(Boolean);
+  const directPrimaryImage = raw.primaryImageUrl ?? raw.PrimaryImageUrl ?? raw.imageUrl ?? raw.ImageUrl ?? null;
+  const images = imageUrls.length ? imageUrls : (directPrimaryImage ? [directPrimaryImage] : []);
+
+  return {
+    id:              raw.productId ?? raw.ProductId ?? raw.id,
+    name:            raw.name ?? raw.Name ?? "",
+    price:           basePrice,
+    discountPercent,
+    discountedPrice: discountPercent > 0 ? Math.round(basePrice * (1 - discountPercent / 100)) : basePrice,
+    inSale:          Boolean(inSale),
+    stockCount,
+    outOfStock:      stockCount === 0,
+    image:           images[0] ?? null,
+    images,
+    category:        raw.categoryName
+      ?? raw.CategoryName
+      ?? raw.categoryType
+      ?? raw.CategoryType
+      ?? raw.category
+      ?? lookups.categoryName
+      ?? "Uncategorized",
+    brand:           raw.brandName
+      ?? raw.BrandName
+      ?? raw.brand
+      ?? lookups.brandName
+      ?? "Unknown Brand",
+    sku:             raw.sku ?? raw.SKU ?? `SKU-${raw.productId ?? raw.ProductId ?? raw.id}`,
+    description:     raw.description ?? raw.Description ?? "No description available.",
+    size:            raw.size ?? raw.Size ?? "N/A",
+    weight:          raw.weight ?? raw.weightGrams ?? raw.Weight ?? "N/A",
+    faqs:            Array.isArray(raw.faqs) && raw.faqs.length
+      ? raw.faqs
+      : (Array.isArray(lookups.faqs) ? lookups.faqs : []),
+    paymentProvider: raw.paymentProvider ?? null,
+    minInstallments: raw.minInstallments ?? null,
+  };
+}
+
 const ProductDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -49,6 +114,16 @@ const ProductDetails = () => {
   const [productReviews, setProductReviews] = useState([]);
   const [activeImg,      setActiveImg]      = useState(0);
 
+  const showPrevImage = () => {
+    if (!product?.images?.length) return;
+    setActiveImg((current) => (current === 0 ? product.images.length - 1 : current - 1));
+  };
+
+  const showNextImage = () => {
+    if (!product?.images?.length) return;
+    setActiveImg((current) => (current === product.images.length - 1 ? 0 : current + 1));
+  };
+
   useEffect(() => {
     setProductLoading(true);
     setActiveImg(0);
@@ -57,34 +132,34 @@ const ProductDetails = () => {
     Promise.allSettled([
       productsApi.getById(productId),
       reviewsApi.getByProduct(productId),
-    ]).then(([prodR, revR]) => {
+      brandsApi.getAll(),
+      categoriesApi.getAll(),
+      productImageApi.getByProduct(productId),
+      productFaqApi.getByProduct(productId),
+    ]).then(([prodR, revR, brandsR, categoriesR, imagesR, faqsR]) => {
       if (prodR.status === "fulfilled" && prodR.value) {
         const raw  = prodR.value;
-        const price = raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0;
-        const disc  = raw.discountPercent ?? 0;
-        const stock = raw.stockQty ?? raw.stockCount ?? 0;
-        const rawImgs = Array.isArray(raw.images) ? raw.images : [];
-        const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
-        const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
-        setProduct({
-          id:              raw.productId ?? raw.id,
-          name:            raw.name ?? "",
-          price,
-          discountPercent: disc,
-          discountedPrice: Math.round(price * (1 - disc / 100)),
-          inSale:          disc > 0,
-          stockCount:      stock,
-          outOfStock:      stock === 0,
-          image:           primary?.imageUrl ?? imgUrls[0] ?? null,
-          images:          imgUrls.length ? imgUrls : (primary?.imageUrl ? [primary.imageUrl] : []),
-          category:        raw.categoryName ?? raw.categoryType ?? raw.category ?? "Skincare",
-          brand:           raw.brandName ?? raw.brand ?? "Premium",
-          sku:             raw.sku ?? `SKU-${raw.productId ?? raw.id}`,
-          description:     raw.description ?? "A premium product for your routine.",
-          size:            raw.size ?? "N/A",
-          weight:          raw.weight ?? raw.weightGrams ?? "N/A",
-          faqs:            Array.isArray(raw.faqs) ? raw.faqs : [],
-        });
+        const brands = Array.isArray(brandsR.value) ? brandsR.value : [];
+        const categories = Array.isArray(categoriesR.value) ? categoriesR.value : [];
+        const images = Array.isArray(imagesR.value) ? imagesR.value : [];
+        const faqs = Array.isArray(faqsR.value) ? faqsR.value : [];
+        const brandName = brands.find(
+          (brand) => (brand.brandId ?? brand.BrandId) === (raw.brandId ?? raw.BrandId)
+        )?.name ?? brands.find(
+          (brand) => (brand.brandId ?? brand.BrandId) === (raw.brandId ?? raw.BrandId)
+        )?.Name;
+        const categoryName = categories.find(
+          (category) => (category.categoryId ?? category.CategoryId ?? category.catagoryID) === (raw.categoryId ?? raw.CategoryId)
+        )?.categoryType ?? categories.find(
+          (category) => (category.categoryId ?? category.CategoryId ?? category.catagoryID) === (raw.categoryId ?? raw.CategoryId)
+        )?.CategoryType;
+
+        setProduct(normalizeProduct(raw, {
+          brandName,
+          categoryName,
+          images,
+          faqs,
+        }));
       }
       if (revR.status === "fulfilled") {
         setProductReviews(Array.isArray(revR.value) ? revR.value : []);
@@ -179,12 +254,41 @@ const ProductDetails = () => {
         <section className="pd-hero grid gap-6 lg:grid-cols-2">
           {/* Gallery */}
           <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="relative aspect-4/3 sm:aspect-4/4 lg:aspect-4/5 bg-slate-50">
-              <img
-                src={product.images[activeImg]}
-                alt={product.name}
-                className="h-full w-full object-cover"
-              />
+            <div className="relative aspect-4/3 sm:aspect-4/4 lg:aspect-4/5 overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.98),_rgba(241,245,249,0.95)_58%,_rgba(226,232,240,0.9))]">
+              {product.images[activeImg] ? (
+                <div className="flex h-full w-full items-center justify-center p-6 sm:p-8 lg:p-10">
+                  <img
+                    src={product.images[activeImg]}
+                    alt={product.name}
+                    className="max-h-full max-w-full object-contain drop-shadow-[0_18px_32px_rgba(15,23,42,0.16)]"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-sm font-medium text-slate-400">
+                  No image available
+                </div>
+              )}
+
+              {product.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={showPrevImage}
+                    className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg transition hover:bg-white"
+                    aria-label="Show previous image"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={showNextImage}
+                    className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg transition hover:bg-white"
+                    aria-label="Show next image"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </>
+              )}
 
               {product.inSale && (
                 <div className="absolute top-4 left-4 rounded-2xl bg-linear-to-r from-orange-500 to-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-orange-500/20">
@@ -207,7 +311,16 @@ const ProductDetails = () => {
             </div>
 
             {product.images.length > 1 && (
-              <div className="p-4 flex gap-3 overflow-x-auto">
+              <div className="p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                    Product Images
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {activeImg + 1} / {product.images.length}
+                  </p>
+                </div>
+                <div className="flex gap-3 overflow-x-auto">
                 {product.images.map((src, i) => (
                   <button
                     key={`${product.id}-${i}`}
@@ -220,13 +333,16 @@ const ProductDetails = () => {
                           : "border-slate-200 hover:border-tenzy-teal/50"
                       }`}
                   >
-                    <img
-                      src={src}
-                      alt={`${product.name} ${i + 1}`}
-                      className="h-full w-full object-cover"
-                    />
+                    <div className="flex h-full w-full items-center justify-center bg-slate-50 p-1.5">
+                      <img
+                        src={src}
+                        alt={`${product.name} ${i + 1}`}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
                   </button>
                 ))}
+                </div>
               </div>
             )}
           </div>
@@ -313,12 +429,14 @@ const ProductDetails = () => {
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                <p className="text-xs text-slate-500">Installments</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {product.minInstallments}+ with {product.paymentProvider}
-                </p>
-              </div>
+              {product.minInstallments && product.paymentProvider && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <p className="text-xs text-slate-500">Installments</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {product.minInstallments}+ with {product.paymentProvider}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Description */}

@@ -330,6 +330,7 @@ export default function AuthPage({ defaultMode = "signin" }) {
   const [signIn, setSignIn]     = useState({ email: "", password: "" });
   const [remember, setRemember] = useState(false);
   const [signInError, setSignInError] = useState("");
+  const [showRoleChoice, setShowRoleChoice] = useState(false);
 
   const [signUp, setSignUp]     = useState({ username: "", email: "", password: "", confirm: "" });
   const [agree, setAgree]       = useState(false);
@@ -341,8 +342,8 @@ export default function AuthPage({ defaultMode = "signin" }) {
     setLoading(true);
     try {
       const user = await login(signIn.email, signIn.password);
-      if (user?.roleId === 1) {
-        navigate("/admin");
+      if (user?.roleId === 3) {
+        setShowRoleChoice(true);
       } else {
         navigate("/home");
       }
@@ -383,6 +384,37 @@ export default function AuthPage({ defaultMode = "signin" }) {
 
   return (
     <>
+      {showRoleChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-tenzy-teal flex items-center justify-center mx-auto mb-4 shadow-lg shadow-tenzy-teal/30">
+              <Sparkles size={22} className="text-white" />
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mb-1">Welcome back!</h2>
+            <p className="text-slate-500 text-sm mb-6">Your account has admin access. Where would you like to go?</p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => navigate("/admin")}
+                className="w-full py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition active:scale-[0.98]"
+              >
+                Go to Admin Panel
+              </button>
+              <button
+                onClick={() => navigate("/home")}
+                className="w-full py-3 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition active:scale-[0.98]"
+              >
+                Continue to Website
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <Navibar />
 
       {/* Dark gradient behind the navbar so white text stays visible */}

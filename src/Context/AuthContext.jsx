@@ -16,14 +16,17 @@ export function AuthProvider({ children }) {
   const saveSession = useCallback((accessToken, userObj) => {
     localStorage.setItem("authToken", accessToken);
     localStorage.setItem("authUser", JSON.stringify(userObj));
+    // Store raw refresh token for silent renewal (comes from userObj.refreshHasToken)
+    const rt = userObj?.refreshHasToken;
+    if (rt) localStorage.setItem("refreshToken", rt);
     // Keep legacy adminAuth key so AdminGuard still works
-    if (userObj?.roleId === 1) localStorage.setItem("adminAuth", "true");
+    if (userObj?.roleId === 3) localStorage.setItem("adminAuth", "true");
     setUser(userObj);
   }, []);
 
   const login = useCallback(async (email, password) => {
     const data = await authApi.login(email, password);
-    // data = { accessToken, expiresAtUtc, user }
+    // data = { accessToken, expiresAtUtc, user: { ..., refreshHasToken } }
     saveSession(data.accessToken, data.user);
     return data.user;
   }, [saveSession]);
@@ -38,10 +41,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("authToken");
     localStorage.removeItem("authUser");
     localStorage.removeItem("adminAuth");
+    localStorage.removeItem("refreshToken");
     setUser(null);
   }, []);
 
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.roleId === 3;
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout, isAdmin }}>

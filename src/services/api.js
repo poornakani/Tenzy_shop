@@ -10,6 +10,13 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function toQuery(params = {}) {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== "")
+  ).toString();
+  return query ? `?${query}` : "";
+}
+
 // Silently exchange the stored refresh token for a new access token.
 // Returns true if a new access token was stored, false otherwise.
 async function tryRefreshToken() {
@@ -130,11 +137,23 @@ async function request(path, options = {}, _isRetry = false) {
       err?.detail ||
       err?.response?.message ||
       (raw && !raw.trim().startsWith("<") ? raw : "");
+    const traceId = err?.traceId || err?.TraceId || err?.traceid;
+    const errorCode = err?.errorCode || err?.ErrorCode;
+    const fullMessage = [
+      message || `Request failed (${res.status})`,
+      errorCode ? `Code: ${errorCode}` : "",
+      traceId ? `TraceId: ${traceId}` : "",
+    ].filter(Boolean).join(" | ");
 
-    throw new Error(message || `Request failed (${res.status})`);
+    throw new Error(fullMessage);
   }
 
-  const data = await res.json();
+  if (res.status === 204) {
+    return null;
+  }
+
+  const raw = await res.text().catch(() => "");
+  const data = raw ? JSON.parse(raw) : null;
   if (API_DEBUG) {
     console.debug("[api:response-ok]", {
       method,
@@ -196,6 +215,8 @@ export const productsApi = {
   create: (body) => api.post("/api/products", body),
   update: (id, b) => api.post(`/api/products/${id}/update`, b),
   remove: (id) => api.post(`/api/products/${id}/delete`, {}),
+  getConcerns: (id) => api.get(`/api/products/${id}/concerns`),
+  getPaymentOptions: (id) => api.get(`/api/products/${id}/payment-options`),
 };
 
 // ── Brands ────────────────────────────────────────────────────────────────────
@@ -219,6 +240,10 @@ export const categoriesApi = {
 // ── Payment Types ─────────────────────────────────────────────────────────────
 export const paymentApi = {
   getAll: () => api.get("/api/paymenttype"),
+  create: (body) => api.post("/api/paymenttype", body),
+  update: (id, body) => api.post(`/api/paymenttype/${id}/update`, body),
+  activate: (id) => api.post(`/api/paymenttype/${id}/activate`, {}),
+  deactivate: (id) => api.post(`/api/paymenttype/${id}/deactivate`, {}),
 };
 
 // ── Orders ────────────────────────────────────────────────────────────────────
@@ -248,6 +273,49 @@ export const procurementApi = {
   getById: (id) => api.get(`/api/procurement/${id}`),
   create: (body) => api.post("/api/procurement", body),
   updateStatus: (id, b) => api.post(`/api/procurement/${id}/status`, b),
+};
+
+// ── Supply Chain ─────────────────────────────────────────────────────────────
+export const supplyChainApi = {
+  getDashboard: () => api.get("/api/admin/supply-chain/dashboard"),
+
+  getProcurements: () => api.get("/api/admin/supply-chain/procurements"),
+  getProcurementById: (id) => api.get(`/api/admin/supply-chain/procurements/${id}`),
+  saveProcurement: (body) => api.post("/api/admin/supply-chain/procurements", body),
+
+  getDispatches: () => api.get("/api/admin/supply-chain/dispatches"),
+  getDispatchById: (id) => api.get(`/api/admin/supply-chain/dispatches/${id}`),
+  saveDispatch: (body) => api.post("/api/admin/supply-chain/dispatches", body),
+  addShipmentCharge: (shipmentId, body) =>
+    api.post(`/api/admin/supply-chain/dispatches/${shipmentId}/charges`, body),
+
+  getArrivals: () => api.get("/api/admin/supply-chain/arrivals"),
+  getArrivalById: (id) => api.get(`/api/admin/supply-chain/arrivals/${id}`),
+  saveArrival: (body) => api.post("/api/admin/supply-chain/arrivals", body),
+
+  getEligiblePricing: () => api.get("/api/admin/supply-chain/pricing/eligible"),
+  getPricing: () => api.get("/api/admin/supply-chain/pricing"),
+  savePricing: (body) => api.post("/api/admin/supply-chain/pricing", body),
+  activatePricing: (pricingId, body = {}) => api.post(`/api/admin/supply-chain/pricing/${pricingId}/activate`, body),
+
+  getProcurementReport: (params = {}) =>
+    api.get(`/api/admin/supply-chain/reports/procurement${toQuery(params)}`),
+  getDispatchReport: (params = {}) =>
+    api.get(`/api/admin/supply-chain/reports/dispatch${toQuery(params)}`),
+  getMonthlyDispatchSummary: (params = {}) =>
+    api.get(`/api/admin/supply-chain/reports/monthly-dispatch-summary${toQuery(params)}`),
+
+  // Stock item delete / update
+  deleteProcurementItem: (itemId, reason) =>
+    api.post(`/api/admin/supply-chain/procurements/items/${itemId}/delete`, { deletionReason: reason || null }),
+  updateProcurementItem: (itemId, body) =>
+    api.post(`/api/admin/supply-chain/procurements/items/${itemId}/update`, body),
+  deleteDispatchItem: (itemId, reason) =>
+    api.post(`/api/admin/supply-chain/dispatches/items/${itemId}/delete`, { deletionReason: reason || null }),
+  updateDispatchItem: (itemId, body) =>
+    api.post(`/api/admin/supply-chain/dispatches/items/${itemId}/update`, body),
+  getDeletedItems: (tableName) =>
+    api.get(`/api/admin/supply-chain/deleted-items${toQuery({ tableName })}`),
 };
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
@@ -306,6 +374,10 @@ export const customersApi = {
 // ── Concerns ──────────────────────────────────────────────────────────────────
 export const concernsApi = {
   getAll: () => api.get("/api/concerns"),
+  create: (body) => api.post("/api/concerns", body),
+  update: (id, body) => api.post(`/api/concerns/${id}/update`, body),
+  activate: (id) => api.post(`/api/concerns/${id}/activate`, {}),
+  deactivate: (id) => api.post(`/api/concerns/${id}/deactivate`, {}),
 };
 
 // ── Product Images ────────────────────────────────────────────────────────────
@@ -323,7 +395,28 @@ export const productImageApi = {
     );
   },
   create: (body) => api.post("/api/productimage", body),
+  update: (body) => api.post("/api/productimage/update", body),
   deactivate: (id) => api.post(`/api/productimage/deactive/${id}`, {}),
+};
+
+// ── Product FAQ ───────────────────────────────────────────────────────────────
+export const productFaqApi = {
+  getAll: async () => {
+    const data = await api.get("/api/productfaq");
+    if (Array.isArray(data)) return data;
+    return Array.isArray(data?.data ?? data?.Data) ? (data?.data ?? data?.Data) : [];
+  },
+  getByProduct: async (productId) => {
+    const all = await productFaqApi.getAll();
+    return all.filter(
+      (faq) =>
+        (faq.productId ?? faq.ProductId ?? faq.productid) === productId &&
+        (faq.isActive ?? faq.IsActive) !== false
+    );
+  },
+  create: (body) => api.post("/api/productfaq", body),
+  update: (id, body) => api.post(`/api/productfaq/${id}/update`, body),
+  deactivate: (id) => api.post(`/api/productfaq/${id}/deactivate`, {}),
 };
 
 // ── Image Upload (ImgBB) ──────────────────────────────────────────────────────

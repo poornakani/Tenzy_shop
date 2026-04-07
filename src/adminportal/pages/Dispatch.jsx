@@ -1,268 +1,333 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Truck, Package, CheckCircle2, Clock, Search, X, MapPin } from "lucide-react";
-import { ordersApi, dispatchApi } from "../../services/api";
+import React, { useEffect, useMemo, useState } from "react";
+import { Truck, Plus, Wallet } from "lucide-react";
+import { supplyChainApi } from "../../services/api";
 
-const fmt = (n) => new Intl.NumberFormat("en-LK").format(n);
-const COURIERS = ["Kapruka", "DHL", "FedEx", "Lanka Hand", "Pick Me Flash"];
+const emptyDispatch = {
+  dispatchReference: "",
+  dispatchDate: new Date().toISOString().slice(0, 10),
+  courierName: "",
+  parcelNumber: "",
+  shipmentStatus: "pending",
+  notes: "",
+  items: [],
+};
+
+const emptyCharge = {
+  chargeType: "uk_courier",
+  currencyCode: "GBP",
+  amount: "",
+  chargeDate: new Date().toISOString().slice(0, 10),
+  notes: "",
+};
+
+const money = (value) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(value ?? 0);
+
+const Input = (props) => (
+  <input
+    {...props}
+    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+  />
+);
+
+const Select = (props) => (
+  <select
+    {...props}
+    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+  />
+);
+
+const Label = ({ children }) => <label className="mb-1 block text-xs font-semibold text-slate-500">{children}</label>;
 
 export default function Dispatch() {
-  const [orders,      setOrders]      = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [search,      setSearch]      = useState("");
-  const [tab,         setTab]         = useState("ready");
-  const [assignModal, setAssignModal] = useState(null);
-  const [courier,     setCourier]     = useState("Kapruka");
-  const [tracking,    setTracking]    = useState("");
-  const [saving,      setSaving]      = useState(false);
+  const [dispatches, setDispatches] = useState([]);
+  const [procurements, setProcurements] = useState([]);
+  const [selectedProcurementId, setSelectedProcurementId] = useState("");
+  const [selectedProcurement, setSelectedProcurement] = useState(null);
+  const [selectedShipment, setSelectedShipment] = useState(null);
+  const [dispatchForm, setDispatchForm] = useState(emptyDispatch);
+  const [chargeForm, setChargeForm] = useState(emptyCharge);
+  const [loading, setLoading] = useState(true);
+  const [savingDispatch, setSavingDispatch] = useState(false);
+  const [savingCharge, setSavingCharge] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    ordersApi.getAll(1, 200)
-      .then((data) => {
-        const list = Array.isArray(data) ? data : (data?.items ?? []);
-        setOrders(list.filter((o) =>
-          ["pending", "processing", "dispatched"].includes((o.status ?? "").toLowerCase())
-        ));
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  useEffect(() => {
+    Promise.allSettled([
+      supplyChainApi.getDispatches(),
+      supplyChainApi.getProcurements(),
+    ]).then(([dispatchList, procurementList]) => {
+      if (dispatchList.status === "fulfilled") setDispatches(dispatchList.value ?? []);
+      if (procurementList.status === "fulfilled") setProcurements(procurementList.value ?? []);
+    }).finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!selectedProcurementId) return;
+    supplyChainApi.getProcurementById(selectedProcurementId).then(setSelectedProcurement);
+  }, [selectedProcurementId]);
 
-  const handleDispatch = async () => {
-    if (!tracking.trim() || saving) return;
-    setSaving(true);
+  const shipmentTotals = useMemo(() => ({
+    quantity: dispatchForm.items.reduce((sum, item) => sum + (Number(item.quantityDispatched) || 0), 0),
+  }), [dispatchForm.items]);
+
+  const addProcurementItem = (item) => {
+    if (dispatchForm.items.some((entry) => entry.procurementItemId === item.procurementItemId)) return;
+    setDispatchForm((current) => ({
+      ...current,
+      items: [
+        ...current.items,
+        {
+          procurementItemId: item.procurementItemId,
+          productName: item.productName,
+          brandName: item.brandName,
+          quantityDispatched: item.quantity,
+          netUnitCost: item.netUnitCost,
+        },
+      ],
+    }));
+  };
+
+  const saveDispatch = async () => {
+    if (!dispatchForm.courierName || !dispatchForm.parcelNumber || dispatchForm.items.length === 0 || savingDispatch) return;
+    setSavingDispatch(true);
     try {
-      await dispatchApi.upsert({
-        orderId:    assignModal.orderId ?? assignModal.id,
-        courier,
-        trackingId: tracking,
+      await supplyChainApi.saveDispatch({
+        ...dispatchForm,
+        dispatchDate: `${dispatchForm.dispatchDate}T00:00:00`,
+        items: dispatchForm.items.map((item) => ({
+          procurementItemId: item.procurementItemId,
+          quantityDispatched: Number(item.quantityDispatched),
+        })),
       });
-      await ordersApi.updateStatus(assignModal.orderId ?? assignModal.id, "dispatched");
-      setAssignModal(null);
-      setTracking("");
-      setCourier("Kapruka");
-      load();
-    } catch (err) { alert(err.message); }
-    finally { setSaving(false); }
+      const refreshed = await supplyChainApi.getDispatches();
+      setDispatches(refreshed ?? []);
+      setDispatchForm(emptyDispatch);
+      setSelectedProcurement(null);
+      setSelectedProcurementId("");
+    } finally {
+      setSavingDispatch(false);
+    }
   };
 
-  const markDelivered = async (orderId) => {
+  const openShipment = async (shipmentId) => {
+    setSelectedShipment(await supplyChainApi.getDispatchById(shipmentId));
+  };
+
+  const addCharge = async () => {
+    if (!selectedShipment?.shipmentId || !chargeForm.amount || savingCharge) return;
+    setSavingCharge(true);
     try {
-      await dispatchApi.markDelivered(orderId);
-      setOrders((prev) => prev.filter((o) => (o.orderId ?? o.id) !== orderId));
-    } catch (err) { alert(err.message); }
+      await supplyChainApi.addShipmentCharge(selectedShipment.shipmentId, {
+        ...chargeForm,
+        amount: Number(chargeForm.amount),
+        chargeDate: `${chargeForm.chargeDate}T00:00:00`,
+      });
+      setSelectedShipment(await supplyChainApi.getDispatchById(selectedShipment.shipmentId));
+      setChargeForm(emptyCharge);
+    } finally {
+      setSavingCharge(false);
+    }
   };
 
-  const q = search.toLowerCase();
-  const readyList = orders.filter((o) => {
-    const status = (o.status ?? "").toLowerCase();
-    const matchStatus = status === "pending" || status === "processing";
-    const matchSearch = !q ||
-      (o.customerName ?? "").toLowerCase().includes(q) ||
-      (o.orderRef ?? "").toLowerCase().includes(q);
-    return matchStatus && matchSearch;
-  });
-
-  const dispatchedList = orders.filter((o) => {
-    const matchStatus = (o.status ?? "").toLowerCase() === "dispatched";
-    const matchSearch = !q ||
-      (o.customerName ?? "").toLowerCase().includes(q) ||
-      (o.orderRef ?? "").toLowerCase().includes(q);
-    return matchStatus && matchSearch;
-  });
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl md:text-2xl font-bold text-slate-900">Dispatch Management</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage order fulfilment and shipping</p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Ready to Dispatch", value: orders.filter((o) => ["pending","processing"].includes((o.status ?? "").toLowerCase())).length, color: "bg-amber-500", icon: Package },
-          { label: "Dispatched",        value: orders.filter((o) => (o.status ?? "").toLowerCase() === "dispatched").length, color: "bg-indigo-500", icon: Truck },
-          { label: "Total Active",      value: orders.length, color: "bg-tenzy-teal", icon: CheckCircle2 },
-        ].map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100 text-center">
-            <div className={`w-9 h-9 ${color} rounded-xl flex items-center justify-center mx-auto mb-2`}>
-              <Icon size={16} className="text-white" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900">{value}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100 space-y-3">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order ref or customer…"
-            className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition" />
-          {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={14} className="text-slate-400" /></button>}
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dispatch From UK</h1>
+          <p className="mt-1 text-sm text-slate-500">Build shipments from procured stock and add logistics costs whenever they become available.</p>
         </div>
-        <div className="flex gap-2">
-          {[
-            { key: "ready",      label: `Ready (${readyList.length})` },
-            { key: "dispatched", label: `Dispatched (${dispatchedList.length})` },
-          ].map(({ key, label }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className={`flex-1 text-xs font-semibold py-2 rounded-xl transition ${
-                tab === key ? "bg-tenzy-teal text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}>
-              {label}
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
+          {dispatches.length} shipments
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label>Dispatch reference</Label>
+              <Input value={dispatchForm.dispatchReference} onChange={(e) => setDispatchForm({ ...dispatchForm, dispatchReference: e.target.value })} placeholder="Auto-generated if blank" />
+            </div>
+            <div>
+              <Label>Dispatch date</Label>
+              <Input type="date" value={dispatchForm.dispatchDate} onChange={(e) => setDispatchForm({ ...dispatchForm, dispatchDate: e.target.value })} />
+            </div>
+            <div>
+              <Label>Courier name</Label>
+              <Input value={dispatchForm.courierName} onChange={(e) => setDispatchForm({ ...dispatchForm, courierName: e.target.value })} placeholder="DHL, Kapruka, hand carry" />
+            </div>
+            <div>
+              <Label>Parcel / shipment number</Label>
+              <Input value={dispatchForm.parcelNumber} onChange={(e) => setDispatchForm({ ...dispatchForm, parcelNumber: e.target.value })} />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={dispatchForm.shipmentStatus} onChange={(e) => setDispatchForm({ ...dispatchForm, shipmentStatus: e.target.value })}>
+                <option value="pending">Pending</option>
+                <option value="dispatched">Dispatched</option>
+                <option value="received">Received</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Input value={dispatchForm.notes} onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })} />
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-3xl bg-slate-50 p-4">
+            <h2 className="text-sm font-bold text-slate-800">Select procurement source</h2>
+            <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+              <Select value={selectedProcurementId} onChange={(e) => setSelectedProcurementId(e.target.value)}>
+                <option value="">Select procurement</option>
+                {procurements.map((procurement) => (
+                  <option key={procurement.procurementId} value={procurement.procurementId}>
+                    {procurement.procurementReference} · {procurement.shopName}
+                  </option>
+                ))}
+              </Select>
+              <div className="rounded-2xl bg-white px-4 py-2 text-sm text-slate-500">{shipmentTotals.quantity} units selected</div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {selectedProcurement?.items?.map((item) => (
+                <div key={item.procurementItemId} className="flex items-center justify-between rounded-2xl bg-white p-3 text-sm">
+                  <div>
+                    <p className="font-semibold text-slate-800">{item.productName}</p>
+                    <p className="text-xs text-slate-500">{item.brandName} · {item.quantity} available · {money(item.netUnitCost)} unit net</p>
+                  </div>
+                  <button onClick={() => addProcurementItem(item)} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
+                    Add
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <h2 className="text-sm font-bold text-slate-800">Shipment items</h2>
+            <div className="mt-3 space-y-3">
+              {dispatchForm.items.length === 0 && <p className="text-sm text-slate-400">No items selected yet.</p>}
+              {dispatchForm.items.map((item, index) => (
+                <div key={item.procurementItemId} className="grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-[1fr_120px_auto] md:items-center">
+                  <div>
+                    <p className="font-semibold text-slate-800">{item.productName}</p>
+                    <p className="text-xs text-slate-500">{item.brandName} · net {money(item.netUnitCost)}</p>
+                  </div>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={item.quantityDispatched}
+                    onChange={(e) => {
+                      const quantityDispatched = e.target.value;
+                      setDispatchForm((current) => ({
+                        ...current,
+                        items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, quantityDispatched } : entry),
+                      }));
+                    }}
+                  />
+                  <button
+                    onClick={() => setDispatchForm((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }))}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button onClick={saveDispatch} disabled={savingDispatch} className="mt-5 w-full rounded-2xl bg-tenzy-teal px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
+              {savingDispatch ? "Saving shipment..." : "Save shipment"}
             </button>
-          ))}
-        </div>
-      </div>
-
-      {tab === "ready" && (
-        <div className="space-y-3">
-          {readyList.length === 0 && (
-            <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
-              <CheckCircle2 size={40} className="text-emerald-400 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-slate-600">All orders dispatched!</p>
-              <p className="text-xs text-slate-400 mt-1">No pending orders to fulfil.</p>
-            </div>
-          )}
-          {readyList.map((order) => (
-            <div key={order.orderId ?? order.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono font-bold text-tenzy-teal">{order.orderRef}</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${
-                      (order.status ?? "").toLowerCase() === "pending" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {order.status}
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-800">{order.customerName}</p>
-                  <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
-                    <MapPin size={11} />
-                    <span>{order.shippingAddress ? `${order.shippingAddress}, ` : ""}{order.shippingCity}</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {order.itemCount ?? "—"} item(s) · LKR {fmt(order.totalLkr ?? 0)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setAssignModal(order)}
-                  className="flex-shrink-0 flex items-center gap-1.5 bg-tenzy-teal text-white text-xs font-bold px-3 py-2 rounded-xl hover:opacity-90 transition active:scale-95"
-                >
-                  <Truck size={13} /> Dispatch
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === "dispatched" && (
-        <div className="space-y-3">
-          {dispatchedList.length === 0 && (
-            <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-100">
-              <Truck size={40} className="text-indigo-300 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-slate-600">No dispatched orders</p>
-            </div>
-          )}
-          {dispatchedList.map((order) => (
-            <div key={order.orderId ?? order.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono font-bold text-tenzy-teal">{order.orderRef}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Dispatched</span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-800">{order.customerName}</p>
-                  <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
-                    <MapPin size={11} />
-                    <span>{order.shippingCity}</span>
-                  </div>
-                  {(order.trackingId || order.courier) && (
-                    <div className="mt-2 flex items-center gap-3">
-                      {order.trackingId && (
-                        <div className="bg-indigo-50 rounded-lg px-3 py-1.5">
-                          <p className="text-[10px] text-indigo-400 font-semibold">Tracking ID</p>
-                          <p className="text-xs font-bold text-indigo-700 font-mono">{order.trackingId}</p>
-                        </div>
-                      )}
-                      {order.courier && (
-                        <div className="bg-slate-50 rounded-lg px-3 py-1.5">
-                          <p className="text-[10px] text-slate-400 font-semibold">Courier</p>
-                          <p className="text-xs font-bold text-slate-700">{order.courier}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => markDelivered(order.orderId ?? order.id)}
-                  className="flex-shrink-0 flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-xl hover:opacity-90 transition"
-                >
-                  <CheckCircle2 size={13} /> Delivered
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {assignModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setAssignModal(null)} />
-          <div className="relative bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
-              <div>
-                <p className="text-xs text-slate-400">Dispatch Order</p>
-                <p className="font-bold text-slate-900 font-mono text-sm">{assignModal.orderRef}</p>
-              </div>
-              <button onClick={() => setAssignModal(null)} className="p-1.5 rounded-full hover:bg-slate-100">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-slate-500 mb-1">{assignModal.customerName}</p>
-                <p className="text-xs text-slate-400">
-                  {assignModal.shippingAddress ? `${assignModal.shippingAddress}, ` : ""}{assignModal.shippingCity}
-                </p>
-                <p className="text-xs font-bold text-slate-700 mt-1">LKR {fmt(assignModal.totalLkr ?? 0)}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Courier Service</label>
-                <select value={courier} onChange={(e) => setCourier(e.target.value)}
-                  className="w-full text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30">
-                  {COURIERS.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Tracking ID *</label>
-                <input value={tracking} onChange={(e) => setTracking(e.target.value)}
-                  placeholder="e.g. TRK-00000"
-                  className="w-full text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition" />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setAssignModal(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">Cancel</button>
-                <button onClick={handleDispatch} disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl bg-tenzy-teal text-white text-sm font-bold hover:opacity-90 transition disabled:opacity-60 flex items-center justify-center gap-2">
-                  <Truck size={15} /> {saving ? "Saving…" : "Confirm Dispatch"}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
-      )}
+
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Truck size={16} className="text-indigo-500" />
+              <h2 className="text-lg font-bold text-slate-900">Saved shipments</h2>
+            </div>
+            <div className="mt-4 space-y-3">
+              {dispatches.map((shipment) => (
+                <button
+                  key={shipment.shipmentId}
+                  onClick={() => openShipment(shipment.shipmentId)}
+                  className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-tenzy-teal"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-800">{shipment.dispatchReference}</p>
+                      <p className="text-xs text-slate-500">{shipment.courierName} · {shipment.parcelNumber}</p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-600">{shipment.shipmentStatus}</span>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-500">Products: {money(shipment.totalProductCost)} · Charges: {money(shipment.totalShipmentCharges)}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {selectedShipment && (
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2">
+                <Wallet size={16} className="text-tenzy-orange" />
+                <h2 className="text-lg font-bold text-slate-900">Shipment costs</h2>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div>
+                  <Label>Charge type</Label>
+                  <Select value={chargeForm.chargeType} onChange={(e) => setChargeForm({ ...chargeForm, chargeType: e.target.value })}>
+                    <option value="uk_courier">UK courier</option>
+                    <option value="sl_courier">Sri Lanka courier</option>
+                    <option value="tax">Tax charge</option>
+                    <option value="other">Additional charge</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Currency</Label>
+                  <Select value={chargeForm.currencyCode} onChange={(e) => setChargeForm({ ...chargeForm, currencyCode: e.target.value })}>
+                    <option value="GBP">GBP</option>
+                    <option value="LKR">LKR</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Amount</Label>
+                  <Input type="number" min="0" step="0.01" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Charge date</Label>
+                  <Input type="date" value={chargeForm.chargeDate} onChange={(e) => setChargeForm({ ...chargeForm, chargeDate: e.target.value })} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <Label>Notes</Label>
+                <Input value={chargeForm.notes} onChange={(e) => setChargeForm({ ...chargeForm, notes: e.target.value })} />
+              </div>
+              <button onClick={addCharge} disabled={savingCharge} className="mt-4 w-full rounded-2xl bg-tenzy-orange px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                {savingCharge ? "Saving charge..." : "Add shipment charge"}
+              </button>
+
+              <div className="mt-5 space-y-3">
+                {(selectedShipment.charges ?? []).map((charge) => (
+                  <div key={charge.shipmentChargeId} className="rounded-2xl bg-slate-50 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold capitalize text-slate-800">{charge.chargeType.replaceAll("_", " ")}</span>
+                      <span className="text-slate-700">{charge.currencyCode} {Number(charge.amount).toFixed(2)}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{String(charge.chargeDate).slice(0, 10)} · {charge.notes || "No note"}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

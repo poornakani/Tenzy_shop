@@ -7,7 +7,12 @@ import { Heart, Eye, ShoppingBag, ChevronRight } from "lucide-react";
 import { useCart } from "@/Context/CartContext";
 import { useToast } from "@/Context/ToastContext";
 import { useNavigate } from "react-router-dom";
-import { productsApi } from "@/services/api";
+import {
+  productsApi,
+  brandsApi,
+  categoriesApi,
+  productImageApi,
+} from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -44,27 +49,52 @@ function Stars({ value }) {
 /* ── Derive filter tabs from product data ─────────────────────────── */
 const CAT_LABELS = { Skin: "Skin Care", Face: "Face Care", Body: "Body Care", Head: "Head Care", Hand: "Hand Care", Lips: "Lip Care", Sun: "Sun Care", Acne: "Acne Care" };
 
-function normalizeProd(raw) {
-  const id    = raw.productId ?? raw.id ?? 0;
-  const price = raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0;
-  const disc  = raw.discountPercent ?? 0;
-  const stock = raw.stockQty ?? raw.stockCount ?? 0;
-  const rawImgs = Array.isArray(raw.images) ? raw.images : [];
+function normalizeProd(raw, lookups = {}) {
+  const id        = raw.productId ?? raw.ProductId ?? raw.id ?? 0;
+  const priceLkr  = parseFloat(raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0);
+  const origPrice = parseFloat(raw.originalPrice ?? raw.OriginalPrice ?? priceLkr);
+  const sellPrice = parseFloat(raw.sellingPrice  ?? raw.SellingPrice  ?? priceLkr ?? origPrice);
+  const basePrice = origPrice > 0 ? origPrice : sellPrice;
+  const isSale    = raw.isSale ?? raw.IsSale ?? raw.inSale ?? raw.InSale ?? raw.insale ?? false;
+  const disc      = Math.round(parseFloat(raw.discountRate ?? raw.DiscountRate ?? raw.discountPercent ?? 0))
+    || (basePrice > 0 && sellPrice < basePrice ? Math.round((1 - sellPrice / basePrice) * 100) : 0);
+  const stock = parseInt(raw.stockQuantity ?? raw.StockQuantity ?? raw.stockQty ?? raw.stockCount ?? raw.stock ?? 0, 10);
+  const rawImgs = Array.isArray(raw.images) && raw.images.length
+    ? raw.images
+    : (lookups.imagesByProductId?.get(id) ?? []);
   const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
   const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
+  const primaryImage = raw.primaryImageUrl
+    ?? raw.PrimaryImageUrl
+    ?? raw.imageUrl
+    ?? raw.ImageUrl
+    ?? primary?.imageUrl
+    ?? primary?.ImageUrl
+    ?? imgUrls[0]
+    ?? null;
   return {
     id,
-    name:            raw.name ?? "",
-    price,
+    name:            raw.name ?? raw.Name ?? "",
+    price:           basePrice,
     discountPercent: disc,
-    discountedPrice: Math.round(price * (1 - disc / 100)),
-    inSale:          disc > 0,
+    discountedPrice: disc > 0 ? Math.round(basePrice * (1 - disc / 100)) : basePrice,
+    inSale:          Boolean(isSale),
     stockCount:      stock,
     outOfStock:      stock === 0,
-    image:           primary?.imageUrl ?? imgUrls[0] ?? null,
-    category:        raw.categoryName ?? raw.categoryType ?? raw.category ?? "",
-    brand:           raw.brandName ?? raw.brand ?? "",
-    brandId:         raw.brandId ?? 0,
+    image:           primaryImage,
+    category:        raw.categoryName
+      ?? raw.CategoryName
+      ?? raw.categoryType
+      ?? raw.CategoryType
+      ?? raw.category
+      ?? lookups.categoryNamesById?.get(raw.categoryId ?? raw.CategoryId)
+      ?? "",
+    brand:           raw.brandName
+      ?? raw.BrandName
+      ?? raw.brand
+      ?? lookups.brandNamesById?.get(raw.brandId ?? raw.BrandId)
+      ?? "",
+    brandId:         raw.brandId      ?? raw.BrandId      ?? 0,
   };
 }
 
@@ -81,8 +111,49 @@ const BestSelling = () => {
   const wrapRef        = useRef(null);
 
   useEffect(() => {
-    productsApi.getAll()
-      .then(data => setAllProducts((Array.isArray(data) ? data : []).map(normalizeProd)))
+    Promise.allSettled([
+      productsApi.getAll(),
+      brandsApi.getAll(),
+      categoriesApi.getAll(),
+      productImageApi.getAll(),
+    ])
+      .then(([productsRes, brandsRes, categoriesRes, imagesRes]) => {
+        const products = Array.isArray(productsRes.value) ? productsRes.value : [];
+        const brands = Array.isArray(brandsRes.value) ? brandsRes.value : [];
+        const categories = Array.isArray(categoriesRes.value) ? categoriesRes.value : [];
+        const images = Array.isArray(imagesRes.value) ? imagesRes.value : [];
+
+        const brandNamesById = new Map(
+          brands.map((brand) => [
+            brand.brandId ?? brand.BrandId,
+            brand.name ?? brand.Name ?? brand.brandName ?? brand.BrandName ?? "",
+          ])
+        );
+        const categoryNamesById = new Map(
+          categories.map((category) => [
+            category.categoryId ?? category.CategoryId ?? category.catagoryID,
+            category.categoryType ?? category.CategoryType ?? category.name ?? category.Name ?? "",
+          ])
+        );
+        const imagesByProductId = images.reduce((map, image) => {
+          const productId = image.productId ?? image.ProductId;
+          if (productId == null || (image.isActive ?? image.IsActive) === false) return map;
+          const list = map.get(productId) ?? [];
+          list.push(image);
+          map.set(productId, list);
+          return map;
+        }, new Map());
+
+        const saleProducts = products
+          .map((product) => normalizeProd(product, {
+            brandNamesById,
+            categoryNamesById,
+            imagesByProductId,
+          }))
+          .filter((product) => product.inSale);
+
+        setAllProducts(saleProducts);
+      })
       .catch(console.error);
   }, []);
 
@@ -97,13 +168,13 @@ const BestSelling = () => {
 
   /* scroll-in animation */
   useEffect(() => {
-    if (!wrapRef.current) return;
+    if (!wrapRef.current || displayed.length === 0) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(".bs-title", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power2.out", scrollTrigger: { trigger: wrapRef.current, start: "top 82%" } });
       gsap.fromTo(".bs-card",  { y: 30, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.65, ease: "power2.out", stagger: 0.07, scrollTrigger: { trigger: wrapRef.current, start: "top 78%" } });
     }, wrapRef);
     return () => ctx.revert();
-  }, [activeFilter]);
+  }, [activeFilter, displayed.length]);
 
   const openQuickView  = p  => { setSelectedProduct(p); setQuickViewOpen(true); };
   const closeQuickView = () => { setQuickViewOpen(false); setSelectedProduct(null); };
@@ -173,11 +244,20 @@ const BestSelling = () => {
               >
                 {/* ── Image block ─────────────────────────────── */}
                 <div className="relative aspect-4/5 overflow-hidden bg-zinc-50 shrink-0">
-                  <img
-                    src={p.image}
-                    alt={p.name}
-                    className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05] ${p.outOfStock ? "grayscale brightness-90" : ""}`}
-                  />
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "flex"; }}
+                      className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05] ${p.outOfStock ? "grayscale brightness-90" : ""}`}
+                    />
+                  ) : null}
+                  <div
+                    style={{ display: p.image ? "none" : "flex" }}
+                    className="h-full w-full items-center justify-center bg-zinc-100"
+                  >
+                    <ShoppingBag size={40} className="text-zinc-300" />
+                  </div>
 
                   {/* top-left: badges */}
                   <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5">
@@ -264,20 +344,19 @@ const BestSelling = () => {
                   {/* Price row */}
                   <div className="flex items-baseline gap-2 mt-3">
                     <span className="text-sm font-bold text-zinc-900">
-                      LKR {formatLKR(discounted)}
+                      LKR {formatLKR(p.discountedPrice)}
                     </span>
-                    <span className="text-xs text-zinc-400 line-through">
-                      LKR {formatLKR(p.price)}
-                    </span>
-                    <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
-                      -{p.discountPercent}%
-                    </span>
+                    {p.inSale && (
+                      <>
+                        <span className="text-xs text-zinc-400 line-through">
+                          LKR {formatLKR(p.price)}
+                        </span>
+                        <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
+                          -{p.discountPercent}%
+                        </span>
+                      </>
+                    )}
                   </div>
-
-                  {/* Instalment hint */}
-                  <p className="text-[10px] text-zinc-400 mt-1">
-                    From <span className="font-semibold text-zinc-600">LKR {formatLKR(Math.round(discounted / p.minInstallments))}</span> × {p.minInstallments} with {p.paymentProvider}
-                  </p>
 
                   {/* Stock bar */}
                   <div className="mt-2.5">
