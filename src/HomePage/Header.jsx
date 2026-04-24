@@ -11,6 +11,8 @@ import { slides } from "@/const";
 //   • Event listeners attached ONCE (empty deps / stable callback deps)
 //   • will-change + translateZ(0) on animated elements → GPU compositing
 //   • contain: layout paint on the card → isolates reflow from the rest of the page
+//   • overflow:hidden on <html> while pre-expanded → no scroll event handler needed,
+//     eliminating the scrollTo(0,0) feedback loop that caused UI jitter
 //
 const ScrollExpandHero = ({ bgSlides = [], children }) => {
   const navigate = useNavigate();
@@ -121,16 +123,34 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
   }, [applyProgress]);
 
   // ── Wheel + touch handlers — added ONCE (no scroll-driven deps) ──────────
+  // Scroll-lock strategy: use overflow:hidden on <html> while the hero is in
+  // pre-expansion mode. This removes the need for a scroll event handler that
+  // called scrollTo(0,0) — that pattern caused a scroll-event feedback loop
+  // (scrollTo fires a scroll event → handler calls scrollTo again → jitter).
   useEffect(() => {
+    document.documentElement.style.overflow = "hidden";
+
+    const unlockScroll = () => {
+      document.documentElement.style.overflow = "";
+    };
+    const lockScroll = () => {
+      document.documentElement.style.overflow = "hidden";
+    };
+
     const handleWheel = (e) => {
       if (expandedRef.current) {
         if (e.deltaY < 0 && window.scrollY <= 5) {
-          expandedRef.current = false;
-          progressRef.current = 0;
+          // Collapse: lock scroll, snap to top, reset progress
+          expandedRef.current    = false;
+          progressRef.current    = 0;
+          showContentRef.current = false;
+          setShowContent(false);
           scheduleUpdate();
           e.preventDefault();
+          window.scrollTo(0, 0);
+          lockScroll();
         }
-        // else: page scrolls normally
+        // else: hero fully expanded — let browser scroll the page normally
       } else {
         e.preventDefault();
         const next = Math.min(Math.max(progressRef.current + e.deltaY * 0.0009, 0), 1);
@@ -141,6 +161,7 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
           showContentRef.current = true;
           expandedRef.current    = true;
           setShowContent(true);
+          unlockScroll(); // allow normal page scroll after full expansion
         } else if (next < 0.75 && showContentRef.current) {
           showContentRef.current = false;
           setShowContent(false);
@@ -161,8 +182,12 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
         if (deltaY < -20 && window.scrollY <= 5) {
           expandedRef.current    = false;
           progressRef.current    = 0;
+          showContentRef.current = false;
+          setShowContent(false);
           scheduleUpdate();
           e.preventDefault();
+          window.scrollTo(0, 0);
+          lockScroll();
         }
       } else {
         e.preventDefault();
@@ -176,6 +201,7 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
           showContentRef.current = true;
           expandedRef.current    = true;
           setShowContent(true);
+          unlockScroll();
         } else if (next < 0.75 && showContentRef.current) {
           showContentRef.current = false;
           setShowContent(false);
@@ -185,19 +211,14 @@ const ScrollExpandHero = ({ bgSlides = [], children }) => {
 
     const handleTouchEnd = () => { touchStartYRef.current = 0; };
 
-    const handleScroll = () => {
-      if (!expandedRef.current) window.scrollTo(0, 0);
-    };
-
     window.addEventListener("wheel",      handleWheel,      { passive: false });
-    window.addEventListener("scroll",     handleScroll);
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true  });
     window.addEventListener("touchmove",  handleTouchMove,  { passive: false });
     window.addEventListener("touchend",   handleTouchEnd);
 
     return () => {
+      unlockScroll(); // always restore on unmount (e.g. navigation away)
       window.removeEventListener("wheel",      handleWheel);
-      window.removeEventListener("scroll",     handleScroll);
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove",  handleTouchMove);
       window.removeEventListener("touchend",   handleTouchEnd);
