@@ -6,7 +6,7 @@ const fmtMoney = (value) => new Intl.NumberFormat("en-GB", { style: "currency", 
 
 const cards = (summary) => [
   {
-    label: "Procurements",
+    label: "UK Purchases",
     value: summary?.procurementCount ?? 0,
     helper: fmtMoney(summary?.procurementNetTotal),
     icon: PackagePlus,
@@ -97,7 +97,7 @@ export default function Dashboard() {
 
           <div className="mt-6 grid gap-3 md:grid-cols-4">
             {[
-              ["1", "Procurement", "Capture purchases, discounts, invoice references, and item-level net cost."],
+              ["1", "UK Purchase", "Capture purchases, discounts, invoice references, and item-level net cost."],
               ["2", "Dispatch", "Build shipments from procured stock and add courier, tax, or late charges."],
               ["3", "Arrival", "Verify dispatched vs received quantities and approve only valid stock."],
               ["4", "Pricing", "Save selling price, discount policy, markup, and final approved record."],

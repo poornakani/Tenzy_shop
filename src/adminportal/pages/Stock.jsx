@@ -11,6 +11,22 @@ const PAGE_SIZE = 15;
 /* ── helpers ──────────────────────────────────────────────────────────────── */
 const fmt = (v) => (v == null ? "—" : typeof v === "string" && v.includes("T") ? v.slice(0, 10) : String(v));
 const fmtMoney = (v) => (v == null ? "—" : `£${Number(v).toFixed(2)}`);
+const getPurchaseDispatchStatus = (items = []) => {
+  const totals = (items ?? []).reduce((acc, item) => {
+    acc.ordered += Number(item.quantity ?? 0);
+    acc.dispatched += Number(item.quantityAlreadyDispatched ?? 0);
+    return acc;
+  }, { ordered: 0, dispatched: 0 });
+
+  if (totals.dispatched <= 0) return "pending_dispatch";
+  if (totals.ordered > 0 && totals.dispatched >= totals.ordered) return "dispatched";
+  return "partially_dispatched";
+};
+const getPurchaseDispatchLabel = (status) => {
+  if (status === "pending_dispatch") return "Pending dispatch";
+  if (status === "partially_dispatched") return "Partially dispatched";
+  return status === "dispatched" ? "Dispatched" : fmt(status);
+};
 
 function Spinner() {
   return (
@@ -245,7 +261,7 @@ function ProcurementItemsDialog({ procurementId, procRef, onClose, onRefresh }) 
         <div className="relative bg-white rounded-2xl w-full max-w-3xl shadow-2xl">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <p className="font-bold text-slate-900">Procurement Items</p>
+              <p className="font-bold text-slate-900">UK Purchase Items</p>
               <p className="text-xs text-slate-500 mt-0.5">{procRef}</p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-full hover:bg-slate-100"><X size={18} /></button>
@@ -552,7 +568,29 @@ function ProcurementStockTab() {
   const load = useCallback(() => {
     setLoading(true);
     supplyChainApi.getProcurements()
-      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .then(async (data) => {
+        const list = Array.isArray(data) ? data : [];
+        const details = await Promise.all(
+          list.map(async (purchase) => {
+            try {
+              return await supplyChainApi.getProcurementById(purchase.procurementId);
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        const detailById = new Map(
+          details
+            .filter(Boolean)
+            .map((detail) => [detail.procurementId, detail])
+        );
+
+        setItems(list.map((purchase) => ({
+          ...purchase,
+          purchaseDispatchStatus: getPurchaseDispatchStatus(detailById.get(purchase.procurementId)?.items ?? []),
+        })));
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -594,7 +632,7 @@ function ProcurementStockTab() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {page_items.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">No procurements found.</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">No UK purchases found.</td></tr>
                 )}
                 {page_items.map((p) => (
                   <tr key={p.procurementId} className="hover:bg-slate-50 transition">
@@ -607,7 +645,17 @@ function ProcurementStockTab() {
                     <td className="px-4 py-3 text-slate-600">{fmtMoney(p.totalGrossAmount)}</td>
                     <td className="px-4 py-3 font-semibold text-slate-900">{fmtMoney(p.totalNetAmount)}</td>
                     <td className="px-4 py-3">
-                      <Badge color="green">{p.status}</Badge>
+                      <Badge
+                        color={
+                          p.purchaseDispatchStatus === "dispatched"
+                            ? "blue"
+                            : p.purchaseDispatchStatus === "partially_dispatched"
+                            ? "amber"
+                            : "slate"
+                        }
+                      >
+                        {getPurchaseDispatchLabel(p.purchaseDispatchStatus)}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -636,7 +684,7 @@ function ProcurementStockTab() {
       {showDeleted && (
         <DeletedItemsDialog
           tableName="SupplyProcurementItems"
-          title="Procurement"
+          title="UK Purchase"
           onClose={() => setShowDeleted(false)}
         />
       )}
@@ -991,7 +1039,7 @@ function ArrivalStockTab() {
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 const TABS = [
-  { label: "Procurement Stock", icon: Package },
+  { label: "UK Purchase Stock", icon: Package },
   { label: "Dispatch Stock",    icon: Truck },
   { label: "Arrival Stock",     icon: BadgeCheck },
 ];
@@ -1004,7 +1052,7 @@ export default function Stock() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-slate-900">Stock Management</h1>
-        <p className="text-sm text-slate-500 mt-0.5">View and manage procurement, dispatch, and arrival stock</p>
+        <p className="text-sm text-slate-500 mt-0.5">View and manage UK purchase, dispatch, and arrival stock</p>
       </div>
 
       {/* Tab bar */}

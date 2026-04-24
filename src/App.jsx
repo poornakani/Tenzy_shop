@@ -44,6 +44,7 @@ import ReferenceData from "./adminportal/pages/ReferenceData";
 import ArrivalVerification from "./adminportal/pages/ArrivalVerification";
 import PricingManagement from "./adminportal/pages/PricingManagement";
 import Stock from "./adminportal/pages/Stock";
+import AuditLog from "./adminportal/pages/AuditLog";
 
 const AdminGuard = ({ children }) => {
   const hasAdminFlag = localStorage.getItem("adminAuth") === "true";
@@ -111,6 +112,7 @@ const App = () => {
                   <Route path="customers" element={<Customers />} />
                   <Route path="reviews" element={<Reviews />} />
                   <Route path="reports" element={<Reports />} />
+                  <Route path="audit-log" element={<AuditLog />} />
                   <Route path="reference" element={<ReferenceData />} />
                 </Route>
 

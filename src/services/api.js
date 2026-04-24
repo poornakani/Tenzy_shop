@@ -1,4 +1,6 @@
-const BASE_URL = "https://www.tenzyapitest.dotnetcloud.co.uk";
+const BASE_URL = import.meta.env.DEV
+  ? "http://localhost:5225"
+  : "https://www.tenzyapitest.dotnetcloud.co.uk";
 const API_DEBUG = import.meta.env.DEV;
 
 function getToken() {
@@ -292,6 +294,10 @@ export const supplyChainApi = {
   getArrivals: () => api.get("/api/admin/supply-chain/arrivals"),
   getArrivalById: (id) => api.get(`/api/admin/supply-chain/arrivals/${id}`),
   saveArrival: (body) => api.post("/api/admin/supply-chain/arrivals", body),
+  updateArrivalItem: (itemId, body) =>
+    api.post(`/api/admin/supply-chain/arrivals/items/${itemId}/update`, body),
+  approveDamagedItem: (itemId, body) =>
+    api.post(`/api/admin/supply-chain/arrivals/items/${itemId}/approve-damaged`, body),
 
   getEligiblePricing: () => api.get("/api/admin/supply-chain/pricing/eligible"),
   getPricing: () => api.get("/api/admin/supply-chain/pricing"),
@@ -454,5 +460,17 @@ export const uploadApi = {
     }
 
     return data.data.url; // e.g. "https://i.ibb.co/xxx/image.jpg"
+  },
+};
+
+// ── Admin / Audit ─────────────────────────────────────────────────────────────
+export const adminApi = {
+  getAuditLogs: (page = 1, pageSize = 50, adminUserId = null) => {
+    const q = toQuery({ page, pageSize, adminUserId });
+    return api.get(`/api/admin/audit-logs${q}`);
+  },
+  getMyActivity: (page = 1, pageSize = 50) => {
+    const q = toQuery({ page, pageSize });
+    return api.get(`/api/admin/my-activity${q}`);
   },
 };

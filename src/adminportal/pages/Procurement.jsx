@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ChevronDown, ChevronUp, CreditCard, Eye, FileText, ImagePlus, Info, MessageSquare,
-  PackagePlus, Pencil, Plus, Receipt, Tag, Trash2, X,
+  AlertCircle, CheckCircle, ChevronDown, ChevronUp, CreditCard, Eye, FileText,
+  ImagePlus, Info, MessageSquare, PackagePlus, Pencil, Plus, Receipt, ShoppingBag,
+  Tag, Trash2, X,
 } from "lucide-react";
 import {
   brandsApi, categoriesApi, concernsApi, paymentApi, productFaqApi,
@@ -25,6 +26,12 @@ const emptyItem = {
   buyQuantity: "",
   payQuantity: "",
   discountNote: "",
+  // shop snapshot — captured when item is added
+  _shopName: "",
+  _invoiceReference: "",
+  _paymentCardName: "",
+  _paymentReference: "",
+  _purchaseNote: "",
 };
 
 const emptyForm = {
@@ -196,8 +203,68 @@ function mapDetailToDraft(detail) {
       quantity: item.quantity ?? 1,
       unitPrice: item.unitPrice ?? "",
       batchNote: item.batchNote ?? "",
+      _shopName: detail.shopName ?? "",
+      _invoiceReference: detail.invoiceReference ?? "",
+      _paymentCardName: detail.paymentCardName ?? "",
+      _paymentReference: detail.paymentReference ?? "",
+      _purchaseNote: detail.purchaseNote ?? "",
     })),
   };
+}
+
+// ── Toast notification component ─────────────────────────────────────────────
+function ToastNotification({ toasts, onDismiss }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="fixed top-5 right-5 z-[100] flex flex-col gap-2 max-w-sm">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`flex items-start gap-3 rounded-2xl px-4 py-3 shadow-lg border text-sm font-medium animate-in slide-in-from-right ${
+            toast.type === "error"
+              ? "bg-red-50 border-red-200 text-red-800"
+              : toast.type === "warning"
+              ? "bg-amber-50 border-amber-200 text-amber-800"
+              : "bg-emerald-50 border-emerald-200 text-emerald-800"
+          }`}
+        >
+          {toast.type === "error" && <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />}
+          {toast.type === "warning" && <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-500" />}
+          {toast.type === "success" && <CheckCircle size={16} className="shrink-0 mt-0.5 text-emerald-500" />}
+          <span className="flex-1">{toast.message}</span>
+          <button onClick={() => onDismiss(toast.id)} className="ml-1 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Confirmation dialog component ─────────────────────────────────────────────
+function ConfirmDialog({ dialog, onCancel }) {
+  if (!dialog) return null;
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-6">
+        <h3 className="text-lg font-bold text-slate-900">{dialog.title}</h3>
+        <p className="mt-2 text-sm text-slate-600">{dialog.message}</p>
+        <div className="mt-5 flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={dialog.onConfirm}
+            className="flex-1 py-2.5 rounded-xl bg-tenzy-teal text-white text-sm font-bold hover:opacity-90 transition"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Procurement() {
@@ -226,6 +293,22 @@ export default function Procurement() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  const addToast = (type, message) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+  };
+
+  const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
+
+  const shopHeaderFilled =
+    form.shopName.trim() &&
+    form.invoiceReference.trim() &&
+    form.paymentCardName.trim() &&
+    form.paymentReference.trim();
 
   const loadPage = async () => {
     setLoading(true);
@@ -281,6 +364,24 @@ export default function Procurement() {
   }), [form.items]);
   const draftAmounts = useMemo(() => getDraftItemAmounts(draftItem), [draftItem]);
 
+  // Group items by shop for draft summary display
+  const itemsByShop = useMemo(() => {
+    const groups = new Map();
+    form.items.forEach((item, index) => {
+      const key = `${item._shopName}|||${item._invoiceReference}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          shopName: item._shopName,
+          invoiceReference: item._invoiceReference,
+          paymentCardName: item._paymentCardName,
+          items: [],
+        });
+      }
+      groups.get(key).items.push({ ...item, _index: index });
+    });
+    return [...groups.values()];
+  }, [form.items]);
+
   const onProductChange = (productId) => {
     const selected = products.find((product) => String(normalizeProductId(product)) === String(productId));
     const brandId = selected?.brandId ?? selected?.BrandId ?? selected?.brandid ?? "";
@@ -333,7 +434,7 @@ export default function Procurement() {
       setBrandForm((current) => ({ ...current, brandImage: url }));
       setBrandPreviewError(false);
     } catch (error) {
-      alert(error.message || "Image upload failed.");
+      addToast("error", error.message || "Image upload failed.");
     } finally {
       setBrandUploading(false);
     }
@@ -363,8 +464,9 @@ export default function Procurement() {
       }
       setBrandModalOpen(false);
       setBrandForm(emptyBrandForm);
+      addToast("success", `Brand "${brandForm.name.trim()}" created successfully.`);
     } catch (error) {
-      alert(error.message);
+      addToast("error", error.message);
     } finally {
       setCreatingBrand(false);
     }
@@ -400,7 +502,7 @@ export default function Procurement() {
         }],
       }));
     } catch (error) {
-      alert(error.message || "Image upload failed.");
+      addToast("error", error.message || "Image upload failed.");
     } finally {
       setProductUploading(false);
     }
@@ -501,7 +603,7 @@ export default function Procurement() {
         (faq) => (faq.question || faq.answer) && (!faq.question || !faq.answer)
       );
       if (hasIncompleteFaq) {
-        alert("Each FAQ must have both a question and an answer.");
+        addToast("warning", "Each FAQ must have both a question and an answer.");
         return;
       }
 
@@ -562,20 +664,38 @@ export default function Procurement() {
       }));
       setProductDrawerOpen(false);
       setProductForm(emptyProductForm());
+      addToast("success", `Product "${productName}" created successfully.`);
     } catch (error) {
-      alert(error.message);
+      addToast("error", error.message);
     } finally {
       setCreatingProduct(false);
     }
   };
 
   const addItem = () => {
+    // Require shop header to be filled first
+    if (!form.shopName.trim()) {
+      addToast("warning", "Please enter the shop / vendor name before adding items.");
+      return;
+    }
+    if (!form.invoiceReference.trim()) {
+      addToast("warning", "Please enter the invoice / receipt reference before adding items.");
+      return;
+    }
+    if (!form.paymentCardName.trim()) {
+      addToast("warning", "Please enter the payment card / issuer before adding items.");
+      return;
+    }
+    if (!form.paymentReference.trim()) {
+      addToast("warning", "Please enter the payment reference before adding items.");
+      return;
+    }
     if (!draftItem.productId) {
-      alert("Choose an existing product or create a new product before adding the item.");
+      addToast("error", "Choose an existing product or create a new product before adding the item.");
       return;
     }
     if (!draftItem.productName || !draftItem.quantity || !draftItem.unitPrice || !draftItem.brandName || !draftItem.categoryName) {
-      alert("Please complete the product, brand, category, quantity, and unit price.");
+      addToast("error", "Please complete the product, brand, category, quantity, and unit price.");
       return;
     }
     setForm((current) => ({
@@ -587,10 +707,16 @@ export default function Procurement() {
           productId: draftItem.productId || "",
           quantity: Number(draftItem.quantity),
           unitPrice: Number(draftItem.unitPrice),
+          _shopName: current.shopName,
+          _invoiceReference: current.invoiceReference,
+          _paymentCardName: current.paymentCardName,
+          _paymentReference: current.paymentReference,
+          _purchaseNote: current.purchaseNote,
         },
       ],
     }));
     setDraftItem(emptyItem);
+    addToast("success", `"${draftItem.productName}" added to the list.`);
   };
 
   const removeDraftItem = (index) => {
@@ -600,13 +726,33 @@ export default function Procurement() {
     }));
   };
 
+  // Clear current shop header fields so user can enter the next shop
+  const clearShopHeader = () => {
+    const currentShopItems = form.items.filter(
+      (item) => item._shopName === form.shopName && item._invoiceReference === form.invoiceReference
+    );
+    if (currentShopItems.length === 0) {
+      addToast("warning", "Add at least one item for this shop before clearing the shop details.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      shopName: "",
+      invoiceReference: "",
+      paymentCardName: "",
+      paymentReference: "",
+      purchaseNote: "",
+    }));
+    addToast("success", `${currentShopItems.length} item(s) saved for "${form.shopName}". Fill in the next shop details to continue.`);
+  };
+
   const openDetail = async (procurementId) => {
     setViewLoading(true);
     try {
       const response = await supplyChainApi.getProcurementById(procurementId);
       setDetail(response);
     } catch (error) {
-      alert(error.message);
+      addToast("error", error.message);
     } finally {
       setViewLoading(false);
     }
@@ -623,57 +769,127 @@ export default function Procurement() {
       setCarryForwardNote("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
-      alert(error.message);
+      addToast("error", error.message);
     } finally {
       setViewLoading(false);
     }
   };
 
   const save = async () => {
-    if (!form.shopName || !form.invoiceReference || form.items.length === 0 || saving) return;
+    if (form.items.length === 0 || saving) return;
     if (form.items.some((item) => !item.productId)) {
-      alert("Every procurement item must be linked to a product.");
+      addToast("error", "Every purchase item must be linked to a product.");
       return;
     }
-    setSaving(true);
-    try {
-      const payload = {
-        procurementId: form.procurementId,
-        procurementReference: form.procurementReference || null,
-        shopName: form.shopName.trim(),
-        purchaseDate: `${form.purchaseDate}T00:00:00`,
-        invoiceReference: form.invoiceReference.trim(),
-        paymentCardName: form.paymentCardName?.trim() || null,
-        paymentReference: form.paymentReference?.trim() || null,
-        purchaseNote: form.purchaseNote?.trim() || null,
-        items: form.items.map((item) => ({
-          productId: item.productId ? Number(item.productId) : null,
-          productName: item.productName.trim(),
-          brandName: item.brandName.trim(),
-          categoryName: item.categoryName.trim(),
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          batchNote: item.batchNote?.trim() || null,
-        })),
-        discounts: form.items
-          .map(buildDiscountFromItem)
-          .filter(Boolean),
-      };
 
-      await supplyChainApi.saveProcurement(payload);
-      await loadPage();
-      setForm(emptyForm);
-      setDraftItem(emptyItem);
-      setCarryForwardItemId("");
-      setCarryForwardNote("");
-      setProductDrawerOpen(false);
-      setBrandModalOpen(false);
-      setDetail(null);
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setSaving(false);
+    // For edit mode, still require shop fields
+    if (form.procurementId && (!form.shopName.trim() || !form.invoiceReference.trim())) {
+      addToast("error", "Shop name and invoice reference are required.");
+      return;
     }
+
+    let confirmMessage;
+    let shopGroups = null;
+
+    if (form.procurementId) {
+      // Edit mode
+      confirmMessage = `Update this UK purchase record from "${form.shopName}"?`;
+    } else {
+      // Create mode — group items by shop
+      const groupMap = new Map();
+      form.items.forEach((item) => {
+        const key = `${item._shopName}|||${item._invoiceReference}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            shopName: item._shopName,
+            invoiceReference: item._invoiceReference,
+            paymentCardName: item._paymentCardName,
+            paymentReference: item._paymentReference,
+            purchaseNote: item._purchaseNote,
+          });
+        }
+      });
+      shopGroups = [...groupMap.values()];
+      const shopNames = shopGroups.map((g) => g.shopName || "Unknown").join(", ");
+      confirmMessage = shopGroups.length === 1
+        ? `Save UK purchase from "${shopGroups[0].shopName}" with ${form.items.length} item(s)?`
+        : `Save ${shopGroups.length} UK purchases (${shopNames}) with ${form.items.length} total item(s)?`;
+    }
+
+    setConfirmDialog({
+      title: "Confirm Save",
+      message: confirmMessage,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setSaving(true);
+        try {
+          if (form.procurementId) {
+            // Edit mode: single procurement update
+            const payload = {
+              procurementId: form.procurementId,
+              procurementReference: form.procurementReference || null,
+              shopName: form.shopName.trim(),
+              purchaseDate: `${form.purchaseDate}T00:00:00`,
+              invoiceReference: form.invoiceReference.trim(),
+              paymentCardName: form.paymentCardName?.trim() || null,
+              paymentReference: form.paymentReference?.trim() || null,
+              purchaseNote: form.purchaseNote?.trim() || null,
+              items: form.items.map((item) => ({
+                productId: item.productId ? Number(item.productId) : null,
+                productName: item.productName.trim(),
+                brandName: item.brandName.trim(),
+                categoryName: item.categoryName.trim(),
+                quantity: Number(item.quantity),
+                unitPrice: Number(item.unitPrice),
+                batchNote: item.batchNote?.trim() || null,
+              })),
+              discounts: form.items.map(buildDiscountFromItem).filter(Boolean),
+            };
+            await supplyChainApi.saveProcurement(payload);
+          } else {
+            // Create mode: one procurement per shop group
+            for (const group of shopGroups) {
+              const groupItems = form.items.filter(
+                (item) => item._shopName === group.shopName && item._invoiceReference === group.invoiceReference
+              );
+              const payload = {
+                procurementReference: form.procurementReference || null,
+                shopName: group.shopName.trim(),
+                purchaseDate: `${form.purchaseDate}T00:00:00`,
+                invoiceReference: group.invoiceReference.trim(),
+                paymentCardName: group.paymentCardName?.trim() || null,
+                paymentReference: group.paymentReference?.trim() || null,
+                purchaseNote: group.purchaseNote?.trim() || null,
+                items: groupItems.map((item) => ({
+                  productId: item.productId ? Number(item.productId) : null,
+                  productName: item.productName.trim(),
+                  brandName: item.brandName.trim(),
+                  categoryName: item.categoryName.trim(),
+                  quantity: Number(item.quantity),
+                  unitPrice: Number(item.unitPrice),
+                  batchNote: item.batchNote?.trim() || null,
+                })),
+                discounts: groupItems.map(buildDiscountFromItem).filter(Boolean),
+              };
+              await supplyChainApi.saveProcurement(payload);
+            }
+          }
+          await loadPage();
+          setForm(emptyForm);
+          setDraftItem(emptyItem);
+          setCarryForwardItemId("");
+          setCarryForwardNote("");
+          setProductDrawerOpen(false);
+          setBrandModalOpen(false);
+          setDetail(null);
+          addToast("success", form.procurementId ? "UK purchase updated successfully." : "UK purchase(s) saved successfully.");
+        } catch (error) {
+          addToast("error", error.message || "Failed to save. Please try again.");
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   const procurementLookup = useMemo(() => {
@@ -682,27 +898,37 @@ export default function Procurement() {
     return map;
   }, [records]);
 
+  const alreadyCarriedForwardIds = useMemo(
+    () => new Set(form.items.map((item) => item.sourceProcurementItemId).filter(Boolean)),
+    [form.items]
+  );
+
   const remainingCarryForwardItems = useMemo(
     () => procurementDetails.flatMap((sourceDetail) => {
       const reference = procurementLookup.get(sourceDetail.procurementId)?.procurementReference ?? "Unknown";
       return (sourceDetail.items ?? []).flatMap((item) => {
         const remaining = remainingByItem[item.procurementItemId] ?? item.quantity ?? 0;
-        return remaining > 0
-          ? [{
-              ...item,
-              procurementReference: reference,
-              remaining,
-            }]
-          : [];
+        if (remaining <= 0 || alreadyCarriedForwardIds.has(item.procurementItemId)) return [];
+        return [{
+          ...item,
+          procurementReference: reference,
+          remaining,
+          _sourceShopName: sourceDetail.shopName ?? "",
+          _sourceInvoiceReference: sourceDetail.invoiceReference ?? "",
+          _sourcePaymentCardName: sourceDetail.paymentCardName ?? "",
+          _sourcePaymentReference: sourceDetail.paymentReference ?? "",
+          _sourcePurchaseNote: sourceDetail.purchaseNote ?? "",
+        }];
       });
     }),
-    [procurementDetails, procurementLookup, remainingByItem]
+    [procurementDetails, procurementLookup, remainingByItem, alreadyCarriedForwardIds]
   );
 
   const addCarryForwardItem = () => {
     const sourceItem = remainingCarryForwardItems.find((item) => String(item.procurementItemId) === String(carryForwardItemId));
     if (!sourceItem) return;
 
+    // Carry-forward items already belong to an original shop/invoice — use those details directly.
     setForm((current) => ({
       ...current,
       items: [
@@ -722,11 +948,17 @@ export default function Procurement() {
             : `${sourceItem.batchNote ? `${sourceItem.batchNote} | ` : ""}Carry forward from ${sourceItem.procurementReference}`,
           sourceProcurementId: detail?.procurementId ?? null,
           sourceProcurementItemId: sourceItem.procurementItemId,
+          _shopName: sourceItem._sourceShopName,
+          _invoiceReference: sourceItem._sourceInvoiceReference,
+          _paymentCardName: sourceItem._sourcePaymentCardName,
+          _paymentReference: sourceItem._sourcePaymentReference,
+          _purchaseNote: sourceItem._sourcePurchaseNote,
         },
       ],
     }));
     setCarryForwardItemId("");
     setCarryForwardNote("");
+    addToast("success", `"${sourceItem.productName}" (remaining ${sourceItem.remaining}) carried forward from ${sourceItem.procurementReference}.`);
   };
 
   if (loading) {
@@ -739,10 +971,16 @@ export default function Procurement() {
 
   return (
     <div className="space-y-5">
+      {/* Toast notifications */}
+      <ToastNotification toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Confirmation dialog */}
+      <ConfirmDialog dialog={confirmDialog} onCancel={() => setConfirmDialog(null)} />
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Procurement</h1>
-          <p className="mt-1 text-sm text-slate-500">Record UK purchases, view remaining undisbursed stock, and carry leftover items into new procurement entries.</p>
+          <h1 className="text-2xl font-bold text-slate-900">UK Purchase</h1>
+          <p className="mt-1 text-sm text-slate-500">Record UK purchases, view remaining undisbursed stock, and carry leftover items into new purchase entries.</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-500">
           {records.length} purchase records
@@ -751,37 +989,75 @@ export default function Procurement() {
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <ShoppingBag size={16} className="text-tenzy-teal" />
+            <h2 className="text-sm font-bold text-slate-800">{form.procurementId ? "Edit purchase" : "Shop details"}</h2>
+            {form.procurementId && (
+              <span className="ml-auto rounded-full bg-indigo-50 px-3 py-0.5 text-xs font-semibold text-indigo-600">
+                Editing existing record
+              </span>
+            )}
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label>Procurement reference</Label>
+              <Label>Purchase reference</Label>
               <Input value={form.procurementReference} onChange={(e) => setForm({ ...form, procurementReference: e.target.value })} placeholder="Auto-generated if blank" />
-            </div>
-            <div>
-              <Label>Shop / vendor</Label>
-              <Input value={form.shopName} onChange={(e) => setForm({ ...form, shopName: e.target.value })} placeholder="Boots, Tesco, Superdrug" />
             </div>
             <div>
               <Label>Purchase date</Label>
               <Input type="date" value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} />
             </div>
             <div>
-              <Label>Invoice / receipt reference</Label>
-              <Input value={form.invoiceReference} onChange={(e) => setForm({ ...form, invoiceReference: e.target.value })} placeholder="Receipt number" />
+              <Label>
+                Shop / vendor <span className="text-red-400">*</span>
+              </Label>
+              <Input
+                value={form.shopName}
+                onChange={(e) => setForm({ ...form, shopName: e.target.value })}
+                placeholder="Boots, Tesco, Superdrug"
+                className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
+                  !form.shopName.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                }`}
+              />
             </div>
             <div>
-              <Label>Payment card / issuer</Label>
+              <Label>
+                Invoice / receipt reference <span className="text-red-400">*</span>
+              </Label>
+              <Input
+                value={form.invoiceReference}
+                onChange={(e) => setForm({ ...form, invoiceReference: e.target.value })}
+                placeholder="Receipt number"
+                className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
+                  !form.invoiceReference.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                }`}
+              />
+            </div>
+            <div>
+              <Label>
+                Payment card / issuer <span className="text-red-400">*</span>
+              </Label>
               <Input
                 value={form.paymentCardName}
                 onChange={(e) => setForm({ ...form, paymentCardName: e.target.value })}
                 placeholder="Amex, Halifax, Visa, Mastercard"
+                className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
+                  !form.paymentCardName.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                }`}
               />
             </div>
             <div>
-              <Label>Payment reference</Label>
+              <Label>
+                Payment reference <span className="text-red-400">*</span>
+              </Label>
               <Input
                 value={form.paymentReference}
                 onChange={(e) => setForm({ ...form, paymentReference: e.target.value })}
                 placeholder="Card ref, bank ref, or transaction id"
+                className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
+                  !form.paymentReference.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                }`}
               />
             </div>
           </div>
@@ -791,11 +1067,37 @@ export default function Procurement() {
             <textarea
               value={form.purchaseNote}
               onChange={(e) => setForm({ ...form, purchaseNote: e.target.value })}
-              rows={3}
+              rows={2}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
               placeholder="Batch note, shelf offer note, or supplier comment"
             />
           </div>
+
+          {/* Clear shop details button — shown when shop header is filled and not in edit mode */}
+          {!form.procurementId && shopHeaderFilled && (
+            <div className="mt-4 flex items-center justify-between rounded-2xl bg-teal-50 border border-teal-200 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-teal-800">Shop: {form.shopName}</p>
+                <p className="text-xs text-teal-600 mt-0.5">After adding all items for this shop, click "Clear shop" to start the next shop.</p>
+              </div>
+              <button
+                onClick={clearShopHeader}
+                className="ml-4 shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-teal-300 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition"
+              >
+                <X size={13} /> Clear shop
+              </button>
+            </div>
+          )}
+
+          {/* Warning banner when shop header is incomplete */}
+          {!shopHeaderFilled && (
+            <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
+              <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-500" />
+              <p className="text-xs text-amber-700">
+                <strong>Fill in the required fields above</strong> — Shop name, Invoice reference, Payment card, and Payment reference — before adding items.
+              </p>
+            </div>
+          )}
 
           {remainingCarryForwardItems.length > 0 && (
             <div className="mt-6 rounded-3xl bg-amber-50 p-4">
@@ -820,15 +1122,19 @@ export default function Procurement() {
             </div>
           )}
 
-          <div className="mt-6 rounded-3xl bg-slate-50 p-4">
+          {/* Add item section */}
+          <div className={`mt-6 rounded-3xl p-4 ${shopHeaderFilled ? "bg-slate-50" : "bg-slate-50/60 opacity-80"}`}>
             <div className="flex items-center gap-2">
               <PackagePlus size={16} className="text-tenzy-teal" />
-              <h2 className="text-sm font-bold text-slate-800">Add procurement item</h2>
+              <h2 className="text-sm font-bold text-slate-800">Add purchase item</h2>
+              {!shopHeaderFilled && (
+                <span className="ml-auto text-xs text-amber-600 font-medium">Fill shop details first</span>
+              )}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <div>
                 <Label>Existing product</Label>
-                <Select value={draftItem.productId} onChange={(e) => onProductChange(e.target.value)}>
+                <Select value={draftItem.productId} onChange={(e) => onProductChange(e.target.value)} disabled={!shopHeaderFilled}>
                   <option value="">Select product</option>
                   {products.map((product) => (
                     <option key={normalizeProductId(product)} value={normalizeProductId(product)}>
@@ -846,12 +1152,14 @@ export default function Procurement() {
                     setDraftItem({ ...draftItem, productId: "", productName: value });
                   }}
                   placeholder="Select an existing product or type a new name"
+                  disabled={!shopHeaderFilled}
                 />
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={openProductDrawer}
-                    className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-tenzy-teal px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-600"
+                    disabled={!shopHeaderFilled}
+                    className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-tenzy-teal px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Create New Product
                   </button>
@@ -859,7 +1167,7 @@ export default function Procurement() {
               </div>
               <div>
                 <Label>Brand</Label>
-                <Select value={draftItem.brandId} onChange={(e) => onBrandChange(e.target.value)}>
+                <Select value={draftItem.brandId} onChange={(e) => onBrandChange(e.target.value)} disabled={!shopHeaderFilled}>
                   <option value="">Select brand</option>
                   {brands.map((brand) => (
                     <option key={normalizeBrandId(brand)} value={normalizeBrandId(brand)}>
@@ -871,7 +1179,8 @@ export default function Procurement() {
                   <button
                     type="button"
                     onClick={openBrandModal}
-                    className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-tenzy-orange px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500"
+                    disabled={!shopHeaderFilled}
+                    className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-tenzy-orange px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Create New Brand
                   </button>
@@ -879,7 +1188,7 @@ export default function Procurement() {
               </div>
               <div>
                 <Label>Category</Label>
-                <Select value={draftItem.categoryId} onChange={(e) => onCategoryChange(e.target.value)}>
+                <Select value={draftItem.categoryId} onChange={(e) => onCategoryChange(e.target.value)} disabled={!shopHeaderFilled}>
                   <option value="">Select category</option>
                   {categories.map((category) => (
                     <option key={normalizeCategoryId(category)} value={normalizeCategoryId(category)}>
@@ -890,16 +1199,17 @@ export default function Procurement() {
               </div>
               <div>
                 <Label>Quantity</Label>
-                <Input type="number" min="1" value={draftItem.quantity} onChange={(e) => setDraftItem({ ...draftItem, quantity: e.target.value })} />
+                <Input type="number" min="1" value={draftItem.quantity} onChange={(e) => setDraftItem({ ...draftItem, quantity: e.target.value })} disabled={!shopHeaderFilled} />
               </div>
               <div>
                 <Label>Unit price (GBP)</Label>
-                <Input type="number" step="0.01" min="0" value={draftItem.unitPrice} onChange={(e) => setDraftItem({ ...draftItem, unitPrice: e.target.value })} />
+                <Input type="number" step="0.01" min="0" value={draftItem.unitPrice} onChange={(e) => setDraftItem({ ...draftItem, unitPrice: e.target.value })} disabled={!shopHeaderFilled} />
               </div>
             </div>
+
             <div className="mt-3">
               <Label>Batch / note</Label>
-              <Input value={draftItem.batchNote} onChange={(e) => setDraftItem({ ...draftItem, batchNote: e.target.value })} />
+              <Input value={draftItem.batchNote} onChange={(e) => setDraftItem({ ...draftItem, batchNote: e.target.value })} disabled={!shopHeaderFilled} />
             </div>
 
             <div className="mt-5 rounded-2xl bg-white p-4">
@@ -910,7 +1220,7 @@ export default function Procurement() {
               <div className="mt-3 grid gap-3 md:grid-cols-3">
                 <div>
                   <Label>Discount type</Label>
-                  <Select value={draftItem.discountType} onChange={(e) => setDraftItem({ ...draftItem, discountType: e.target.value, discountValue: "", buyQuantity: "", payQuantity: "" })}>
+                  <Select value={draftItem.discountType} onChange={(e) => setDraftItem({ ...draftItem, discountType: e.target.value, discountValue: "", buyQuantity: "", payQuantity: "" })} disabled={!shopHeaderFilled}>
                     <option value="none">No discount</option>
                     <option value="percentage">Percentage</option>
                     <option value="fixed_amount">Fixed amount</option>
@@ -933,12 +1243,12 @@ export default function Procurement() {
                     step="0.01"
                     value={draftItem.discountValue}
                     onChange={(e) => setDraftItem({ ...draftItem, discountValue: e.target.value })}
-                    disabled={draftItem.discountType === "none" || draftItem.discountType === "buy_x_pay_y"}
+                    disabled={!shopHeaderFilled || draftItem.discountType === "none" || draftItem.discountType === "buy_x_pay_y"}
                   />
                 </div>
                 <div>
                   <Label>Discount note</Label>
-                  <Input value={draftItem.discountNote} onChange={(e) => setDraftItem({ ...draftItem, discountNote: e.target.value })} placeholder="Optional" />
+                  <Input value={draftItem.discountNote} onChange={(e) => setDraftItem({ ...draftItem, discountNote: e.target.value })} placeholder="Optional" disabled={!shopHeaderFilled} />
                 </div>
                 <div>
                   <Label>{draftItem.discountType === "buy_x_pay_y" ? "Buy quantity" : "Trigger quantity"}</Label>
@@ -947,7 +1257,7 @@ export default function Procurement() {
                     min="0"
                     value={draftItem.buyQuantity}
                     onChange={(e) => setDraftItem({ ...draftItem, buyQuantity: e.target.value })}
-                    disabled={!["buy_x_get_amount_off", "buy_x_pay_y"].includes(draftItem.discountType)}
+                    disabled={!shopHeaderFilled || !["buy_x_get_amount_off", "buy_x_pay_y"].includes(draftItem.discountType)}
                   />
                 </div>
                 <div>
@@ -957,7 +1267,7 @@ export default function Procurement() {
                     min="0"
                     value={draftItem.payQuantity}
                     onChange={(e) => setDraftItem({ ...draftItem, payQuantity: e.target.value })}
-                    disabled={draftItem.discountType !== "buy_x_pay_y"}
+                    disabled={!shopHeaderFilled || draftItem.discountType !== "buy_x_pay_y"}
                     placeholder={draftItem.discountType === "buy_x_pay_y" ? "For example: 2" : "Choose Buy X Pay Y first"}
                   />
                 </div>
@@ -988,47 +1298,74 @@ export default function Procurement() {
             </div>
 
             <div className="mt-5 flex justify-end">
-              <button onClick={addItem} className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-              <Plus size={15} /> Add item
+              <button
+                onClick={addItem}
+                disabled={!shopHeaderFilled}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus size={15} /> Add item
               </button>
             </div>
           </div>
         </div>
 
+        {/* Right column: summary + draft items */}
         <div className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900">{form.procurementId ? "Edit procurement" : "Draft summary"}</h2>
+            <h2 className="text-lg font-bold text-slate-900">{form.procurementId ? "Edit UK purchase" : "Draft summary"}</h2>
             <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="flex items-center justify-between"><span>Shops</span><strong>{itemsByShop.length || "—"}</strong></div>
               <div className="flex items-center justify-between"><span>Items</span><strong>{form.items.length}</strong></div>
               <div className="flex items-center justify-between"><span>Gross value</span><strong>{money(totals.gross)}</strong></div>
               <div className="flex items-center justify-between"><span>Estimated discounts</span><strong>{money(totals.estimatedDiscount)}</strong></div>
               <div className="flex items-center justify-between"><span>Estimated net</span><strong>{money(totals.gross - totals.estimatedDiscount)}</strong></div>
             </div>
-            <button onClick={save} disabled={saving} className="mt-5 w-full rounded-2xl bg-tenzy-teal px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
-              {saving ? "Saving procurement..." : form.procurementId ? "Update procurement" : "Save procurement"}
+            {form.items.length === 0 && (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-xs text-amber-700">No items added yet. Fill in the shop details and add items to save.</p>
+              </div>
+            )}
+            <button
+              onClick={save}
+              disabled={saving || form.items.length === 0}
+              className="mt-5 w-full rounded-2xl bg-tenzy-teal px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {saving ? "Saving..." : form.procurementId ? "Update UK purchase" : "Save UK purchase"}
             </button>
           </div>
 
+          {/* Draft items grouped by shop */}
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900">Draft items</h2>
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-4">
               {form.items.length === 0 && <p className="text-sm text-slate-400">No items added yet.</p>}
-              {form.items.map((item, index) => (
-                <div key={`${item.productName}-${index}`} className="rounded-2xl bg-slate-50 p-3 text-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-800">{item.productName}</p>
-                      <p className="text-xs text-slate-500">{item.brandName} · {item.categoryName}</p>
-                      <p className="mt-1 text-xs text-slate-500">Product ID: {item.productId}</p>
-                      <p className="mt-1 text-xs text-slate-500">{discountSummary(item)}</p>
-                      {item.batchNote && <p className="mt-1 text-xs text-slate-500">{item.batchNote}</p>}
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="text-xs font-semibold text-slate-600">{item.quantity} x {money(item.unitPrice)}</span>
-                      <button onClick={() => removeDraftItem(index)} className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-2 py-1 text-xs font-semibold text-red-500">
-                        <Trash2 size={12} /> Remove
-                      </button>
-                    </div>
+              {itemsByShop.map((group, groupIdx) => (
+                <div key={groupIdx}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShoppingBag size={13} className="text-tenzy-teal shrink-0" />
+                    <p className="text-xs font-bold text-slate-700 truncate">{group.shopName}</p>
+                    <span className="ml-auto shrink-0 text-[10px] text-slate-400 font-medium">{group.invoiceReference}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {group.items.map((item) => (
+                      <div key={`${item.productName}-${item._index}`} className="rounded-2xl bg-slate-50 p-3 text-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-800">{item.productName}</p>
+                            <p className="text-xs text-slate-500">{item.brandName} · {item.categoryName}</p>
+                            <p className="mt-1 text-xs text-slate-500">Product ID: {item.productId}</p>
+                            <p className="mt-1 text-xs text-slate-500">{discountSummary(item)}</p>
+                            {item.batchNote && <p className="mt-1 text-xs text-slate-500">{item.batchNote}</p>}
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="text-xs font-semibold text-slate-600">{item.quantity} x {money(item.unitPrice)}</span>
+                            <button onClick={() => removeDraftItem(item._index)} className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-2 py-1 text-xs font-semibold text-red-500">
+                              <Trash2 size={12} /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -1037,10 +1374,11 @@ export default function Procurement() {
         </div>
       </div>
 
+      {/* Saved records table */}
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2">
           <Receipt size={16} className="text-tenzy-teal" />
-          <h2 className="text-lg font-bold text-slate-900">Saved procurements</h2>
+          <h2 className="text-lg font-bold text-slate-900">Saved UK purchases</h2>
         </div>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -1103,6 +1441,7 @@ export default function Procurement() {
         </div>
       )}
 
+      {/* Brand modal */}
       {brandModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setBrandModalOpen(false)} />
@@ -1151,6 +1490,7 @@ export default function Procurement() {
         </div>
       )}
 
+      {/* Product drawer */}
       {productDrawerOpen && (
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setProductDrawerOpen(false)} />

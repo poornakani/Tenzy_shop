@@ -4,14 +4,14 @@ import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users,
   BarChart2, LogOut, Menu, X, Bell, ChevronRight,
   Settings, Store, Star, PackagePlus, Database, Percent,
-  BadgeCheck, Layers,
+  BadgeCheck, Layers, Shield,
 } from "lucide-react";
 
 const NAV = [
   { to: "/admin",              label: "Dashboard",   icon: LayoutDashboard, end: true },
   { to: "/admin/orders",       label: "Orders",      icon: ShoppingCart },
   { to: "/admin/products",     label: "Products",    icon: Package },
-  { to: "/admin/procurement",  label: "Procurement", icon: PackagePlus },
+  { to: "/admin/procurement",  label: "UK Purchase", icon: PackagePlus },
   { to: "/admin/arrival",      label: "Arrival",     icon: BadgeCheck },
   { to: "/admin/pricing",      label: "Pricing",     icon: Percent },
   { to: "/admin/dispatch",     label: "Dispatch",    icon: Truck },
@@ -19,6 +19,7 @@ const NAV = [
   { to: "/admin/customers",    label: "Customers",   icon: Users },
   { to: "/admin/reviews",      label: "Reviews",     icon: Star },
   { to: "/admin/reports",      label: "Reports",     icon: BarChart2 },
+  { to: "/admin/audit-log",    label: "Audit Log",   icon: Shield },
   { to: "/admin/reference",    label: "Reference",   icon: Database },
 ];
 

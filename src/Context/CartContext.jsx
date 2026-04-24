@@ -43,7 +43,20 @@ export const CartProvider = ({ children }) => {
       if (idx >= 0) {
         const next = [...prev];
         const updatedQty = clamp(next[idx].qty + quantity, 1, maxQty);
-        next[idx] = { ...next[idx], qty: updatedQty };
+        next[idx] = {
+          ...next[idx],
+          name: product.name,
+          image: product.image,
+          price: product.price,
+          discountedPrice: product.discountedPrice ?? product.price,
+          discountPercent: product.discountPercent ?? 0,
+          stockCount: product.stockCount ?? next[idx].stockCount ?? 0,
+          outOfStock: product.outOfStock ?? false,
+          brand: product.brand,
+          category: product.category,
+          sku: product.sku,
+          qty: updatedQty,
+        };
         return next;
       }
 

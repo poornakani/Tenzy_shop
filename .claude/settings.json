@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet clean:*)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -i /c/Users/poorn/source/repos/TencyBackendApi/Database/migrations/015_fix_report_stored_procedures.sql -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -i 'C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\015_fix_report_stored_procedures.sql' -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q 'EXEC dbo.spSupplyReport_Procurement; EXEC dbo.spSupplyReport_Dispatch;' -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q 'SELECT TOP 3 ProcurementItemId, ProcurementReference, UnitPrice, GrossTotal, DiscountTotal, NetUnitCost FROM dbo.spSupplyReport_Procurement\\(\\) -- just check columns' -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q 'SELECT TOP 2 DispatchReference, ProcurementItemId, UnitPrice, GrossTotal, DiscountTotal, DiscountDescription, NetUnitCost, TotalShipmentCharge FROM \\(EXEC dbo.spSupplyReport_Dispatch\\) t' -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q 'EXEC dbo.spSupplyReport_Procurement; SELECT '\\\\''---DISPATCH---'\\\\''; EXEC dbo.spSupplyReport_Dispatch;' -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q 'SET ROWCOUNT 3; EXEC dbo.spSupplyReport_Dispatch;' -b -W)",
+      "Read(//c/Users/poorn/Tenzy_shop/**)",
+      "Bash(dotnet publish:*)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -i 'C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\016_procurement_getbyid_dispatched_qty.sql' -b)",
+      "Bash('/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/sqlcmd.exe' -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q 'EXEC dbo.spSupplyProcurement_GetById @ProcurementId = 1;' -b)",
+      "Bash(dotnet run:*)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SQL Server\\\\Client SDK\\\\ODBC\\\\170\\\\Tools\\\\Binn\\\\SQLCMD.EXE\" -S mssqluk20.prosql.net -U tenzyuk_user -P \"Poorn@1987\" -d tenzyuk_production -i \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\017_dispatch_item_tax.sql\")",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SQL Server\\\\Client SDK\\\\ODBC\\\\170\\\\Tools\\\\Binn\\\\SQLCMD.EXE\" -S mssqluk20.prosql.net -U tenzyuk_production -P \"Poorn@1987\" -d tenzyuk_production -i \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\017_dispatch_item_tax.sql\")",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SQL Server\\\\Client SDK\\\\ODBC\\\\170\\\\Tools\\\\Binn\\\\SQLCMD.EXE\" -S mssqluk20.prosql.net -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -d tenzyuk_production -i \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\017_dispatch_item_tax.sql\")",
+      "Read(//c/Users/poorn/source/repos/TencyBackendApi/**)",
+      "Bash(sqlcmd -?)",
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -i \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\018_fix_storefront_getall_pricing_join.sql\")",
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Category' ORDER BY ORDINAL_POSITION;\")",
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"SELECT OBJECT_ID\\('dbo.spProductCatalog_GetAll', 'P'\\) AS SpExists;\")",
+      "Bash(sqlcmd -S mssqluk20.prosql.net -d tenzyuk_production -U 17061994_tenzyukprouser -P fhnd6ad4gtd@ -Q ':*)",
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"SELECT OBJECT_ID\\('dbo.spProductCatalog_GetAll', 'P'\\) AS SpExists; EXEC dbo.spProductCatalog_GetAll;\")",
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"EXEC dbo.spProductCatalog_GetAllAdmin;\")",
+      "Bash(npm run:*)",
+      "Bash(git config:*)",
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"SELECT OBJECT_ID\\('dbo.spProductCatalog_GetAll','P'\\) AS GetAll, OBJECT_ID\\('dbo.spProductCatalog_GetAllAdmin','P'\\) AS GetAllAdmin, OBJECT_ID\\('dbo.spProductCatalog_GetById','P'\\) AS GetById;\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\Database\\migrations",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Models\\SupplyChainModels",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\Products\\ProductCatalog",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Models\\ProductsModels",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TencyBackendApi\\Middleware",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TencyBackendApi"
+    ]
+  }
+}

@@ -82,6 +82,7 @@ function normalizeProd(raw, lookups = {}) {
     stockCount:      stock,
     outOfStock:      stock === 0,
     image:           primaryImage,
+    size:            raw.size ?? raw.Size ?? "",
     category:        raw.categoryName
       ?? raw.CategoryName
       ?? raw.categoryType
@@ -95,7 +96,31 @@ function normalizeProd(raw, lookups = {}) {
       ?? lookups.brandNamesById?.get(raw.brandId ?? raw.BrandId)
       ?? "",
     brandId:         raw.brandId      ?? raw.BrandId      ?? 0,
+    paymentProvider: raw.paymentProvider ?? raw.PaymentProvider ?? null,
+    minInstallments: raw.minInstallments ?? raw.MinInstallments ?? null,
   };
+}
+
+function dedupeProducts(products) {
+  const byId = new Map();
+
+  products.forEach((product) => {
+    const existing = byId.get(product.id);
+    if (!existing) {
+      byId.set(product.id, product);
+      return;
+    }
+
+    const preferred = (
+      (product.inSale && !existing.inSale)
+      || (!!product.image && !existing.image)
+      || ((product.stockCount ?? 0) > (existing.stockCount ?? 0))
+    ) ? product : existing;
+
+    byId.set(product.id, preferred);
+  });
+
+  return [...byId.values()];
 }
 
 /* ══════════════════════════════════════════════════════════════════ */
@@ -144,12 +169,13 @@ const BestSelling = () => {
           return map;
         }, new Map());
 
-        const saleProducts = products
-          .map((product) => normalizeProd(product, {
+        const saleProducts = dedupeProducts(
+          products.map((product) => normalizeProd(product, {
             brandNamesById,
             categoryNamesById,
             imagesByProductId,
           }))
+        )
           .filter((product) => product.inSale);
 
         setAllProducts(saleProducts);
@@ -342,21 +368,43 @@ const BestSelling = () => {
                   )}
 
                   {/* Price row */}
-                  <div className="flex items-baseline gap-2 mt-3">
-                    <span className="text-sm font-bold text-zinc-900">
-                      LKR {formatLKR(p.discountedPrice)}
-                    </span>
-                    {p.inSale && (
+                  <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5">
+                    {p.discountedPrice > 0 ? (
                       <>
-                        <span className="text-xs text-zinc-400 line-through">
-                          LKR {formatLKR(p.price)}
-                        </span>
-                        <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
-                          -{p.discountPercent}%
-                        </span>
+                        <div className="flex items-end justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Price</p>
+                            <span className="text-sm font-bold text-zinc-900">
+                              LKR {formatLKR(p.discountedPrice)}
+                            </span>
+                          </div>
+                          {p.discountPercent > 0 && (
+                            <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
+                              -{p.discountPercent}%
+                            </span>
+                          )}
+                        </div>
+                        {p.discountPercent > 0 && (
+                          <p className="mt-1 text-xs text-zinc-400 line-through">
+                            LKR {formatLKR(p.price)}
+                          </p>
+                        )}
                       </>
+                    ) : (
+                      <p className="text-[10px] text-zinc-400 italic">Price not available</p>
                     )}
                   </div>
+
+                  {(p.paymentProvider || p.minInstallments) && (
+                    <div className="mt-2 rounded-2xl border border-zinc-100 bg-white px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Payment</p>
+                      <p className="mt-1 text-[11px] text-zinc-600">
+                        {p.paymentProvider ? <span className="font-semibold text-zinc-800">{p.paymentProvider}</span> : "Installments available"}
+                        {p.paymentProvider && p.minInstallments ? " • " : ""}
+                        {p.minInstallments ? `${p.minInstallments}+ installments` : ""}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Stock bar */}
                   <div className="mt-2.5">

@@ -95,8 +95,8 @@ function normalizeProduct(raw, lookups = {}) {
     faqs:            Array.isArray(raw.faqs) && raw.faqs.length
       ? raw.faqs
       : (Array.isArray(lookups.faqs) ? lookups.faqs : []),
-    paymentProvider: raw.paymentProvider ?? null,
-    minInstallments: raw.minInstallments ?? null,
+    paymentProvider: raw.paymentProvider ?? lookups.paymentProvider ?? null,
+    minInstallments: raw.minInstallments ?? lookups.minInstallments ?? null,
   };
 }
 
@@ -136,7 +136,8 @@ const ProductDetails = () => {
       categoriesApi.getAll(),
       productImageApi.getByProduct(productId),
       productFaqApi.getByProduct(productId),
-    ]).then(([prodR, revR, brandsR, categoriesR, imagesR, faqsR]) => {
+      productsApi.getPaymentOptions(productId).catch(() => []),
+    ]).then(([prodR, revR, brandsR, categoriesR, imagesR, faqsR, payOptsR]) => {
       if (prodR.status === "fulfilled" && prodR.value) {
         const raw  = prodR.value;
         const brands = Array.isArray(brandsR.value) ? brandsR.value : [];
@@ -154,11 +155,19 @@ const ProductDetails = () => {
           (category) => (category.categoryId ?? category.CategoryId ?? category.catagoryID) === (raw.categoryId ?? raw.CategoryId)
         )?.CategoryType;
 
+        // Build payment info — getPaymentOptions now returns PaymentType name directly
+        const payOpts = Array.isArray(payOptsR.value) ? payOptsR.value : [];
+        const firstOpt = payOpts.find((o) => (o.paymentTypeId ?? o.PaymentTypeId) > 0);
+        const paymentProvider = raw.paymentProvider ?? firstOpt?.paymentType ?? firstOpt?.PaymentType ?? null;
+        const minInstallments = raw.minInstallments ?? firstOpt?.instalment ?? firstOpt?.Instalment ?? null;
+
         setProduct(normalizeProduct(raw, {
           brandName,
           categoryName,
           images,
           faqs,
+          paymentProvider,
+          minInstallments,
         }));
       }
       if (revR.status === "fulfilled") {
@@ -388,22 +397,28 @@ const ProductDetails = () => {
 
             {/* Price */}
             <div className="mt-5 rounded-3xl border border-slate-200 bg-linear-to-br from-teal-50 via-white to-orange-50 p-4">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-sm text-slate-600">Price</p>
-                  <p className="text-2xl font-semibold text-slate-900">
-                    LKR {formatLKR(product.discountedPrice)}
-                  </p>
+              {product.discountedPrice > 0 ? (
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-slate-600">Price</p>
+                    <p className="text-2xl font-semibold text-slate-900">
+                      LKR {formatLKR(product.discountedPrice)}
+                    </p>
+                  </div>
+                  {product.discountPercent > 0 && (
+                    <div className="text-right">
+                      <p className="text-sm text-slate-500 line-through">
+                        LKR {formatLKR(product.price)}
+                      </p>
+                      <p className="text-sm font-semibold text-tenzy-orange">
+                        -{product.discountPercent}%
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-slate-500 line-through">
-                    LKR {formatLKR(product.price)}
-                  </p>
-                  <p className="text-sm font-semibold text-tenzy-orange">
-                    -{product.discountPercent}%
-                  </p>
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-slate-500 italic">Price not yet available</p>
+              )}
             </div>
 
             {/* Key details */}
@@ -429,11 +444,15 @@ const ProductDetails = () => {
                 </p>
               </div>
 
-              {product.minInstallments && product.paymentProvider && (
+              {(product.minInstallments || product.paymentProvider) && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                  <p className="text-xs text-slate-500">Installments</p>
+                  <p className="text-xs text-slate-500">Payment</p>
                   <p className="text-sm font-semibold text-slate-900">
-                    {product.minInstallments}+ with {product.paymentProvider}
+                    {product.paymentProvider
+                      ? product.minInstallments
+                        ? `${product.minInstallments}+ with ${product.paymentProvider}`
+                        : product.paymentProvider
+                      : `${product.minInstallments}+ installments`}
                   </p>
                 </div>
               )}

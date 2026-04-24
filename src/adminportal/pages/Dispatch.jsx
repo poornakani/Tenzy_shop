@@ -49,6 +49,7 @@ export default function Dispatch() {
   const [loading, setLoading] = useState(true);
   const [savingDispatch, setSavingDispatch] = useState(false);
   const [savingCharge, setSavingCharge] = useState(false);
+  const [fullyDispatchedIds, setFullyDispatchedIds] = useState(new Set());
 
   useEffect(() => {
     Promise.allSettled([
@@ -65,25 +66,89 @@ export default function Dispatch() {
     supplyChainApi.getProcurementById(selectedProcurementId).then(setSelectedProcurement);
   }, [selectedProcurementId]);
 
+  // After loading a procurement, check if all items are already dispatched.
+  // If so, hide it from the dropdown and clear the selection.
+  useEffect(() => {
+    if (!selectedProcurement) return;
+    const allGone = selectedProcurement.items?.every((item) => {
+      const alreadyDispatched = item.quantityAlreadyDispatched ?? 0;
+      return (item.quantity || 0) - alreadyDispatched <= 0;
+    });
+    if (allGone && selectedProcurement.items?.length > 0) {
+      setFullyDispatchedIds((prev) => new Set([...prev, selectedProcurement.procurementId]));
+      setSelectedProcurementId("");
+      setSelectedProcurement(null);
+    }
+  }, [selectedProcurement]);
+
   const shipmentTotals = useMemo(() => ({
     quantity: dispatchForm.items.reduce((sum, item) => sum + (Number(item.quantityDispatched) || 0), 0),
   }), [dispatchForm.items]);
 
-  const addProcurementItem = (item) => {
-    if (dispatchForm.items.some((entry) => entry.procurementItemId === item.procurementItemId)) return;
-    setDispatchForm((current) => ({
-      ...current,
-      items: [
-        ...current.items,
-        {
-          procurementItemId: item.procurementItemId,
-          productName: item.productName,
-          brandName: item.brandName,
-          quantityDispatched: item.quantity,
-          netUnitCost: item.netUnitCost,
-        },
-      ],
-    }));
+  // Items available to add:
+  // - items fully dispatched in previous shipments are always hidden
+  // - partial items (in draft but dispatching fewer than available) shown at top
+  // - fresh items (not in current draft) shown after partial items
+  const availableItems = useMemo(() => {
+    if (!selectedProcurement?.items) return [];
+
+    const partial = [];
+    const fresh = [];
+
+    selectedProcurement.items.forEach((item) => {
+      const alreadyDispatched = item.quantityAlreadyDispatched ?? 0;
+      const availableQty = (item.quantity || 0) - alreadyDispatched;
+
+      // Hide completely if all units already dispatched in previous shipments
+      if (availableQty <= 0) return;
+
+      const inDraft = dispatchForm.items.find((d) => d.procurementItemId === item.procurementItemId);
+      if (!inDraft) {
+        fresh.push({ ...item, _remaining: availableQty, _isPartial: false });
+      } else {
+        const dispatching = Number(inDraft.quantityDispatched) || 0;
+        const remaining = availableQty - dispatching;
+        if (remaining > 0) {
+          partial.push({ ...item, _remaining: remaining, _dispatching: dispatching, _isPartial: true });
+        }
+        // fully allocated in draft → excluded from list
+      }
+    });
+
+    return [...partial, ...fresh];
+  }, [selectedProcurement, dispatchForm.items]);
+
+  // Add a fresh item, or fill up a partial item's dispatched qty to its full available amount
+  const addOrFillItem = (item) => {
+    const availableQty = (item.quantity || 0) - (item.quantityAlreadyDispatched ?? 0);
+    const inDraft = dispatchForm.items.find((d) => d.procurementItemId === item.procurementItemId);
+
+    if (inDraft) {
+      // Already in draft but partial — set qty to the full available amount
+      setDispatchForm((current) => ({
+        ...current,
+        items: current.items.map((d) =>
+          d.procurementItemId === item.procurementItemId
+            ? { ...d, quantityDispatched: availableQty }
+            : d
+        ),
+      }));
+    } else {
+      setDispatchForm((current) => ({
+        ...current,
+        items: [
+          ...current.items,
+          {
+            procurementItemId: item.procurementItemId,
+            productName: item.productName,
+            brandName: item.brandName,
+            quantityDispatched: availableQty,
+            netUnitCost: item.netUnitCost,
+            taxAmount: "",
+          },
+        ],
+      }));
+    }
   };
 
   const saveDispatch = async () => {
@@ -96,6 +161,7 @@ export default function Dispatch() {
         items: dispatchForm.items.map((item) => ({
           procurementItemId: item.procurementItemId,
           quantityDispatched: Number(item.quantityDispatched),
+          taxAmount: Number(item.taxAmount) || 0,
         })),
       });
       const refreshed = await supplyChainApi.getDispatches();
@@ -182,28 +248,49 @@ export default function Dispatch() {
           </div>
 
           <div className="mt-6 rounded-3xl bg-slate-50 p-4">
-            <h2 className="text-sm font-bold text-slate-800">Select procurement source</h2>
+            <h2 className="text-sm font-bold text-slate-800">Select UK purchase source</h2>
             <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
               <Select value={selectedProcurementId} onChange={(e) => setSelectedProcurementId(e.target.value)}>
-                <option value="">Select procurement</option>
-                {procurements.map((procurement) => (
-                  <option key={procurement.procurementId} value={procurement.procurementId}>
-                    {procurement.procurementReference} · {procurement.shopName}
-                  </option>
-                ))}
+                <option value="">Select UK purchase</option>
+                {procurements
+                  .filter((p) => !fullyDispatchedIds.has(p.procurementId))
+                  .map((procurement) => (
+                    <option key={procurement.procurementId} value={procurement.procurementId}>
+                      {procurement.procurementReference} · {procurement.shopName}
+                    </option>
+                  ))}
               </Select>
               <div className="rounded-2xl bg-white px-4 py-2 text-sm text-slate-500">{shipmentTotals.quantity} units selected</div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {selectedProcurement?.items?.map((item) => (
-                <div key={item.procurementItemId} className="flex items-center justify-between rounded-2xl bg-white p-3 text-sm">
+            <div className="mt-4 space-y-2">
+              {availableItems.length === 0 && selectedProcurement && (
+                <p className="text-xs text-slate-400 text-center py-3">All items from this purchase have been dispatched or added to this shipment.</p>
+              )}
+              {availableItems.map((item) => (
+                <div
+                  key={item.procurementItemId}
+                  className={`flex items-center justify-between rounded-2xl p-3 text-sm ${
+                    item._isPartial ? "bg-amber-50 border border-amber-200" : "bg-white"
+                  }`}
+                >
                   <div>
                     <p className="font-semibold text-slate-800">{item.productName}</p>
-                    <p className="text-xs text-slate-500">{item.brandName} · {item.quantity} available · {money(item.netUnitCost)} unit net</p>
+                    {item._isPartial ? (
+                      <p className="text-xs text-amber-700">
+                        {item._remaining} remaining · dispatching {item._dispatching} of {item._remaining + item._dispatching} · {money(item.netUnitCost)} unit net
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500">{item._remaining} available · {money(item.netUnitCost)} unit net</p>
+                    )}
                   </div>
-                  <button onClick={() => addProcurementItem(item)} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
-                    Add
+                  <button
+                    onClick={() => addOrFillItem(item)}
+                    className={`ml-3 shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold text-white ${
+                      item._isPartial ? "bg-amber-500 hover:bg-amber-600" : "bg-slate-900 hover:bg-slate-700"
+                    }`}
+                  >
+                    {item._isPartial ? `Add remaining ${item._remaining}` : "Add"}
                   </button>
                 </div>
               ))}
@@ -214,32 +301,77 @@ export default function Dispatch() {
             <h2 className="text-sm font-bold text-slate-800">Shipment items</h2>
             <div className="mt-3 space-y-3">
               {dispatchForm.items.length === 0 && <p className="text-sm text-slate-400">No items selected yet.</p>}
-              {dispatchForm.items.map((item, index) => (
-                <div key={item.procurementItemId} className="grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-[1fr_120px_auto] md:items-center">
-                  <div>
-                    <p className="font-semibold text-slate-800">{item.productName}</p>
-                    <p className="text-xs text-slate-500">{item.brandName} · net {money(item.netUnitCost)}</p>
+              {dispatchForm.items.map((item, index) => {
+                const source = selectedProcurement?.items?.find((s) => s.procurementItemId === item.procurementItemId);
+                const maxQty = source ? (source.quantity - (source.quantityAlreadyDispatched ?? 0)) : null;
+                const dispatching = Number(item.quantityDispatched) || 0;
+                const overLimit = maxQty !== null && dispatching > maxQty;
+
+                return (
+                  <div key={item.procurementItemId} className={`rounded-2xl p-4 ${overLimit ? "bg-red-50 border border-red-200" : "bg-slate-50"}`}>
+                    <div className="grid gap-3 md:grid-cols-[1fr_120px_120px_auto] md:items-center">
+                      <div>
+                        <p className="font-semibold text-slate-800">{item.productName}</p>
+                        <p className="text-xs text-slate-500">
+                          {item.brandName} · net {money(item.netUnitCost)}
+                          {maxQty !== null && (
+                            <span className={`ml-1 ${overLimit ? "text-red-500 font-semibold" : "text-slate-400"}`}>
+                              · max {maxQty}
+                            </span>
+                          )}
+                        </p>
+                        {overLimit && (
+                          <p className="mt-0.5 text-xs font-semibold text-red-500">Exceeds available quantity ({maxQty})</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="mb-1 text-xs text-slate-400">Qty</p>
+                        <Input
+                          type="number"
+                          min="1"
+                          max={maxQty ?? undefined}
+                          value={item.quantityDispatched}
+                          onChange={(e) => {
+                            const quantityDispatched = e.target.value;
+                            setDispatchForm((current) => ({
+                              ...current,
+                              items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, quantityDispatched } : entry),
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <p className="mb-1 text-xs text-slate-400">Tax £ <span className="text-slate-300">(optional)</span></p>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={item.taxAmount}
+                          onChange={(e) => {
+                            const taxAmount = e.target.value;
+                            setDispatchForm((current) => ({
+                              ...current,
+                              items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, taxAmount } : entry),
+                            }));
+                          }}
+                        />
+                      </div>
+                      <button
+                        onClick={() => setDispatchForm((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }))}
+                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-red-200 hover:text-red-500 transition self-end"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    {Number(item.taxAmount) > 0 && (
+                      <p className="mt-2 text-xs text-amber-700 font-semibold">
+                        Tax: {money(item.taxAmount)} · Total item cost: {money((Number(item.quantityDispatched) || 0) * item.netUnitCost + Number(item.taxAmount))}
+                      </p>
+                    )}
                   </div>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={item.quantityDispatched}
-                    onChange={(e) => {
-                      const quantityDispatched = e.target.value;
-                      setDispatchForm((current) => ({
-                        ...current,
-                        items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, quantityDispatched } : entry),
-                      }));
-                    }}
-                  />
-                  <button
-                    onClick={() => setDispatchForm((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }))}
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <button onClick={saveDispatch} disabled={savingDispatch} className="mt-5 w-full rounded-2xl bg-tenzy-teal px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
               {savingDispatch ? "Saving shipment..." : "Save shipment"}
