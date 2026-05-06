@@ -167,8 +167,7 @@ const CartPage = () => {
                                 </h3>
                               </Link>
                               <p className="mt-1 text-xs text-slate-500">
-                                {p.category ? `${p.category}` : "Product"}
-                                {p.brand ? ` • ${p.brand}` : ""}
+                                {p.brand ? p.brand : "Product"}
                                 {p.sku ? ` • ${p.sku}` : ""}
                               </p>
 

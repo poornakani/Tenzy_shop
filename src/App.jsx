@@ -7,7 +7,6 @@ import {
 
 import "./index.css";
 import Header from "./HomePage/Header";
-import Categories from "./HomePage/Categories";
 import Banner01 from "./HomePage/Banner01";
 import BestSelling from "./HomePage/Bestselling";
 import Brands from "./HomePage/Brands";
@@ -62,7 +61,6 @@ const Home = () => {
     <div className="w-full overflow-hidden">
       <Navibar />
       <Header />
-      <Categories />
       <Banner01 />
       <BestSelling />
       {/* <Banner02 /> */}

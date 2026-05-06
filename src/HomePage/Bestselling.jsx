@@ -10,7 +10,6 @@ import { useNavigate } from "react-router-dom";
 import {
   productsApi,
   brandsApi,
-  categoriesApi,
   productImageApi,
 } from "@/services/api";
 
@@ -47,7 +46,6 @@ function Stars({ value }) {
 }
 
 /* ── Derive filter tabs from product data ─────────────────────────── */
-const CAT_LABELS = { Skin: "Skin Care", Face: "Face Care", Body: "Body Care", Head: "Head Care", Hand: "Hand Care", Lips: "Lip Care", Sun: "Sun Care", Acne: "Acne Care" };
 
 function normalizeProd(raw, lookups = {}) {
   const id        = raw.productId ?? raw.ProductId ?? raw.id ?? 0;
@@ -83,13 +81,6 @@ function normalizeProd(raw, lookups = {}) {
     outOfStock:      stock === 0,
     image:           primaryImage,
     size:            raw.size ?? raw.Size ?? "",
-    category:        raw.categoryName
-      ?? raw.CategoryName
-      ?? raw.categoryType
-      ?? raw.CategoryType
-      ?? raw.category
-      ?? lookups.categoryNamesById?.get(raw.categoryId ?? raw.CategoryId)
-      ?? "",
     brand:           raw.brandName
       ?? raw.BrandName
       ?? raw.brand
@@ -128,7 +119,6 @@ const BestSelling = () => {
   const [allProducts,   setAllProducts]   = useState([]);
   const [quickViewOpen,   setQuickViewOpen]   = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [activeFilter,    setActiveFilter]    = useState("All");
   const { toggleWishlist, isWishlisted } = useWishlist();
   const { addToCart }  = useCart();
   const { showToast }  = useToast();
@@ -139,25 +129,17 @@ const BestSelling = () => {
     Promise.allSettled([
       productsApi.getAll(),
       brandsApi.getAll(),
-      categoriesApi.getAll(),
       productImageApi.getAll(),
     ])
-      .then(([productsRes, brandsRes, categoriesRes, imagesRes]) => {
+      .then(([productsRes, brandsRes, imagesRes]) => {
         const products = Array.isArray(productsRes.value) ? productsRes.value : [];
         const brands = Array.isArray(brandsRes.value) ? brandsRes.value : [];
-        const categories = Array.isArray(categoriesRes.value) ? categoriesRes.value : [];
         const images = Array.isArray(imagesRes.value) ? imagesRes.value : [];
 
         const brandNamesById = new Map(
           brands.map((brand) => [
             brand.brandId ?? brand.BrandId,
             brand.name ?? brand.Name ?? brand.brandName ?? brand.BrandName ?? "",
-          ])
-        );
-        const categoryNamesById = new Map(
-          categories.map((category) => [
-            category.categoryId ?? category.CategoryId ?? category.catagoryID,
-            category.categoryType ?? category.CategoryType ?? category.name ?? category.Name ?? "",
           ])
         );
         const imagesByProductId = images.reduce((map, image) => {
@@ -172,7 +154,6 @@ const BestSelling = () => {
         const saleProducts = dedupeProducts(
           products.map((product) => normalizeProd(product, {
             brandNamesById,
-            categoryNamesById,
             imagesByProductId,
           }))
         )
@@ -183,14 +164,8 @@ const BestSelling = () => {
       .catch(console.error);
   }, []);
 
-  const ALL_CATS = useMemo(() => ["All", ...new Set(allProducts.map(p => p.category).filter(Boolean))], [allProducts]);
-
-  /* filtered list, max 10 */
-  const displayed = useMemo(() => (
-    activeFilter === "All"
-      ? allProducts
-      : allProducts.filter(p => p.category === activeFilter)
-  ).slice(0, 10), [allProducts, activeFilter]);
+  /* displayed list, max 10 */
+  const displayed = useMemo(() => allProducts.slice(0, 10), [allProducts]);
 
   /* scroll-in animation */
   useEffect(() => {
@@ -200,7 +175,7 @@ const BestSelling = () => {
       gsap.fromTo(".bs-card",  { y: 30, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.65, ease: "power2.out", stagger: 0.07, scrollTrigger: { trigger: wrapRef.current, start: "top 78%" } });
     }, wrapRef);
     return () => ctx.revert();
-  }, [activeFilter, displayed.length]);
+  }, [displayed.length]);
 
   const openQuickView  = p  => { setSelectedProduct(p); setQuickViewOpen(true); };
   const closeQuickView = () => { setQuickViewOpen(false); setSelectedProduct(null); };
@@ -234,23 +209,6 @@ const BestSelling = () => {
           </button>
         </div>
 
-        {/* ── Filter tabs ─────────────────────────────────────────── */}
-        <div className="bs-title flex items-center gap-2 flex-wrap mb-7">
-          {ALL_CATS.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveFilter(cat)}
-              className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-250 border"
-              style={
-                activeFilter === cat
-                  ? { background: ORANGE, borderColor: ORANGE, color: "white", boxShadow: `0 4px 14px rgba(232,82,42,0.30)` }
-                  : { background: "white", borderColor: "rgba(0,0,0,0.10)", color: "#71717a" }
-              }
-            >
-              {cat === "All" ? "All Products" : (CAT_LABELS[cat] ?? cat)}
-            </button>
-          ))}
-        </div>
 
         {/* ── Product grid ────────────────────────────────────────── */}
         <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -450,7 +408,7 @@ const BestSelling = () => {
         {/* ── Empty state ─────────────────────────────────────────── */}
         {displayed.length === 0 && (
           <div className="py-20 text-center text-zinc-400 text-sm">
-            No products in this category yet.
+            No products yet.
           </div>
         )}
 

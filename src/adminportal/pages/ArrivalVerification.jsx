@@ -1,9 +1,83 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
-  AlertTriangle, BadgeCheck, CheckCircle, Clock, Eye, History,
-  ImagePlus, PackageSearch, Trash2, X,
+  AlertTriangle, BadgeCheck, Camera, CheckCircle, Clock, Eye, History,
+  Images, PackageSearch, Trash2, X,
 } from "lucide-react";
 import { supplyChainApi, uploadApi } from "../../services/api";
+
+// ── Reusable damage photo uploader ───────────────────────────────────────────
+function DamagePhotoUploader({ itemId, photos = [], uploading, onCamera, onGallery, onRemove }) {
+  return (
+    <div className="mt-3 rounded-2xl bg-red-50 border border-red-200 p-3">
+      <p className="text-xs font-bold text-red-700 mb-2 flex items-center gap-1.5">
+        <Camera size={12} /> Damage photos
+      </p>
+
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {photos.map((url) => (
+            <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-red-200 group shrink-0">
+              <img src={url} alt="damage" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => onRemove(url)}
+                className="absolute top-1 right-1 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white shadow"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {uploading ? (
+        <div className="flex items-center justify-center gap-2 py-2 text-xs text-red-500">
+          <div className="w-4 h-4 rounded-full border-2 border-red-300 border-t-red-600 animate-spin" />
+          Uploading photo…
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {/* Camera — opens camera directly on mobile */}
+          <label className="flex items-center justify-center gap-1.5 rounded-xl bg-red-600 text-white text-xs font-semibold py-2.5 cursor-pointer hover:bg-red-700 transition active:scale-95">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onCamera(file);
+                e.target.value = "";
+              }}
+            />
+            <Camera size={13} /> Take photo
+          </label>
+          {/* Gallery — opens file picker / gallery on mobile */}
+          <label className="flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white text-red-700 text-xs font-semibold py-2.5 cursor-pointer hover:bg-red-50 transition active:scale-95">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                files.forEach((file) => onGallery(file));
+                e.target.value = "";
+              }}
+            />
+            <Images size={13} /> From gallery
+          </label>
+        </div>
+      )}
+
+      {photos.length === 0 && !uploading && (
+        <p className="mt-2 text-[10px] text-red-400 text-center">
+          Add at least one photo before approving damaged items.
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 const Input = (props) => (
@@ -148,6 +222,8 @@ function VerifyTab({ shipments, arrivals, onSaved }) {
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [itemPhotos, setItemPhotos] = useState({}); // { [shipmentItemId]: [url, ...] }
+  const [uploadingPhotoId, setUploadingPhotoId] = useState(null);
 
   // Shipments that already have an arrival record — exclude from dropdown
   const verifiedShipmentIds = useMemo(
@@ -155,14 +231,40 @@ function VerifyTab({ shipments, arrivals, onSaved }) {
     [arrivals]
   );
   const availableShipments = useMemo(
-    () => (shipments ?? []).filter((s) => !verifiedShipmentIds.has(String(s.shipmentId))),
+    () => (shipments ?? [])
+      .filter((s) => !verifiedShipmentIds.has(String(s.shipmentId)))
+      .sort((a, b) => new Date(b.dispatchDate ?? 0) - new Date(a.dispatchDate ?? 0)),
     [shipments, verifiedShipmentIds]
   );
+
+  const handleDamagePhotoUpload = async (shipmentItemId, file) => {
+    if (!file) return;
+    setUploadingPhotoId(shipmentItemId);
+    try {
+      const url = await uploadApi.uploadImage(file);
+      setItemPhotos((prev) => ({
+        ...prev,
+        [shipmentItemId]: [...(prev[shipmentItemId] ?? []), url],
+      }));
+    } catch (err) {
+      alert(err.message || "Photo upload failed.");
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  };
+
+  const removeDamagePhoto = (shipmentItemId, url) => {
+    setItemPhotos((prev) => ({
+      ...prev,
+      [shipmentItemId]: (prev[shipmentItemId] ?? []).filter((u) => u !== url),
+    }));
+  };
 
   const chooseShipment = async (shipmentId) => {
     if (!shipmentId) {
       setSelectedShipment(null);
       setForm(emptyForm);
+      setItemPhotos({});
       return;
     }
     const detail = await supplyChainApi.getDispatchById(shipmentId);
@@ -212,10 +314,12 @@ function VerifyTab({ shipments, arrivals, onSaved }) {
           damagedQuantity: Number(item.damagedQuantity),
           approvedForPricing: !!item.approvedForPricing,
           notes: item.notes,
+          damagedPhotos: itemPhotos[item.shipmentItemId] ?? [],
         })),
       });
       setForm(emptyForm);
       setSelectedShipment(null);
+      setItemPhotos({});
       onSaved();
     } finally {
       setSaving(false);
@@ -311,9 +415,14 @@ function VerifyTab({ shipments, arrivals, onSaved }) {
               </div>
 
               {Number(item.damagedQuantity) > 0 && (
-                <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
-                  <AlertTriangle size={12} /> {item.damagedQuantity} damaged unit(s) — manage & upload photos in the Damaged Items tab after saving.
-                </p>
+                <DamagePhotoUploader
+                  itemId={item.shipmentItemId}
+                  photos={itemPhotos[item.shipmentItemId] ?? []}
+                  uploading={uploadingPhotoId === item.shipmentItemId}
+                  onCamera={(file) => handleDamagePhotoUpload(item.shipmentItemId, file)}
+                  onGallery={(file) => handleDamagePhotoUpload(item.shipmentItemId, file)}
+                  onRemove={(url) => removeDamagePhoto(item.shipmentItemId, url)}
+                />
               )}
 
               <div className="mt-3">
@@ -436,9 +545,7 @@ function MissingTab({ arrivals, allArrivalDetails }) {
 function DamagedTab({ allArrivalDetails, onRefresh }) {
   const [approvingId, setApprovingId] = useState(null);
   const [uploadingId, setUploadingId] = useState(null);
-  // Local photo state: { [arrivalItemId]: [url, ...] }
   const [photos, setPhotos] = useState({});
-  const fileRefs = useRef({});
 
   const damagedItems = useMemo(() => {
     const rows = [];
@@ -473,12 +580,11 @@ function DamagedTab({ allArrivalDetails, onRefresh }) {
     }
   };
 
-  const removePhoto = (arrivalItemId, url) => {
+  const removePhoto = (arrivalItemId, url) =>
     setPhotos((prev) => ({
       ...prev,
       [arrivalItemId]: (prev[arrivalItemId] ?? []).filter((u) => u !== url),
     }));
-  };
 
   const approveItem = async (item) => {
     if (approvingId === item.arrivalItemId) return;
@@ -550,55 +656,14 @@ function DamagedTab({ allArrivalDetails, onRefresh }) {
             </div>
 
             {/* Photo section */}
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-slate-500 mb-2">Damage photos</p>
-              <div className="flex flex-wrap gap-2">
-                {itemPhotos.map((url) => (
-                  <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 group">
-                    <img src={url} alt="damage" className="w-full h-full object-cover" />
-                    <button
-                      onClick={() => removePhoto(item.arrivalItemId, url)}
-                      className="absolute top-1 right-1 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Upload button */}
-                <label
-                  className={`w-20 h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition ${
-                    uploadingId === item.arrivalItemId
-                      ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
-                      : "border-tenzy-teal/40 hover:border-tenzy-teal hover:bg-teal-50/30"
-                  }`}
-                >
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    disabled={uploadingId === item.arrivalItemId}
-                    ref={(el) => { fileRefs.current[item.arrivalItemId] = el; }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handlePhotoUpload(item.arrivalItemId, file);
-                      e.target.value = "";
-                    }}
-                  />
-                  {uploadingId === item.arrivalItemId ? (
-                    <div className="w-4 h-4 rounded-full border-2 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
-                  ) : (
-                    <>
-                      <ImagePlus size={16} className="text-tenzy-teal" />
-                      <span className="text-[10px] text-tenzy-teal font-semibold mt-1">Add photo</span>
-                    </>
-                  )}
-                </label>
-              </div>
-              {itemPhotos.length === 0 && (
-                <p className="mt-1 text-xs text-slate-400">No photos yet — add photos before approving.</p>
-              )}
-            </div>
+            <DamagePhotoUploader
+              itemId={item.arrivalItemId}
+              photos={photos[item.arrivalItemId] ?? []}
+              uploading={uploadingId === item.arrivalItemId}
+              onCamera={(file) => handlePhotoUpload(item.arrivalItemId, file)}
+              onGallery={(file) => handlePhotoUpload(item.arrivalItemId, file)}
+              onRemove={(url) => removePhoto(item.arrivalItemId, url)}
+            />
 
             {item.notes && <p className="mt-3 text-xs text-slate-500 italic">{item.notes}</p>}
 
@@ -665,7 +730,14 @@ function HistoryTab({ arrivals, onView }) {
           <tbody className="divide-y divide-slate-100">
             {sorted.map((arrival) => (
               <tr key={arrival.arrivalVerificationId} className="hover:bg-slate-50/60">
-                <td className="px-4 py-3 font-semibold text-slate-800">{arrival.dispatchReference}</td>
+                <td className="px-4 py-3 font-semibold text-slate-800">
+                  <div className="flex items-center gap-2">
+                    {arrival.dispatchReference}
+                    {arrival === sorted[0] && (
+                      <span className="rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5">Latest</span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                   <div>
                     {new Date(arrival.verificationDate).toLocaleDateString("en-GB", {

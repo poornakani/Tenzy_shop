@@ -317,8 +317,7 @@ const QuickViewModal = ({
                   </p>
                 </div>
 
-                {(product.category ||
-                  product.brand ||
+                {(product.brand ||
                   product.sku ||
                   product.description) && (
                   <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4">
@@ -327,14 +326,6 @@ const QuickViewModal = ({
                     </p>
 
                     <div className="grid grid-cols-2 gap-3 text-sm">
-                      {product.category && (
-                        <div>
-                          <p className="text-xs text-slate-500">Category</p>
-                          <p className="font-semibold text-slate-900">
-                            {product.category}
-                          </p>
-                        </div>
-                      )}
 
                       {product.brand && (
                         <div>

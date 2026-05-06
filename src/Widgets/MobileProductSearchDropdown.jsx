@@ -120,8 +120,7 @@ const MobileProductSearchDropdown = ({
                     {p.name}
                   </p>
                   <p className="text-xs text-white/60 truncate">
-                    {p.brand ? `${p.brand} • ` : ""}
-                    {p.category || ""}
+                    {p.brand || ""}
                   </p>
                 </div>
 

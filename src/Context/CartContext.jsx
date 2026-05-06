@@ -53,7 +53,6 @@ export const CartProvider = ({ children }) => {
           stockCount: product.stockCount ?? next[idx].stockCount ?? 0,
           outOfStock: product.outOfStock ?? false,
           brand: product.brand,
-          category: product.category,
           sku: product.sku,
           qty: updatedQty,
         };
@@ -72,7 +71,6 @@ export const CartProvider = ({ children }) => {
           stockCount: product.stockCount ?? 0,
           outOfStock: product.outOfStock ?? false,
           brand: product.brand,
-          category: product.category,
           sku: product.sku,
           qty: clamp(quantity, 1, maxQty),
         },

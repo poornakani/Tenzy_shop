@@ -230,15 +230,6 @@ export const brandsApi = {
   deactivate: (id) => api.post(`/api/brands/${id}`),
 };
 
-// ── Categories ────────────────────────────────────────────────────────────────
-export const categoriesApi = {
-  getAll: () => api.get("/api/categories"),
-  create: (body) => api.post("/api/categories", body),
-  update: (body) => api.post("/api/categories/update", body),
-  activate: (id) => api.post(`/api/categories/${id}/activate`),
-  deactivate: (id) => api.post(`/api/categories/${id}`),
-};
-
 // ── Payment Types ─────────────────────────────────────────────────────────────
 export const paymentApi = {
   getAll: () => api.get("/api/paymenttype"),
@@ -277,9 +268,24 @@ export const procurementApi = {
   updateStatus: (id, b) => api.post(`/api/procurement/${id}/status`, b),
 };
 
+// ── Payment Cards (UK purchase card issuers) ──────────────────────────────────
+export const paymentCardsApi = {
+  getAll: () => api.get("/api/admin/supply-chain/payment-cards"),
+  save: (body) => api.post("/api/admin/supply-chain/payment-cards", body),
+};
+
+// ── UK Purchase Shops ───────────────────────────────────────────────────────
+export const shopsApi = {
+  getAll: () => api.get("/api/admin/supply-chain/shops"),
+  save: (body) => api.post("/api/admin/supply-chain/shops", body),
+};
+
 // ── Supply Chain ─────────────────────────────────────────────────────────────
 export const supplyChainApi = {
   getDashboard: () => api.get("/api/admin/supply-chain/dashboard"),
+
+  getPaymentCards: () => api.get("/api/admin/supply-chain/payment-cards"),
+  getShops: () => api.get("/api/admin/supply-chain/shops"),
 
   getProcurements: () => api.get("/api/admin/supply-chain/procurements"),
   getProcurementById: (id) => api.get(`/api/admin/supply-chain/procurements/${id}`),

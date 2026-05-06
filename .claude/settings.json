@@ -30,7 +30,14 @@
       "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"EXEC dbo.spProductCatalog_GetAllAdmin;\")",
       "Bash(npm run:*)",
       "Bash(git config:*)",
-      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"SELECT OBJECT_ID\\('dbo.spProductCatalog_GetAll','P'\\) AS GetAll, OBJECT_ID\\('dbo.spProductCatalog_GetAllAdmin','P'\\) AS GetAllAdmin, OBJECT_ID\\('dbo.spProductCatalog_GetById','P'\\) AS GetById;\")"
+      "Bash(sqlcmd -S \"mssqluk20.prosql.net\" -d \"tenzyuk_production\" -U \"17061994_tenzyukprouser\" -P \"fhnd6ad4gtd@\" -Q \"SELECT OBJECT_ID\\('dbo.spProductCatalog_GetAll','P'\\) AS GetAll, OBJECT_ID\\('dbo.spProductCatalog_GetAllAdmin','P'\\) AS GetAllAdmin, OBJECT_ID\\('dbo.spProductCatalog_GetById','P'\\) AS GetById;\")",
+      "WebFetch(domain:www.tenzyapitest.dotnetcloud.co.uk)",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\040_products_show_when_not_on_sale.sql' | Select-Object -First 110 | Select-Object -Last 50\")",
+      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Entity\\\\ProductsEntity\\\\CategoryEntity.cs\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Models\\\\ProductsModels\\\\CatagoryModel.cs\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\ICategoryReader.cs\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\CategoryReader.cs\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\ICategoryWriter.cs\" -Force)"
     ],
     "additionalDirectories": [
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\Database\\migrations",
@@ -38,7 +45,10 @@
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\Products\\ProductCatalog",
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Models\\ProductsModels",
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TencyBackendApi\\Middleware",
-      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TencyBackendApi"
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TencyBackendApi",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Core\\Services\\SupplyChainService",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Entity\\ProductsEntity",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\SupplyChain"
     ]
   }
 }

@@ -21,7 +21,6 @@ import Footer from "@/HomePage/Footer";
 import {
   productsApi,
   brandsApi,
-  categoriesApi,
   productImageApi,
 } from "../services/api";
 
@@ -77,14 +76,6 @@ function normalizeApiProduct(raw, lookups = {}) {
     outOfStock:      stock === 0,
     image:           mainImg,
     images:          imgUrls.length ? imgUrls : (mainImg ? [mainImg] : []),
-    category:        raw.categoryName
-      ?? raw.CategoryName
-      ?? raw.categoryType
-      ?? raw.CategoryType
-      ?? raw.category
-      ?? lookups.categoryNamesById?.get(raw.categoryId ?? raw.CategoryId)
-      ?? "",
-    categoryId:      raw.categoryId ?? raw.CategoryId ?? 0,
     brand:           raw.brandName
       ?? raw.BrandName
       ?? raw.brand
@@ -224,7 +215,6 @@ const ProductsPage = () => {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productLookups,  setProductLookups]  = useState({
     brandNamesById: new Map(),
-    categoryNamesById: new Map(),
     imagesByProductId: new Map(),
   });
 
@@ -232,25 +222,17 @@ const ProductsPage = () => {
     Promise.allSettled([
       productsApi.getAll(),
       brandsApi.getAll(),
-      categoriesApi.getAll(),
       productImageApi.getAll(),
     ])
-      .then(([productsRes, brandsRes, categoriesRes, imagesRes]) => {
+      .then(([productsRes, brandsRes, imagesRes]) => {
         const products = Array.isArray(productsRes.value) ? productsRes.value : [];
         const brands = Array.isArray(brandsRes.value) ? brandsRes.value : [];
-        const categories = Array.isArray(categoriesRes.value) ? categoriesRes.value : [];
         const images = Array.isArray(imagesRes.value) ? imagesRes.value : [];
 
         const brandNamesById = new Map(
           brands.map((brand) => [
             brand.brandId ?? brand.BrandId,
             brand.name ?? brand.Name ?? brand.brandName ?? brand.BrandName ?? "",
-          ])
-        );
-        const categoryNamesById = new Map(
-          categories.map((category) => [
-            category.categoryId ?? category.CategoryId ?? category.catagoryID,
-            category.categoryType ?? category.CategoryType ?? category.name ?? category.Name ?? "",
           ])
         );
         const imagesByProductId = images.reduce((map, image) => {
@@ -263,7 +245,7 @@ const ProductsPage = () => {
         }, new Map());
 
         setRawProducts(products);
-        setProductLookups({ brandNamesById, categoryNamesById, imagesByProductId });
+        setProductLookups({ brandNamesById, imagesByProductId });
       })
       .catch(console.error)
       .finally(() => setLoadingProducts(false));
@@ -283,13 +265,7 @@ const ProductsPage = () => {
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [products]);
 
-  const uniqueCats = useMemo(() => {
-    const set = new Set(products.map((p) => p.category).filter(Boolean));
-    return ["All", ...Array.from(set)];
-  }, [products]);
-
   // -------- Filter states --------
-  const [activeCategory, setActiveCategory] = useState("All");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("featured");
   const [onlySale, setOnlySale] = useState(false);
@@ -325,16 +301,6 @@ const ProductsPage = () => {
 
   const goToProduct = (p) => navigate(`/product/${p.id}`);
 
-  // -------- Read category from URL (?category=Skin) --------
-  useEffect(() => {
-    const cat = searchParams.get("category");
-    if (cat && uniqueCats.includes(cat)) setActiveCategory(cat);
-  }, [searchParams, uniqueCats]);
-
-  useEffect(() => {
-    if (activeConcernID) setActiveCategory("All");
-  }, [activeConcernID]);
-
   // -------- Filtered list --------
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -347,9 +313,6 @@ const ProductsPage = () => {
           (typeof p.concernID === "number" && p.concernID === activeConcernID);
         if (!hasConcern) return false;
       }
-
-      if (activeCategory !== "All" && p.category !== activeCategory)
-        return false;
 
       if (
         selectedBrandId !== "All" &&
@@ -380,7 +343,6 @@ const ProductsPage = () => {
   }, [
     products,
     activeConcernID,
-    activeCategory,
     selectedBrandId,
     q,
     sort,
@@ -400,7 +362,7 @@ const ProductsPage = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [activeCategory, selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID]);
+  }, [selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -414,14 +376,12 @@ const ProductsPage = () => {
 
   // -------- Active filter count --------
   const hasActiveFilters =
-    activeCategory !== "All" ||
     selectedBrandId !== "All" ||
     onlySale ||
     onlyInStock ||
     maxPrice < priceMax;
 
   const activeFilterCount = [
-    activeCategory !== "All",
     selectedBrandId !== "All",
     onlySale,
     onlyInStock,
@@ -462,7 +422,7 @@ const ProductsPage = () => {
       { y: 10, opacity: 0 },
       { y: 0, opacity: 1, duration: 0.25, stagger: 0.02, ease: "power2.out" }
     );
-  }, [activeCategory, selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID, page]);
+  }, [selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID, page]);
 
   // Mobile panel slide-up animation
   useEffect(() => {
@@ -486,7 +446,6 @@ const ProductsPage = () => {
 
   // -------- Actions --------
   const clearFilters = () => {
-    setActiveCategory("All");
     setSelectedBrandId("All");
     setQ("");
     setSort("featured");
@@ -615,7 +574,7 @@ const ProductsPage = () => {
                             {p.name}
                           </p>
                           <p className="text-xs text-zinc-400">
-                            {p.category} • {p.brand}
+                            {p.brand}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
@@ -647,40 +606,8 @@ const ProductsPage = () => {
         <div className="mt-3 sticky top-[72px] z-40">
           <div className="rounded-2xl bg-white/95 backdrop-blur-sm border border-zinc-100 shadow-sm px-4 py-3">
 
-            {/* Pills + Sort + Filter row */}
+            {/* Sort + Filter row */}
             <div className="flex items-center gap-2">
-
-              {/* Category pills — scrollable */}
-              <div
-                className="flex-1 flex gap-2 overflow-x-auto"
-                style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
-              >
-                {uniqueCats.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setActiveCategory(cat)}
-                    className="shrink-0 rounded-full px-4 py-2 text-[11px] font-bold transition-all whitespace-nowrap"
-                    style={
-                      activeCategory === cat
-                        ? {
-                            background: "#2BB9B4",
-                            color: "white",
-                            boxShadow: "0 2px 8px rgba(43,185,180,0.35)",
-                          }
-                        : {}
-                    }
-                    {...(activeCategory !== cat
-                      ? { className: "shrink-0 rounded-full px-4 py-2 text-[11px] font-bold transition-all whitespace-nowrap bg-zinc-100 text-zinc-600 hover:bg-teal-50 hover:text-tenzy-teal" }
-                      : {})}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
-              {/* Divider */}
-              <div className="h-6 w-px bg-zinc-200 shrink-0" />
 
               {/* Custom Sort dropdown */}
               <div ref={sortRef} className="relative shrink-0">
@@ -767,12 +694,6 @@ const ProductsPage = () => {
             {/* Active filter chips */}
             {hasActiveFilters && (
               <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-zinc-50">
-                {activeCategory !== "All" && (
-                  <FilterChip
-                    label={activeCategory}
-                    onRemove={() => setActiveCategory("All")}
-                  />
-                )}
                 {activeBrandName && (
                   <FilterChip
                     label={activeBrandName}
@@ -1061,7 +982,7 @@ const ProductsPage = () => {
                         {/* Details */}
                         <div className="p-4">
                           <p className="text-[11px] font-semibold text-zinc-400">
-                            {p.category} • {p.brand}
+                            {p.brand}
                           </p>
 
                           <h3
@@ -1262,30 +1183,6 @@ const ProductsPage = () => {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {/* Category */}
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-                      Category
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {uniqueCats.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setActiveCategory(cat)}
-                          className="rounded-full px-3.5 py-1.5 text-xs font-bold transition"
-                          style={
-                            activeCategory === cat
-                              ? { background: "#2BB9B4", color: "white" }
-                              : { background: "#f4f4f5", color: "#52525b" }
-                          }
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Price */}
                   <div>
                     <div className="flex justify-between mb-2">

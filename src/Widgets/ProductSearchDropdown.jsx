@@ -211,11 +211,6 @@ export default function ProductSearchDropdown({ products = [], onClose }) {
                       <div className="truncate text-sm font-medium text-white">
                         {p.name}
                       </div>
-                      {p.category && (
-                        <div className="truncate text-xs text-white/60 mt-0.5">
-                          {p.category}
-                        </div>
-                      )}
                     </div>
 
                     {/* small modern indicator */}

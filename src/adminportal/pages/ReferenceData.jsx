@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, X, Edit2, AlertTriangle, ImagePlus, PowerOff } from "lucide-react";
-import { categoriesApi, concernsApi, paymentApi, brandsApi, uploadApi } from "../../services/api";
+import { Plus, X, Edit2, AlertTriangle, ImagePlus, PowerOff, CreditCard } from "lucide-react";
+import { concernsApi, paymentApi, brandsApi, uploadApi, paymentCardsApi, shopsApi } from "../../services/api";
 
-const TABS = ["Categories", "Concern Types", "Payment Types", "Brands"];
+const TABS = ["Concern Types", "Payment Types", "Brands", "Payment Cards", "Shops"];
 
 const Input = ({ ...props }) => (
   <input
@@ -11,152 +11,7 @@ const Input = ({ ...props }) => (
   />
 );
 
-/* ── Categories ────────────────────────────────────────────────────────────── */
-function CategoriesTab() {
-  const [items,       setItems]       = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [formValue,   setFormValue]   = useState("");
-  const [editTarget,  setEditTarget]  = useState(null);
-  const [saving,      setSaving]      = useState(false);
-  const [error,       setError]       = useState("");
-  const [deactConfirm, setDeactConfirm] = useState(null);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    categoriesApi.getAll()
-      .then((data) => setItems(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const openAdd = () => { setEditTarget(null); setFormValue(""); setError(""); };
-  const openEdit = (item) => {
-    setEditTarget(item);
-    setFormValue(item.categoryType ?? item.categorytype ?? "");
-    setError("");
-  };
-  const cancel = () => { setEditTarget(null); setFormValue(""); setError(""); };
-
-  const handleSave = async () => {
-    if (!formValue.trim()) { setError("Name is required."); return; }
-    setSaving(true);
-    setError("");
-    try {
-      if (editTarget) {
-        const id = editTarget.categoryId ?? editTarget.catagoryID;
-        await categoriesApi.update({ categoryId: id, categoryType: formValue.trim() });
-      } else {
-        await categoriesApi.create({ categoryType: formValue.trim() });
-      }
-      cancel();
-      load();
-    } catch (err) {
-      setError(err.message || "Save failed.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeactivate = async (id) => {
-    try {
-      await categoriesApi.deactivate(id);
-      load();
-    } catch (err) {
-      alert(err.message || "Deactivate failed.");
-    }
-    setDeactConfirm(null);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{items.length} active categories</p>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 bg-tenzy-teal text-white rounded-xl hover:opacity-90 transition active:scale-95">
-          <Plus size={15} /> Add Category
-        </button>
-      </div>
-
-      {(editTarget !== null || formValue !== "" || error) && (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            {editTarget ? "Edit Category" : "New Category"}
-          </p>
-          <Input
-            value={formValue}
-            onChange={(e) => setFormValue(e.target.value)}
-            placeholder="e.g. Moisturizers"
-            onKeyDown={(e) => e.key === "Enter" && handleSave()}
-            autoFocus
-          />
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={cancel}
-              className="flex-1 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">
-              Cancel
-            </button>
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 py-2 rounded-xl bg-tenzy-teal text-white text-sm font-bold hover:opacity-90 transition disabled:opacity-60">
-              {saving ? "Saving…" : editTarget ? "Save Changes" : "Add"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-50">
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
-          </div>
-        )}
-        {!loading && items.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-12">No categories yet.</p>
-        )}
-        {items.map((item) => {
-          const id    = item.categoryId ?? item.catagoryID;
-          const label = item.categoryType ?? item.categorytype ?? "—";
-          return (
-            <div key={id} className="flex items-center gap-3 px-4 py-3">
-              <span className="flex-1 text-sm text-slate-800 font-medium">{label}</span>
-              <button onClick={() => openEdit(item)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-tenzy-teal hover:text-white transition">
-                <Edit2 size={14} />
-              </button>
-              <button onClick={() => setDeactConfirm(id)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-red-500 hover:text-white transition">
-                <X size={14} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {deactConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDeactConfirm(null)} />
-          <div className="relative bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                <AlertTriangle size={18} className="text-amber-500" />
-              </div>
-              <p className="font-bold text-slate-900">Deactivate Category?</p>
-            </div>
-            <p className="text-sm text-slate-500 mb-5">This will hide the category from product lists.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeactConfirm(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">Cancel</button>
-              <button onClick={() => handleDeactivate(deactConfirm)}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 transition">Deactivate</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+/* ── Concern Types ─────────────────────────────────────────────────────────── */
 
 /* ── Concern Types ─────────────────────────────────────────────────────────── */
 function ConcernTypesTab() {
@@ -698,17 +553,217 @@ function BrandsTab() {
   );
 }
 
+/* ── Payment Cards ─────────────────────────────────────────────────────────── */
+function PaymentCardsTab() {
+  const [items,      setItems]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [loadError,  setLoadError]  = useState("");
+  const [formName,   setFormName]   = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const [saving,     setSaving]     = useState(false);
+  const [formError,  setFormError]  = useState("");
+  const [showForm,   setShowForm]   = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError("");
+    paymentCardsApi.getAll()
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch((err) => setLoadError(err.message || "Failed to load payment cards."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => { setEditTarget(null); setFormName(""); setFormError(""); setShowForm(true); };
+  const openEdit = (item) => { setEditTarget(item); setFormName(item.cardName ?? ""); setFormError(""); setShowForm(true); };
+  const cancel = () => { setShowForm(false); setEditTarget(null); setFormName(""); setFormError(""); };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { setFormError("Card name is required."); return; }
+    setSaving(true);
+    setFormError("");
+    try {
+      await paymentCardsApi.save({ cardId: editTarget?.cardId ?? 0, cardName: formName.trim() });
+      cancel();
+      load();
+    } catch (err) {
+      setFormError(err.message || "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CreditCard size={16} className="text-tenzy-teal" />
+          <h2 className="font-bold text-slate-800">Payment Cards</h2>
+          <span className="text-xs text-slate-400">Used on the UK Purchase form</span>
+        </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 rounded-xl bg-tenzy-teal px-3 py-1.5 text-xs font-bold text-white hover:opacity-90 transition"
+        >
+          <Plus size={13} /> Add Card
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-700">{editTarget ? "Edit card" : "Add card"}</p>
+          <Input
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="e.g. Amex, Halifax Debit"
+          />
+          {formError && <p className="text-xs text-red-500">{formError}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-xl bg-tenzy-teal px-4 py-1.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-60 transition"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={cancel} className="rounded-xl border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loadError && <p className="text-sm text-red-500">{loadError}</p>}
+      {loading ? (
+        <p className="text-sm text-slate-400">Loading…</p>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {items.length === 0 && <p className="text-sm text-slate-400 py-2">No cards yet.</p>}
+          {items.map((item) => (
+            <div key={item.cardId} className="flex items-center justify-between py-2.5">
+              <div className="flex items-center gap-2">
+                <CreditCard size={14} className="text-indigo-400 shrink-0" />
+                <span className="text-sm font-medium text-slate-700">{item.cardName}</span>
+              </div>
+              <button
+                onClick={() => openEdit(item)}
+                className="flex items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 hover:border-tenzy-teal hover:text-tenzy-teal transition"
+              >
+                <Edit2 size={11} /> Edit
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Page ──────────────────────────────────────────────────────────────────── */
+function ShopsTab() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [formName, setFormName] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError("");
+    shopsApi.getAll()
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch((err) => setLoadError(err.message || "Failed to load shops."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => { setEditTarget(null); setFormName(""); setFormError(""); setShowForm(true); };
+  const openEdit = (item) => { setEditTarget(item); setFormName(item.shopName ?? item.ShopName ?? ""); setFormError(""); setShowForm(true); };
+  const cancel = () => { setShowForm(false); setEditTarget(null); setFormName(""); setFormError(""); };
+
+  const handleSave = async () => {
+    if (!formName.trim()) { setFormError("Shop name is required."); return; }
+    setSaving(true);
+    setFormError("");
+    try {
+      await shopsApi.save({
+        shopId: editTarget?.shopId ?? editTarget?.ShopId ?? 0,
+        shopName: formName.trim(),
+      });
+      cancel();
+      load();
+    } catch (err) {
+      setFormError(err.message || "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-slate-800">Shops</h2>
+          <span className="text-xs text-slate-400">Used on the UK Purchase form</span>
+        </div>
+        <button onClick={openAdd} className="flex items-center gap-1.5 rounded-xl bg-tenzy-teal px-3 py-1.5 text-xs font-bold text-white hover:opacity-90 transition">
+          <Plus size={13} /> Add Shop
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-700">{editTarget ? "Edit shop" : "Add shop"}</p>
+          <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Boots" />
+          {formError && <p className="text-xs text-red-500">{formError}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving} className="rounded-xl bg-tenzy-teal px-4 py-1.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-60 transition">
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button onClick={cancel} className="rounded-xl border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {loadError && <p className="text-sm text-red-500">{loadError}</p>}
+      {loading ? (
+        <p className="text-sm text-slate-400">Loading...</p>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {items.length === 0 && <p className="text-sm text-slate-400 py-2">No shops yet.</p>}
+          {items.map((item) => {
+            const id = item.shopId ?? item.ShopId;
+            const name = item.shopName ?? item.ShopName;
+            return (
+              <div key={id} className="flex items-center justify-between py-2.5">
+                <span className="text-sm font-medium text-slate-700">{name}</span>
+                <button onClick={() => openEdit(item)} className="flex items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 hover:border-tenzy-teal hover:text-tenzy-teal transition">
+                  <Edit2 size={11} /> Edit
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReferenceData() {
   const [activeTab, setActiveTab] = useState(0);
 
-  const TabContent = [CategoriesTab, ConcernTypesTab, PaymentTypesTab, BrandsTab][activeTab];
+  const TabContent = [ConcernTypesTab, PaymentTypesTab, BrandsTab, PaymentCardsTab, ShopsTab][activeTab];
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-slate-900">Reference Data</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage categories, concern types, payment options, and brands</p>
+        <p className="text-sm text-slate-500 mt-0.5">Manage categories, concern types, payment options, brands, cards, and UK shops</p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-1.5 flex gap-1">

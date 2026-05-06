@@ -12,7 +12,6 @@ import {
   productsApi,
   reviewsApi,
   brandsApi,
-  categoriesApi,
   productImageApi,
   productFaqApi,
 } from "@/services/api";
@@ -76,13 +75,6 @@ function normalizeProduct(raw, lookups = {}) {
     outOfStock:      stockCount === 0,
     image:           images[0] ?? null,
     images,
-    category:        raw.categoryName
-      ?? raw.CategoryName
-      ?? raw.categoryType
-      ?? raw.CategoryType
-      ?? raw.category
-      ?? lookups.categoryName
-      ?? "Uncategorized",
     brand:           raw.brandName
       ?? raw.BrandName
       ?? raw.brand
@@ -133,15 +125,13 @@ const ProductDetails = () => {
       productsApi.getById(productId),
       reviewsApi.getByProduct(productId),
       brandsApi.getAll(),
-      categoriesApi.getAll(),
       productImageApi.getByProduct(productId),
       productFaqApi.getByProduct(productId),
       productsApi.getPaymentOptions(productId).catch(() => []),
-    ]).then(([prodR, revR, brandsR, categoriesR, imagesR, faqsR, payOptsR]) => {
+    ]).then(([prodR, revR, brandsR, imagesR, faqsR, payOptsR]) => {
       if (prodR.status === "fulfilled" && prodR.value) {
         const raw  = prodR.value;
         const brands = Array.isArray(brandsR.value) ? brandsR.value : [];
-        const categories = Array.isArray(categoriesR.value) ? categoriesR.value : [];
         const images = Array.isArray(imagesR.value) ? imagesR.value : [];
         const faqs = Array.isArray(faqsR.value) ? faqsR.value : [];
         const brandName = brands.find(
@@ -149,11 +139,6 @@ const ProductDetails = () => {
         )?.name ?? brands.find(
           (brand) => (brand.brandId ?? brand.BrandId) === (raw.brandId ?? raw.BrandId)
         )?.Name;
-        const categoryName = categories.find(
-          (category) => (category.categoryId ?? category.CategoryId ?? category.catagoryID) === (raw.categoryId ?? raw.CategoryId)
-        )?.categoryType ?? categories.find(
-          (category) => (category.categoryId ?? category.CategoryId ?? category.catagoryID) === (raw.categoryId ?? raw.CategoryId)
-        )?.CategoryType;
 
         // Build payment info — getPaymentOptions now returns PaymentType name directly
         const payOpts = Array.isArray(payOptsR.value) ? payOptsR.value : [];
@@ -163,7 +148,6 @@ const ProductDetails = () => {
 
         setProduct(normalizeProduct(raw, {
           brandName,
-          categoryName,
           images,
           faqs,
           paymentProvider,
@@ -361,7 +345,7 @@ const ProductDetails = () => {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-slate-500 tracking-wide">
-                  {product.category} • {product.brand}
+                  {product.brand}
                 </p>
                 <h1 className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-900 leading-snug">
                   {product.name}

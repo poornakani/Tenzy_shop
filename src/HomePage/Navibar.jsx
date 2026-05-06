@@ -563,11 +563,6 @@ const Navibar = () => {
                               ].join(" ")}
                             >
                               {c.concernType}
-                              {c.category ? (
-                                <span className="ml-2 text-xs text-white/50">
-                                  • {c.category}
-                                </span>
-                              ) : null}
                             </button>
                           );
                         })}

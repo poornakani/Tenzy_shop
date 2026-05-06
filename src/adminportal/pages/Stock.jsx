@@ -121,7 +121,6 @@ function EditProcurementItemDialog({ item, onSave, onCancel }) {
   const [form, setForm] = useState({
     productName:  item.productName  ?? "",
     brandName:    item.brandName    ?? "",
-    categoryName: item.categoryName ?? "",
     quantity:     item.quantity     ?? 1,
     unitPrice:    item.unitPrice    ?? 0,
     batchNote:    item.batchNote    ?? "",
@@ -159,9 +158,8 @@ function EditProcurementItemDialog({ item, onSave, onCancel }) {
           <F label="Product Name *">
             <input className={inp} value={form.productName} onChange={(e) => setForm({ ...form, productName: e.target.value })} />
           </F>
-          <div className="grid grid-cols-2 gap-3">
+          <div>
             <F label="Brand"><input className={inp} value={form.brandName} onChange={(e) => setForm({ ...form, brandName: e.target.value })} /></F>
-            <F label="Category"><input className={inp} value={form.categoryName} onChange={(e) => setForm({ ...form, categoryName: e.target.value })} /></F>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <F label="Quantity *"><input type="number" min="1" className={inp} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></F>
@@ -288,7 +286,7 @@ function ProcurementItemsDialog({ procurementId, procRef, onClose, onRefresh }) 
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider">
                       <tr>
-                        {["#", "Product", "Brand", "Category", "Qty", "Unit £", "Net £", ""].map((h) => (
+                        {["#", "Product", "Brand", "Qty", "Unit £", "Net £", ""].map((h) => (
                           <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
                         ))}
                       </tr>
@@ -299,7 +297,7 @@ function ProcurementItemsDialog({ procurementId, procRef, onClose, onRefresh }) 
                           <td className="px-3 py-2 text-slate-400">{item.lineNumber}</td>
                           <td className="px-3 py-2 font-medium text-slate-800">{item.productName}</td>
                           <td className="px-3 py-2 text-slate-600">{item.brandName || "—"}</td>
-                          <td className="px-3 py-2 text-slate-600">{item.categoryName || "—"}</td>
+
                           <td className="px-3 py-2 text-slate-700 font-medium">{item.quantity}</td>
                           <td className="px-3 py-2 text-slate-600">{fmtMoney(item.unitPrice)}</td>
                           <td className="px-3 py-2 text-slate-800 font-semibold">{fmtMoney(item.netTotal)}</td>
@@ -412,7 +410,7 @@ function DispatchItemsDialog({ shipmentId, dispRef, onClose, onRefresh }) {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider">
                       <tr>
-                        {["Product", "Brand", "Category", "Qty", "Net Unit £", "Net £", ""].map((h) => (
+                        {["Product", "Brand", "Qty", "Net Unit £", "Net £", ""].map((h) => (
                           <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
                         ))}
                       </tr>
@@ -422,7 +420,7 @@ function DispatchItemsDialog({ shipmentId, dispRef, onClose, onRefresh }) {
                         <tr key={item.shipmentItemId} className="hover:bg-slate-50">
                           <td className="px-3 py-2 font-medium text-slate-800">{item.productName}</td>
                           <td className="px-3 py-2 text-slate-600">{item.brandName || "—"}</td>
-                          <td className="px-3 py-2 text-slate-600">{item.categoryName || "—"}</td>
+
                           <td className="px-3 py-2 font-medium text-slate-700">{item.quantityDispatched}</td>
                           <td className="px-3 py-2 text-slate-600">{fmtMoney(item.netUnitCost)}</td>
                           <td className="px-3 py-2 font-semibold text-slate-800">{fmtMoney(item.netAmount)}</td>
@@ -494,7 +492,7 @@ function DeletedItemsDialog({ tableName, title, onClose }) {
   }, [tableName]);
 
   const filtered = items.filter((i) =>
-    !search || [i.productName, i.brandName, i.categoryName, i.deletionReason]
+    !search || [i.productName, i.brandName, i.deletionReason]
       .some((v) => v?.toLowerCase().includes(search.toLowerCase()))
   );
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
