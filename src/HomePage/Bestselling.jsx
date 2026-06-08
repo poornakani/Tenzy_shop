@@ -11,6 +11,7 @@ import {
   productsApi,
   brandsApi,
   productImageApi,
+  productVariantsApi,
 } from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -22,14 +23,51 @@ const ORANGE = "#E8522A";
 function formatLKR(v) {
   return new Intl.NumberFormat("en-LK").format(v);
 }
-function calcDiscounted(price, pct) {
-  return Math.round(price * (1 - pct / 100));
+function isSaleEnabled(value) {
+  return value === true || value === 1 || String(value).toLowerCase() === "true";
 }
-/* deterministic mock rating per product id */
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.Data)) return value.Data;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.Items)) return value.Items;
+  if (Array.isArray(value?.response)) return value.response;
+  if (Array.isArray(value?.Response)) return value.Response;
+  return [];
+}
+function getVariantPrice(variant) {
+  return Number(
+    variant?.sellingPrice ?? variant?.SellingPrice
+    ?? variant?.finalSellingPrice ?? variant?.FinalSellingPrice
+    ?? variant?.price ?? variant?.Price ?? 0
+  );
+}
+function getVariantStock(variant) {
+  return Number(
+    variant?.stock ?? variant?.Stock
+    ?? variant?.stockQuantity ?? variant?.StockQuantity
+    ?? variant?.availableStock ?? variant?.AvailableStock ?? 0
+  );
+}
+function getVariantName(variant) {
+  return variant?.variantName ?? variant?.VariantName ?? variant?.name ?? variant?.Name ?? "";
+}
+function getPaymentName(option) {
+  return option?.paymentProvider ?? option?.PaymentProvider
+    ?? option?.paymentType ?? option?.PaymentType
+    ?? option?.paymentTypeName ?? option?.PaymentTypeName
+    ?? option?.name ?? option?.Name ?? null;
+}
+function getPaymentInstalment(option) {
+  return option?.minInstallments ?? option?.MinInstallments
+    ?? option?.instalment ?? option?.Instalment
+    ?? option?.installments ?? option?.Installments ?? null;
+}
 function mockRating(id)  { return (4.1 + ((id * 17) % 10) * 0.08).toFixed(1); }
 function mockReviews(id) { return 68 + ((id * 31) % 110); }
 
-/* ── Star display ─────────────────────────────────────────────────── */
+/* ── Stars ────────────────────────────────────────────────────────── */
 function Stars({ value }) {
   const full = Math.floor(value);
   return (
@@ -45,8 +83,7 @@ function Stars({ value }) {
   );
 }
 
-/* ── Derive filter tabs from product data ─────────────────────────── */
-
+/* ── normalise raw API product ────────────────────────────────────── */
 function normalizeProd(raw, lookups = {}) {
   const id        = raw.productId ?? raw.ProductId ?? raw.id ?? 0;
   const priceLkr  = parseFloat(raw.priceLkr ?? raw.priceLKR ?? raw.price ?? 0);
@@ -57,66 +94,311 @@ function normalizeProd(raw, lookups = {}) {
   const disc      = Math.round(parseFloat(raw.discountRate ?? raw.DiscountRate ?? raw.discountPercent ?? 0))
     || (basePrice > 0 && sellPrice < basePrice ? Math.round((1 - sellPrice / basePrice) * 100) : 0);
   const stock = parseInt(raw.stockQuantity ?? raw.StockQuantity ?? raw.stockQty ?? raw.stockCount ?? raw.stock ?? 0, 10);
+
   const rawImgs = Array.isArray(raw.images) && raw.images.length
     ? raw.images
     : (lookups.imagesByProductId?.get(id) ?? []);
-  const imgUrls = rawImgs.map(i => i.imageUrl ?? i.ImageUrl).filter(Boolean);
-  const primary = rawImgs.find(i => i.isPrimary || i.IsPrimary);
-  const primaryImage = raw.primaryImageUrl
-    ?? raw.PrimaryImageUrl
-    ?? raw.imageUrl
-    ?? raw.ImageUrl
-    ?? primary?.imageUrl
-    ?? primary?.ImageUrl
-    ?? imgUrls[0]
-    ?? null;
+
+  const sortedImgs = [...rawImgs].sort((a, b) => {
+    const aP = (a.isPrimary ?? a.IsPrimary) ? 1 : 0;
+    const bP = (b.isPrimary ?? b.IsPrimary) ? 1 : 0;
+    if (bP !== aP) return bP - aP;
+    return (a.sortOrder ?? a.SortOrder ?? 0) - (b.sortOrder ?? b.SortOrder ?? 0);
+  });
+  const primary = raw.primaryImageUrl ?? raw.PrimaryImageUrl ?? raw.imageUrl ?? raw.ImageUrl
+    ?? sortedImgs.find(i => i.isPrimary || i.IsPrimary)?.imageUrl
+    ?? sortedImgs[0]?.imageUrl ?? null;
+
   return {
     id,
     name:            raw.name ?? raw.Name ?? "",
     price:           basePrice,
     discountPercent: disc,
     discountedPrice: disc > 0 ? Math.round(basePrice * (1 - disc / 100)) : basePrice,
-    inSale:          Boolean(isSale),
+    inSale:          isSaleEnabled(isSale),
     stockCount:      stock,
     outOfStock:      stock === 0,
-    image:           primaryImage,
-    size:            raw.size ?? raw.Size ?? "",
-    brand:           raw.brandName
-      ?? raw.BrandName
-      ?? raw.brand
-      ?? lookups.brandNamesById?.get(raw.brandId ?? raw.BrandId)
-      ?? "",
-    brandId:         raw.brandId      ?? raw.BrandId      ?? 0,
-    paymentProvider: raw.paymentProvider ?? raw.PaymentProvider ?? null,
-    minInstallments: raw.minInstallments ?? raw.MinInstallments ?? null,
+    image:           primary,
+    images:          sortedImgs,    // full image objects — card uses for carousel + variant split
+    brand:           raw.brandName ?? raw.BrandName ?? raw.brand
+      ?? lookups.brandNamesById?.get(raw.brandId ?? raw.BrandId) ?? "",
+    brandId:         raw.brandId ?? raw.BrandId ?? 0,
+    showVolume:      raw.showVolume      ?? raw.ShowVolume      ?? false,
+    showWeight:      raw.showWeight      ?? raw.ShowWeight      ?? false,
+    showTabletCount: raw.showTabletCount ?? raw.ShowTabletCount ?? false,
+    paymentProvider: raw.paymentProvider ?? raw.PaymentProvider ?? raw.PaymentType ?? raw.paymentType ?? null,
+    minInstallments: raw.minInstallments ?? raw.MinInstallments ?? raw.Instalment ?? raw.instalment ?? null,
+    variants:        [],  // filled in by second fetch
   };
 }
 
 function dedupeProducts(products) {
   const byId = new Map();
-
-  products.forEach((product) => {
-    const existing = byId.get(product.id);
-    if (!existing) {
-      byId.set(product.id, product);
-      return;
-    }
-
+  products.forEach(p => {
+    const ex = byId.get(p.id);
+    if (!ex) { byId.set(p.id, p); return; }
     const preferred = (
-      (product.inSale && !existing.inSale)
-      || (!!product.image && !existing.image)
-      || ((product.stockCount ?? 0) > (existing.stockCount ?? 0))
-    ) ? product : existing;
-
-    byId.set(product.id, preferred);
+      (p.inSale && !ex.inSale) || (!!p.image && !ex.image) || ((p.stockCount ?? 0) > (ex.stockCount ?? 0))
+    ) ? p : ex;
+    byId.set(p.id, preferred);
   });
-
   return [...byId.values()];
+}
+
+/* ── Per-card component (needs own state for carousel + selector) ── */
+function BestSellingCard({ p, addToCart, showToast, toggleWishlist, isWishlisted, openQuickView, navigate }) {
+  const [activeImg,       setActiveImg]       = useState(0);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+
+  // Split product-level vs variant-level images; build variant → url[] map
+  const { productImages, variantImagesMap } = useMemo(() => {
+    const productLvl = [];
+    const vBuckets   = new Map();
+    (p.images ?? []).forEach(img => {
+      const vid = img.variantId ?? img.VariantId ?? null;
+      if (vid) {
+        const bucket = vBuckets.get(vid) ?? [];
+        bucket.push(img);
+        vBuckets.set(vid, bucket);
+      } else {
+        productLvl.push(img);
+      }
+    });
+    const toUrls = imgs => imgs
+      .map(img => img.imageUrl ?? img.ImageUrl)
+      .filter(Boolean);
+    const vMap = new Map();
+    vBuckets.forEach((imgs, vid) => vMap.set(vid, toUrls(imgs)));
+    // Fall back to all images if no product-level ones exist
+    const base = productLvl.length ? productLvl : (p.images ?? []);
+    return { productImages: toUrls(base), variantImagesMap: vMap };
+  }, [p.images]);
+
+  // Pre-select first in-stock variant when variants arrive
+  useEffect(() => {
+    const vs = p.variants ?? [];
+    const first = vs.find(v => getVariantStock(v) > 0) ?? vs[0] ?? null;
+    setSelectedVariant(first);
+  }, [p.variants]);
+
+  // Switch to variant images when a variant is selected; fallback to product images
+  const displayImages = useMemo(() => {
+    if (!selectedVariant) return productImages;
+    const vid     = selectedVariant.VariantId ?? selectedVariant.variantId;
+    const vImgs   = variantImagesMap.get(vid);
+    return vImgs?.length ? vImgs : productImages;
+  }, [selectedVariant, productImages, variantImagesMap]);
+
+  // Reset carousel on image set change
+  useEffect(() => { setActiveImg(0); }, [displayImages]);
+
+  const variants      = p.variants ?? [];
+  const variantPrice  = selectedVariant ? getVariantPrice(selectedVariant) : 0;
+  const displayPrice  = variantPrice > 0 ? variantPrice : p.discountedPrice;
+  const displayStock  = selectedVariant ? getVariantStock(selectedVariant) : p.stockCount;
+  const outOfStock    = displayStock === 0;
+  const isLow         = displayStock > 0 && displayStock <= 5;
+  const wishlisted    = isWishlisted(p.id);
+  const rating        = parseFloat(mockRating(p.id));
+  const reviews       = mockReviews(p.id);
+
+  const prev = (e) => {
+    e.stopPropagation();
+    setActiveImg(i => i === 0 ? displayImages.length - 1 : i - 1);
+  };
+  const next = (e) => {
+    e.stopPropagation();
+    setActiveImg(i => i === displayImages.length - 1 ? 0 : i + 1);
+  };
+
+  return (
+    <article
+      className="bs-card group relative bg-white rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1"
+      style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.07)", border: "1px solid rgba(0,0,0,0.07)" }}
+      onClick={() => navigate(`/product/${p.id}`)}
+    >
+      {/* ── Image carousel ───────────────────────────────────────── */}
+      <div className="relative aspect-4/5 overflow-hidden bg-zinc-50 shrink-0">
+        {displayImages.length > 0 ? (
+          <img
+            src={displayImages[activeImg]}
+            alt={p.name}
+            onError={e => { e.currentTarget.style.display = "none"; }}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center bg-zinc-100">
+            <ShoppingBag size={40} className="text-zinc-300" />
+          </div>
+        )}
+
+        {/* Arrow buttons — visible on hover */}
+        {displayImages.length > 1 && (
+          <>
+            <button type="button" onClick={prev}
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/85 backdrop-blur-sm flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity active:scale-90">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <button type="button" onClick={next}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/85 backdrop-blur-sm flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity active:scale-90">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </>
+        )}
+
+        {/* Dot indicators */}
+        {displayImages.length > 1 && (
+          <div className="absolute bottom-9 inset-x-0 z-10 flex items-center justify-center gap-1 pointer-events-none">
+            {displayImages.map((_, i) => (
+              <button key={i} type="button"
+                onClick={e => { e.stopPropagation(); setActiveImg(i); }}
+                className={`pointer-events-auto rounded-full transition-all duration-200 ${i === activeImg ? "w-3 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/55 hover:bg-white/80"}`}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Badges */}
+        <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5">
+          {p.inSale && !outOfStock && (
+            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: ORANGE }}>
+              {p.discountPercent > 0 ? `${p.discountPercent}% OFF` : "SALE"}
+            </span>
+          )}
+          {isLow && (
+            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: "#f59e0b" }}>
+              Low Stock
+            </span>
+          )}
+          {p.id % 4 === 0 && !outOfStock && (
+            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: TEAL }}>
+              New
+            </span>
+          )}
+        </div>
+
+        {/* Wishlist */}
+        <button type="button" onClick={e => { e.stopPropagation(); toggleWishlist(p); }}
+          aria-label="Wishlist"
+          className="absolute top-2.5 right-2.5 z-10 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 active:scale-90"
+          style={{ background: wishlisted ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)" }}>
+          <Heart size={15} className={wishlisted ? "fill-red-500 text-red-500" : "text-zinc-600"} strokeWidth={2} />
+        </button>
+
+        {/* Quick view */}
+        <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+          <button type="button"
+            onClick={e => { e.stopPropagation(); openQuickView(p); }}
+            className="pointer-events-auto flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white transition-all duration-200 active:scale-95"
+            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}>
+            <Eye size={13} /> Quick View
+          </button>
+        </div>
+
+        {/* Out of stock */}
+        {outOfStock && (
+          <div className="absolute bottom-0 inset-x-0 z-10 py-2.5 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <span className="text-xs font-bold tracking-widest uppercase text-white">Out of Stock</span>
+          </div>
+        )}
+
+        <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.35), transparent)" }} />
+      </div>
+
+      {/* ── Card body ────────────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 p-3.5">
+        <span className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: TEAL }}>
+          {p.brand}
+        </span>
+
+        <h3 className="text-sm font-semibold text-zinc-900 leading-snug line-clamp-2 flex-1">
+          {p.name}
+        </h3>
+
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <Stars value={rating} />
+          <span className="text-[10px] text-zinc-400 font-medium">{rating} ({reviews})</span>
+        </div>
+
+
+        {/* Price */}
+        <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5">
+          {displayPrice > 0 ? (
+            <>
+              <div className="flex items-end justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Price</p>
+                  <span className="text-sm font-bold text-zinc-900">LKR {formatLKR(displayPrice)}</span>
+                </div>
+                {!selectedVariant && p.discountPercent > 0 && (
+                  <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
+                    -{p.discountPercent}%
+                  </span>
+                )}
+              </div>
+              {!selectedVariant && p.discountPercent > 0 && (
+                <p className="mt-1 text-xs text-zinc-400 line-through">LKR {formatLKR(p.price)}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-[10px] text-zinc-400 italic">Price not available</p>
+          )}
+        </div>
+
+
+        {/* Stock bar */}
+        <div className="mt-2.5">
+          <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: outOfStock ? "0%" : `${Math.min(100, (displayStock / 20) * 100)}%`,
+                background: isLow ? "#f59e0b" : TEAL,
+              }} />
+          </div>
+          <p className="text-[10px] mt-0.5" style={{ color: isLow ? "#f59e0b" : "#a1a1aa" }}>
+            {outOfStock ? "Out of stock" : isLow ? `Only ${displayStock} left!` : `${displayStock} in stock`}
+          </p>
+        </div>
+
+        {/* Add to cart */}
+        <button type="button" disabled={outOfStock}
+          onClick={e => {
+            e.stopPropagation();
+            const vid = selectedVariant?.VariantId ?? selectedVariant?.variantId;
+            const cartItem = selectedVariant ? {
+              ...p,
+              id:              `${p.id}-v${vid}`,
+              discountedPrice: displayPrice,
+              price:           displayPrice,
+              stockCount:      displayStock,
+              variantId:       vid,
+              variantName:     getVariantName(selectedVariant),
+            } : p;
+            addToCart(cartItem, 1);
+            const vname = selectedVariant ? ` (${getVariantName(selectedVariant)})` : "";
+            showToast({ title: "Added to cart", message: `${p.name}${vname} × 1`, image: p.image });
+          }}
+          className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-95"
+          style={outOfStock
+            ? { background: "#f4f4f5", color: "#a1a1aa", cursor: "not-allowed" }
+            : { background: ORANGE, color: "white", boxShadow: `0 4px 14px rgba(232,82,42,0.28)` }
+          }>
+          <ShoppingBag size={13} strokeWidth={2.5} />
+          {outOfStock ? "Unavailable" : "Add to Bag"}
+        </button>
+      </div>
+    </article>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════ */
 const BestSelling = () => {
-  const [allProducts,   setAllProducts]   = useState([]);
+  const [allProducts,     setAllProducts]     = useState([]);
   const [quickViewOpen,   setQuickViewOpen]   = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const { toggleWishlist, isWishlisted } = useWishlist();
@@ -130,44 +412,65 @@ const BestSelling = () => {
       productsApi.getAll(),
       brandsApi.getAll(),
       productImageApi.getAll(),
-    ])
-      .then(([productsRes, brandsRes, imagesRes]) => {
-        const products = Array.isArray(productsRes.value) ? productsRes.value : [];
-        const brands = Array.isArray(brandsRes.value) ? brandsRes.value : [];
-        const images = Array.isArray(imagesRes.value) ? imagesRes.value : [];
+    ]).then(([productsRes, brandsRes, imagesRes]) => {
+      const products = asArray(productsRes.value);
+      const brands   = asArray(brandsRes.value);
+      const images   = asArray(imagesRes.value);
 
-        const brandNamesById = new Map(
-          brands.map((brand) => [
-            brand.brandId ?? brand.BrandId,
-            brand.name ?? brand.Name ?? brand.brandName ?? brand.BrandName ?? "",
-          ])
-        );
-        const imagesByProductId = images.reduce((map, image) => {
-          const productId = image.productId ?? image.ProductId;
-          if (productId == null || (image.isActive ?? image.IsActive) === false) return map;
-          const list = map.get(productId) ?? [];
-          list.push(image);
-          map.set(productId, list);
-          return map;
-        }, new Map());
+      const brandNamesById = new Map(
+        brands.map(b => [b.brandId ?? b.BrandId, b.name ?? b.Name ?? b.brandName ?? b.BrandName ?? ""])
+      );
+      const imagesByProductId = images.reduce((map, img) => {
+        const pid = img.productId ?? img.ProductId;
+        if (pid == null || (img.isActive ?? img.IsActive) === false) return map;
+        const list = map.get(pid) ?? [];
+        list.push(img);
+        map.set(pid, list);
+        return map;
+      }, new Map());
 
-        const saleProducts = dedupeProducts(
-          products.map((product) => normalizeProd(product, {
-            brandNamesById,
-            imagesByProductId,
-          }))
+      const saleProducts = dedupeProducts(
+        products.map(p => normalizeProd(p, { brandNamesById, imagesByProductId }))
+      ).filter(p => p.inSale);
+
+      setAllProducts(saleProducts);
+
+      // Second pass: fetch variants + payment options per product
+      Promise.allSettled(
+        saleProducts.map(product =>
+          Promise.allSettled([
+            productVariantsApi.getVisible(product.id).catch(() => []),
+            productsApi.getPaymentOptions(product.id).catch(() => []),
+          ]).then(([variantsRes, paymentsRes]) => {
+            const variants = variantsRes.status === "fulfilled" ? asArray(variantsRes.value) : [];
+            const payments = paymentsRes.status === "fulfilled" ? asArray(paymentsRes.value) : [];
+            const firstPricedVariant = variants.find(v => getVariantStock(v) > 0 && getVariantPrice(v) > 0)
+              ?? variants.find(v => getVariantPrice(v) > 0) ?? null;
+            const totalStock = variants.reduce((sum, v) => sum + Math.max(0, getVariantStock(v)), 0);
+            const firstPayment = payments.find(o => getPaymentName(o) || getPaymentInstalment(o));
+            const vPrice = getVariantPrice(firstPricedVariant);
+            return {
+              ...product,
+              variants,
+              paymentOptions:  payments,
+              price:           vPrice > 0 ? vPrice : product.price,
+              discountedPrice: vPrice > 0 ? Math.round(vPrice) : product.discountedPrice,
+              discountPercent: vPrice > 0 ? 0 : product.discountPercent,
+              stockCount:      variants.length > 0 ? totalStock : product.stockCount,
+              outOfStock:      variants.length > 0 ? totalStock === 0 : product.outOfStock,
+              paymentProvider: getPaymentName(firstPayment)    ?? product.paymentProvider,
+              minInstallments: getPaymentInstalment(firstPayment) ?? product.minInstallments,
+            };
+          })
         )
-          .filter((product) => product.inSale);
-
-        setAllProducts(saleProducts);
-      })
-      .catch(console.error);
+      ).then(results => {
+        setAllProducts(results.map((r, i) => r.status === "fulfilled" ? r.value : saleProducts[i]));
+      });
+    }).catch(console.error);
   }, []);
 
-  /* displayed list, max 10 */
   const displayed = useMemo(() => allProducts.slice(0, 10), [allProducts]);
 
-  /* scroll-in animation */
   useEffect(() => {
     if (!wrapRef.current || displayed.length === 0) return;
     const ctx = gsap.context(() => {
@@ -184,7 +487,7 @@ const BestSelling = () => {
     <section ref={wrapRef} className="w-full py-12 md:py-16" style={{ background: "#fafaf9" }}>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
 
-        {/* ── Header row ──────────────────────────────────────────── */}
+        {/* Header */}
         <div className="bs-title flex items-end justify-between gap-4 mb-8">
           <div>
             <span className="inline-flex items-center gap-2 mb-2 text-xs font-bold tracking-[0.2em] uppercase" style={{ color: TEAL }}>
@@ -198,227 +501,37 @@ const BestSelling = () => {
               Expert-curated favourites — tried, loved, and trusted by our customers.
             </p>
           </div>
-
-          {/* View All link */}
-          <button
-            onClick={() => navigate("/products")}
+          <button onClick={() => navigate("/products")}
             className="hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold shrink-0 transition-all duration-200 hover:gap-2.5"
-            style={{ color: TEAL }}
-          >
+            style={{ color: TEAL }}>
             View All <ChevronRight size={16} strokeWidth={2.5} />
           </button>
         </div>
 
-
-        {/* ── Product grid ────────────────────────────────────────── */}
+        {/* Grid */}
         <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {displayed.map(p => {
-            const pw         = p;
-            const rating     = parseFloat(mockRating(p.id));
-            const reviews    = mockReviews(p.id);
-            const isLow      = p.stockCount > 0 && p.stockCount <= 5;
-            const wishlisted = isWishlisted(p.id);
-
-            return (
-              <article
-                key={p.id}
-                className="bs-card group relative bg-white rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1"
-                style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.07)", border: "1px solid rgba(0,0,0,0.07)" }}
-                onClick={() => navigate(`/product/${p.id}`)}
-              >
-                {/* ── Image block ─────────────────────────────── */}
-                <div className="relative aspect-4/5 overflow-hidden bg-zinc-50 shrink-0">
-                  {p.image ? (
-                    <img
-                      src={p.image}
-                      alt={p.name}
-                      onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "flex"; }}
-                      className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05] ${p.outOfStock ? "grayscale brightness-90" : ""}`}
-                    />
-                  ) : null}
-                  <div
-                    style={{ display: p.image ? "none" : "flex" }}
-                    className="h-full w-full items-center justify-center bg-zinc-100"
-                  >
-                    <ShoppingBag size={40} className="text-zinc-300" />
-                  </div>
-
-                  {/* top-left: badges */}
-                  <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5">
-                    {p.inSale && !p.outOfStock && (
-                      <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: ORANGE }}>
-                        {p.discountPercent}% OFF
-                      </span>
-                    )}
-                    {isLow && (
-                      <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: "#f59e0b" }}>
-                        Low Stock
-                      </span>
-                    )}
-                    {p.id % 4 === 0 && !p.outOfStock && (
-                      <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: TEAL }}>
-                        New
-                      </span>
-                    )}
-                  </div>
-
-                  {/* top-right: wishlist pill */}
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); toggleWishlist(pw); }}
-                    aria-label="Wishlist"
-                    className="absolute top-2.5 right-2.5 z-10 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 active:scale-90"
-                    style={{
-                      background: wishlisted ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.85)",
-                      backdropFilter: "blur(8px)",
-                    }}
-                  >
-                    <Heart size={15} className={wishlisted ? "fill-red-500 text-red-500" : "text-zinc-600"} strokeWidth={2} />
-                  </button>
-
-                  {/* centre hover: quick view */}
-                  <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); openQuickView(pw); }}
-                      className="pointer-events-auto flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white transition-all duration-200 active:scale-95"
-                      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}
-                    >
-                      <Eye size={13} />
-                      Quick View
-                    </button>
-                  </div>
-
-                  {/* out-of-stock overlay */}
-                  {p.outOfStock && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30">
-                      <span className="rounded-xl bg-black/65 px-4 py-2 text-xs font-bold text-white backdrop-blur uppercase tracking-widest">
-                        Out of Stock
-                      </span>
-                    </div>
-                  )}
-
-                  {/* subtle bottom gradient */}
-                  <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.35), transparent)" }} />
-                </div>
-
-                {/* ── Card body ───────────────────────────────── */}
-                <div className="flex flex-col flex-1 p-3.5">
-                  {/* Brand */}
-                  <span className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: TEAL }}>
-                    {p.brand}
-                  </span>
-
-                  {/* Product name */}
-                  <h3 className="text-sm font-semibold text-zinc-900 leading-snug line-clamp-2 flex-1">
-                    {p.name}
-                  </h3>
-
-                  {/* Star rating */}
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    <Stars value={rating} />
-                    <span className="text-[10px] text-zinc-400 font-medium">{rating} ({reviews})</span>
-                  </div>
-
-                  {/* Size */}
-                  {p.size && (
-                    <span className="text-[10px] text-zinc-400 mt-1">{p.size}</span>
-                  )}
-
-                  {/* Price row */}
-                  <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5">
-                    {p.discountedPrice > 0 ? (
-                      <>
-                        <div className="flex items-end justify-between gap-2">
-                          <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Price</p>
-                            <span className="text-sm font-bold text-zinc-900">
-                              LKR {formatLKR(p.discountedPrice)}
-                            </span>
-                          </div>
-                          {p.discountPercent > 0 && (
-                            <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
-                              -{p.discountPercent}%
-                            </span>
-                          )}
-                        </div>
-                        {p.discountPercent > 0 && (
-                          <p className="mt-1 text-xs text-zinc-400 line-through">
-                            LKR {formatLKR(p.price)}
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-[10px] text-zinc-400 italic">Price not available</p>
-                    )}
-                  </div>
-
-                  {(p.paymentProvider || p.minInstallments) && (
-                    <div className="mt-2 rounded-2xl border border-zinc-100 bg-white px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Payment</p>
-                      <p className="mt-1 text-[11px] text-zinc-600">
-                        {p.paymentProvider ? <span className="font-semibold text-zinc-800">{p.paymentProvider}</span> : "Installments available"}
-                        {p.paymentProvider && p.minInstallments ? " • " : ""}
-                        {p.minInstallments ? `${p.minInstallments}+ installments` : ""}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Stock bar */}
-                  <div className="mt-2.5">
-                    <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: p.outOfStock ? "0%" : `${Math.min(100, (p.stockCount / 20) * 100)}%`,
-                          background: isLow ? "#f59e0b" : TEAL,
-                        }}
-                      />
-                    </div>
-                    <p className="text-[10px] mt-0.5" style={{ color: isLow ? "#f59e0b" : "#a1a1aa" }}>
-                      {p.outOfStock ? "Out of stock" : isLow ? `Only ${p.stockCount} left!` : `${p.stockCount} in stock`}
-                    </p>
-                  </div>
-
-                  {/* Add to cart */}
-                  <button
-                    type="button"
-                    disabled={p.outOfStock}
-                    onClick={e => {
-                      e.stopPropagation();
-                      addToCart(pw, 1);
-                      showToast({ title: "Added to cart", message: `${pw.name} × 1`, image: pw.image });
-                    }}
-                    className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-95"
-                    style={
-                      p.outOfStock
-                        ? { background: "#f4f4f5", color: "#a1a1aa", cursor: "not-allowed" }
-                        : { background: ORANGE, color: "white", boxShadow: `0 4px 14px rgba(232,82,42,0.28)` }
-                    }
-                  >
-                    <ShoppingBag size={13} strokeWidth={2.5} />
-                    {p.outOfStock ? "Unavailable" : "Add to Bag"}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+          {displayed.map(p => (
+            <BestSellingCard
+              key={p.id}
+              p={p}
+              addToCart={addToCart}
+              showToast={showToast}
+              toggleWishlist={toggleWishlist}
+              isWishlisted={isWishlisted}
+              openQuickView={openQuickView}
+              navigate={navigate}
+            />
+          ))}
         </div>
 
-        {/* ── Empty state ─────────────────────────────────────────── */}
         {displayed.length === 0 && (
-          <div className="py-20 text-center text-zinc-400 text-sm">
-            No products yet.
-          </div>
+          <div className="py-20 text-center text-zinc-400 text-sm">No products yet.</div>
         )}
 
-        {/* ── View all CTA ────────────────────────────────────────── */}
         <div className="flex justify-center mt-10">
-          <button
-            onClick={() => navigate("/products")}
+          <button onClick={() => navigate("/products")}
             className="inline-flex items-center gap-2 rounded-full px-10 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
-            style={{ background: `linear-gradient(135deg, ${TEAL} 0%, #22a19d 100%)`, boxShadow: `0 8px 28px rgba(43,185,180,0.30)` }}
-          >
+            style={{ background: `linear-gradient(135deg, ${TEAL} 0%, #22a19d 100%)`, boxShadow: `0 8px 28px rgba(43,185,180,0.30)` }}>
             See All Products <ChevronRight size={16} strokeWidth={2.5} />
           </button>
         </div>

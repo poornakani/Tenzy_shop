@@ -63,7 +63,7 @@ export default function SignInPage() {
         localStorage.setItem("userEmail", data.email ?? form.email);
       }
 
-      if (data?.userRole === 3) {
+      if ([1, 3, 4].includes(Number(data?.userRole ?? data?.user?.roleId))) {
         // Admin user — ask where to go
         setShowRoleChoice(true);
       } else {
@@ -142,7 +142,10 @@ export default function SignInPage() {
           />
 
           {error && (
-            <p className="text-sm text-red-500 text-center">{error}</p>
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <span className="mt-0.5 shrink-0 text-base leading-none">&#9888;</span>
+              <span>{error}</span>
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-3">

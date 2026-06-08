@@ -22,6 +22,9 @@ import {
   productsApi,
   brandsApi,
   productImageApi,
+  categoriesApi,
+  productVariantsApi,
+  concernsApi,
 } from "../services/api";
 
 function parseConcernIds(raw) {
@@ -39,6 +42,53 @@ function parseConcernIds(raw) {
   }
 
   return [];
+}
+
+function isSaleEnabled(value) {
+  return value === true || value === 1 || String(value).toLowerCase() === "true";
+}
+
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.Data)) return value.Data;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.Items)) return value.Items;
+  if (Array.isArray(value?.response)) return value.response;
+  if (Array.isArray(value?.Response)) return value.Response;
+  return [];
+}
+
+function variantIdOf(variant) {
+  return variant?.VariantId ?? variant?.variantId ?? variant?.id ?? variant?.Id;
+}
+
+function variantNameOf(variant) {
+  return variant?.VariantName ?? variant?.variantName ?? variant?.name ?? variant?.Name ?? "";
+}
+
+function variantPriceOf(variant) {
+  return Number(
+    variant?.SellingPrice
+    ?? variant?.sellingPrice
+    ?? variant?.FinalSellingPrice
+    ?? variant?.finalSellingPrice
+    ?? variant?.Price
+    ?? variant?.price
+    ?? 0
+  );
+}
+
+function variantStockOf(variant, fallback = 0) {
+  return Number(
+    variant?.Stock
+    ?? variant?.stock
+    ?? variant?.StockQuantity
+    ?? variant?.stockQuantity
+    ?? variant?.AvailableStock
+    ?? variant?.availableStock
+    ?? fallback
+  );
 }
 
 function normalizeApiProduct(raw, lookups = {}) {
@@ -71,7 +121,7 @@ function normalizeApiProduct(raw, lookups = {}) {
     price:           basePrice,
     discountPercent: disc,
     discountedPrice: disc > 0 ? Math.round(basePrice * (1 - disc / 100)) : basePrice,
-    inSale:          Boolean(isSale),
+    inSale:          isSaleEnabled(isSale),
     stockCount:      stock,
     outOfStock:      stock === 0,
     image:           mainImg,
@@ -100,8 +150,13 @@ function normalizeApiProduct(raw, lookups = {}) {
       ?? raw.concernTypeIdsCsv
       ?? raw.ConcernTypeIdsCsv
     ),
-    paymentProvider: raw.paymentProvider ?? null,
-    minInstallments: raw.minInstallments ?? null,
+    categoryId:      raw.categoryId ?? raw.CategoryId ?? null,
+    categoryName:    raw.categoryName ?? raw.CategoryName ?? null,
+    paymentProvider: raw.paymentProvider ?? raw.PaymentProvider ?? raw.PaymentType ?? raw.paymentType ?? null,
+    minInstallments: raw.minInstallments ?? raw.MinInstallments ?? raw.Instalment ?? raw.instalment ?? null,
+    showVolume:      raw.showVolume      ?? raw.ShowVolume      ?? false,
+    showWeight:      raw.showWeight      ?? raw.ShowWeight      ?? false,
+    showTabletCount: raw.showTabletCount ?? raw.ShowTabletCount ?? false,
   };
 }
 
@@ -148,6 +203,180 @@ const SORT_OPTIONS = [
   { v: "discount",  label: "Highest Discount" },
   { v: "stock",     label: "Most in Stock" },
 ];
+
+/* ── ProductCard ──────────────────────────────────────────────────── */
+
+function ProductCard({ p, variants = [], paymentOptions = [], addToCart, showToast, toggleWishlist, isWishlisted, goToProduct }) {
+  const [selectedVariant, setSelectedVariant] = useState(
+    variants.length > 0 ? variants[0] : null
+  );
+
+  useEffect(() => {
+    setSelectedVariant((current) => {
+      if (!variants.length) return null;
+      if (current && variants.some((variant) => String(variantIdOf(variant)) === String(variantIdOf(current)))) {
+        return current;
+      }
+      return variants.find((variant) => variantStockOf(variant) > 0) ?? variants[0];
+    });
+  }, [variants]);
+
+  const showSelector = (p.showVolume || p.showWeight || p.showTabletCount) && variants.length > 0;
+
+  const variantPrice = selectedVariant
+    ? variantPriceOf(selectedVariant)
+    : 0;
+  const displayPrice = selectedVariant
+    ? Math.round(variantPrice > 0 ? variantPrice : p.discountedPrice)
+    : p.discountedPrice;
+  const displayStock = selectedVariant
+    ? variantStockOf(selectedVariant, p.stockCount)
+    : p.stockCount;
+  const outOfStock = displayStock === 0;
+
+  const handleAddToCart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const vid = variantIdOf(selectedVariant);
+    const cartItem = selectedVariant ? {
+      ...p,
+      id:              `${p.id}-v${vid}`,
+      discountedPrice: displayPrice,
+      price:           displayPrice,
+      stockCount:      displayStock,
+      variantId:       vid,
+      variantName:     variantNameOf(selectedVariant),
+    } : p;
+    addToCart(cartItem, 1);
+    const vname = selectedVariant ? ` (${variantNameOf(selectedVariant)})` : "";
+    showToast({ title: "Added to cart", message: `${p.name}${vname} × 1`, image: p.image });
+  };
+
+  return (
+    <article className="pp-card group rounded-2xl border border-zinc-100 bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+      {/* Image */}
+      <div className="relative aspect-square overflow-hidden cursor-pointer" style={{ background: "#f0ebe3" }} onClick={() => goToProduct(p)}>
+        {p.image ? (
+          <img src={p.image} alt={p.name}
+            className="h-full w-full object-contain p-4 transition-transform duration-500 group-hover:scale-[1.05]" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-zinc-300">
+            No image
+          </div>
+        )}
+
+        {p.inSale && (
+          <div className="absolute top-3 left-3 rounded-xl bg-tenzy-orange px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-tenzy-orange/25">
+            IN SALE
+          </div>
+        )}
+
+        {!outOfStock && (
+          <div className="absolute top-3 right-3 rounded-xl px-3 py-1.5 text-xs font-semibold text-white backdrop-blur shadow-lg bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20">
+            Stock: {displayStock}
+          </div>
+        )}
+
+        {outOfStock && (
+          <div className="absolute bottom-0 inset-x-0 py-2.5 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <span className="text-xs font-bold tracking-widest uppercase text-white">Out of Stock</span>
+          </div>
+        )}
+
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/45 to-transparent" />
+
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <div className="rounded-2xl bg-white/80 backdrop-blur border border-white/30 shadow-sm p-2 flex items-center gap-2">
+            <button type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlist(p); }}
+              className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95
+                ${isWishlisted(p.id) ? "bg-tenzy-orange/90 text-white" : "bg-white text-slate-900 hover:bg-slate-50"}`}
+              aria-label="Wishlist">
+              <span className="text-base">{isWishlisted(p.id) ? "♥" : "♡"}</span>
+            </button>
+            <button type="button" disabled={outOfStock} onClick={handleAddToCart}
+              className={`flex-1 h-10 rounded-xl text-xs font-semibold transition active:scale-95
+                ${outOfStock ? "bg-slate-200 text-slate-500 cursor-not-allowed" : "bg-tenzy-teal text-white hover:opacity-90"}`}>
+              Add to cart
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Details */}
+      <div className="p-4">
+        <p className="text-[11px] font-semibold text-zinc-400">{p.brand}</p>
+        <h3 className="mt-1 text-sm font-semibold text-zinc-900 leading-snug line-clamp-2 cursor-pointer hover:text-tenzy-teal transition"
+          onClick={() => goToProduct(p)}>
+          {p.name}
+        </h3>
+
+        {/* Variant selector */}
+        {showSelector && (
+          <div className="mt-3 relative">
+            <select
+              value={selectedVariant ? variantIdOf(selectedVariant) : ""}
+              onChange={(e) => {
+                const vid = e.target.value;
+                setSelectedVariant(variants.find((v) => String(variantIdOf(v)) === vid) ?? null);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full appearance-none text-xs font-semibold text-zinc-800 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 pr-8 focus:outline-none focus:border-tenzy-teal transition cursor-pointer"
+            >
+              {variants.map((v) => {
+                const vid   = variantIdOf(v);
+                const name  = variantNameOf(v);
+                const vol   = v.Volume ?? v.volume;
+                const wt    = v.Weight ?? v.weight;
+                const tabs  = Number(v.TabsCount ?? v.tabsCount ?? 0);
+                const stk   = variantStockOf(v);
+                const price = variantPriceOf(v);
+                const parts = [name];
+                if (p.showVolume && vol) parts.push(vol);
+                if (p.showWeight && wt)  parts.push(`${wt}g`);
+                if (p.showTabletCount && tabs > 0) parts.push(`${tabs} tabs`);
+                const priceStr = price > 0 ? ` — LKR ${formatLKR(price)}` : "";
+                const stockStr = stk === 0 ? " (Sold out)" : "";
+                return (
+                  <option key={vid} value={vid} disabled={stk === 0}>
+                    {parts.join(" · ")}{priceStr}{stockStr}
+                  </option>
+                );
+              })}
+            </select>
+            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5">
+          {displayPrice > 0 ? (
+            <>
+              <div className="flex items-end justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Price</p>
+                  <p className="text-sm font-bold text-zinc-900">LKR {formatLKR(displayPrice)}</p>
+                </div>
+                {!selectedVariant && p.discountPercent > 0 && (
+                  <p className="text-xs font-bold text-tenzy-orange">-{p.discountPercent}%</p>
+                )}
+              </div>
+              {!selectedVariant && p.discountPercent > 0 && (
+                <p className="mt-1 text-xs text-zinc-400 line-through">LKR {formatLKR(p.price)}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-[10px] text-zinc-400 italic">Price not available</p>
+          )}
+        </div>
+
+      </div>
+    </article>
+  );
+}
 
 /* ── Small helper components ──────────────────────────────────────── */
 
@@ -205,18 +434,39 @@ const ProductsPage = () => {
   const toggleWishlist = wishlistApi?.toggleWishlist ?? (() => {});
   const isWishlisted = wishlistApi?.isWishlisted ?? (() => false);
 
-  // Read concernID from URL (?concernID=1)
-  const concernIDParam =
-    searchParams.get("concernID") || searchParams.get("concern");
-  const activeConcernID = concernIDParam ? Number(concernIDParam) : null;
+  // Read categoryId from URL (?categoryId=1) — also keep old concernID for backwards compat
+  const categoryIdParam = searchParams.get("categoryId") || searchParams.get("categoryID");
+  const initialCategoryId = categoryIdParam ? Number(categoryIdParam) : null;
+
+  // -------- Categories --------
+  const [categories, setCategories] = useState([]);
+  useEffect(() => {
+    categoriesApi.getAll()
+      .then((data) => setCategories(Array.isArray(data) ? data.filter((c) => c.isActive !== false) : []))
+      .catch(() => {});
+  }, []);
+
+  // -------- Concern types --------
+  const [concernsList, setConcernsList] = useState([]);
+  useEffect(() => {
+    concernsApi.getAll()
+      .then((data) => setConcernsList(
+        Array.isArray(data)
+          ? data.filter((c) => c.isActive === true || c.isActive === 1)
+          : []
+      ))
+      .catch(() => {});
+  }, []);
 
   // -------- API product list --------
-  const [rawProducts,     setRawProducts]     = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-  const [productLookups,  setProductLookups]  = useState({
+  const [rawProducts,        setRawProducts]        = useState([]);
+  const [loadingProducts,    setLoadingProducts]    = useState(true);
+  const [productLookups,     setProductLookups]     = useState({
     brandNamesById: new Map(),
     imagesByProductId: new Map(),
   });
+  const [variantsByProductId,     setVariantsByProductId]     = useState(new Map());
+  const [paymentOptionsByProductId, setPaymentOptionsByProductId] = useState(new Map());
 
   useEffect(() => {
     Promise.allSettled([
@@ -225,9 +475,9 @@ const ProductsPage = () => {
       productImageApi.getAll(),
     ])
       .then(([productsRes, brandsRes, imagesRes]) => {
-        const products = Array.isArray(productsRes.value) ? productsRes.value : [];
-        const brands = Array.isArray(brandsRes.value) ? brandsRes.value : [];
-        const images = Array.isArray(imagesRes.value) ? imagesRes.value : [];
+        const products = asArray(productsRes.value);
+        const brands = asArray(brandsRes.value);
+        const images = asArray(imagesRes.value);
 
         const brandNamesById = new Map(
           brands.map((brand) => [
@@ -246,13 +496,59 @@ const ProductsPage = () => {
 
         setRawProducts(products);
         setProductLookups({ brandNamesById, imagesByProductId });
+
+        // Batch-fetch all payment options
+        Promise.allSettled(
+          products.map((pr) => {
+            const pid = pr.productId ?? pr.ProductId ?? pr.id;
+            return productsApi.getPaymentOptions(pid).then((opts) => ({ pid, opts }));
+          })
+        ).then((results) => {
+          const map = new Map();
+          results.forEach((r) => {
+            if (r.status === "fulfilled") {
+              const { pid, opts } = r.value;
+              const arr = asArray(opts);
+              if (arr.length) map.set(pid, arr);
+            }
+          });
+          setPaymentOptionsByProductId(map);
+        });
+
+        // Fetch visible variants for products with variant display enabled
+        const eligible = products.filter(
+          (pr) => (pr.showVolume ?? pr.ShowVolume)
+            || (pr.showWeight ?? pr.ShowWeight)
+            || (pr.showTabletCount ?? pr.ShowTabletCount)
+        );
+        if (eligible.length > 0) {
+          Promise.allSettled(
+            eligible.map((pr) => {
+              const pid = pr.productId ?? pr.ProductId ?? pr.id;
+              return productVariantsApi.getVisible(pid).then((vs) => ({ pid, vs }));
+            })
+          ).then((results) => {
+            const map = new Map();
+            results.forEach((r) => {
+              if (r.status === "fulfilled") {
+                const { pid, vs } = r.value;
+                const inStock = asArray(vs).filter(
+                  (v) => variantStockOf(v) > 0
+                );
+                if (inStock.length > 0) map.set(pid, inStock);
+              }
+            });
+            setVariantsByProductId(map);
+          });
+        }
       })
       .catch(console.error)
       .finally(() => setLoadingProducts(false));
   }, []);
 
   const products = useMemo(
-    () => dedupeProducts(rawProducts.map((product) => normalizeApiProduct(product, productLookups))),
+    () => dedupeProducts(rawProducts.map((product) => normalizeApiProduct(product, productLookups)))
+      .filter((product) => product.inSale),
     [rawProducts, productLookups]
   );
 
@@ -273,6 +569,9 @@ const ProductsPage = () => {
   const { showToast } = useToast();
 
   const [selectedBrandId, setSelectedBrandId] = useState("All");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
+  const [selectedConcernId, setSelectedConcernId] = useState(null);
+
 
   const priceMin = useMemo(() => {
     if (!products.length) return 0;
@@ -306,12 +605,8 @@ const ProductsPage = () => {
     const query = q.trim().toLowerCase();
 
     let list = products.filter((p) => {
-      if (activeConcernID) {
-        const hasConcern =
-          (Array.isArray(p.concernIds) &&
-            p.concernIds.includes(activeConcernID)) ||
-          (typeof p.concernID === "number" && p.concernID === activeConcernID);
-        if (!hasConcern) return false;
+      if (selectedCategoryId) {
+        if (p.categoryId !== selectedCategoryId) return false;
       }
 
       if (
@@ -322,6 +617,7 @@ const ProductsPage = () => {
       )
         return false;
 
+      if (selectedConcernId !== null && !p.concernIds.includes(selectedConcernId)) return false;
       if (onlySale && !p.inSale) return false;
       if (onlyInStock && (p.outOfStock || p.stockCount === 0)) return false;
       if (p.discountedPrice > maxPrice) return false;
@@ -342,8 +638,9 @@ const ProductsPage = () => {
     return list;
   }, [
     products,
-    activeConcernID,
+    selectedCategoryId,
     selectedBrandId,
+    selectedConcernId,
     q,
     sort,
     onlySale,
@@ -362,7 +659,7 @@ const ProductsPage = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID]);
+  }, [selectedBrandId, selectedCategoryId, selectedConcernId, q, sort, onlySale, onlyInStock, maxPrice]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -377,12 +674,16 @@ const ProductsPage = () => {
   // -------- Active filter count --------
   const hasActiveFilters =
     selectedBrandId !== "All" ||
+    selectedCategoryId !== null ||
+    selectedConcernId !== null ||
     onlySale ||
     onlyInStock ||
     maxPrice < priceMax;
 
   const activeFilterCount = [
     selectedBrandId !== "All",
+    selectedCategoryId !== null,
+    selectedConcernId !== null,
     onlySale,
     onlyInStock,
     maxPrice < priceMax,
@@ -394,35 +695,45 @@ const ProductsPage = () => {
     return b?.name ?? selectedBrandId;
   }, [selectedBrandId, brandsList]);
 
+  // -------- animations replaced with motion whileInView --------
   // -------- GSAP animations --------
   useEffect(() => {
     if (!wrapRef.current) return;
     const ctx = gsap.context(() => {
+      const cards = gsap.utils.toArray(".pp-card");
       gsap.fromTo(
         ".pp-hero",
         { y: 14, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.55, ease: "power2.out" }
       );
-      gsap.fromTo(
-        ".pp-card",
-        { y: 18, opacity: 0, scale: 0.985 },
-        {
-          y: 0, opacity: 1, scale: 1,
-          duration: 0.45, ease: "power2.out", stagger: 0.04,
-          scrollTrigger: { trigger: ".pp-grid", start: "top 85%" },
-        }
-      );
+      if (cards.length) {
+        gsap.fromTo(
+          cards,
+          { y: 18, opacity: 0, scale: 0.985 },
+          {
+            y: 0, opacity: 1, scale: 1,
+            duration: 0.45, ease: "power2.out", stagger: 0.04,
+            scrollTrigger: { trigger: ".pp-grid", start: "top 85%" },
+          }
+        );
+      }
     }, wrapRef);
     return () => ctx.revert();
   }, []);
 
   useEffect(() => {
-    gsap.fromTo(
-      ".pp-card",
-      { y: 10, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.25, stagger: 0.02, ease: "power2.out" }
-    );
-  }, [selectedBrandId, q, sort, onlySale, onlyInStock, maxPrice, activeConcernID, page]);
+    if (!wrapRef.current) return;
+    const ctx = gsap.context(() => {
+      const cards = gsap.utils.toArray(".pp-card");
+      if (!cards.length) return;
+      gsap.fromTo(
+        cards,
+        { y: 10, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.25, stagger: 0.02, ease: "power2.out" }
+      );
+    }, wrapRef);
+    return () => ctx.revert();
+  }, [selectedBrandId, selectedCategoryId, selectedConcernId, q, sort, onlySale, onlyInStock, maxPrice, page, pagedProducts.length]);
 
   // Mobile panel slide-up animation
   useEffect(() => {
@@ -447,12 +758,18 @@ const ProductsPage = () => {
   // -------- Actions --------
   const clearFilters = () => {
     setSelectedBrandId("All");
+    setSelectedCategoryId(null);
+    setSelectedConcernId(null);
     setQ("");
     setSort("featured");
     setOnlySale(false);
     setOnlyInStock(false);
     setMaxPrice(priceMax);
   };
+
+  const selectedCategoryName = selectedCategoryId
+    ? (categories.find((c) => c.categoryId === selectedCategoryId)?.name ?? null)
+    : null;
 
   const { addToCart } = useCart();
   const showPagination = filtered.length > PAGE_SIZE;
@@ -694,12 +1011,23 @@ const ProductsPage = () => {
             {/* Active filter chips */}
             {hasActiveFilters && (
               <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-zinc-50">
+                {selectedCategoryName && (
+                  <FilterChip
+                    label={selectedCategoryName}
+                    onRemove={() => setSelectedCategoryId(null)}
+                  />
+                )}
                 {activeBrandName && (
                   <FilterChip
                     label={activeBrandName}
                     onRemove={() => setSelectedBrandId("All")}
                   />
                 )}
+                {selectedConcernId !== null && (() => {
+                  const ct = concernsList.find((c) => (c.concernTypeId ?? c.ConcernTypeId) === selectedConcernId);
+                  const label = ct?.name ?? ct?.Name ?? `Concern ${selectedConcernId}`;
+                  return <FilterChip label={label} onRemove={() => setSelectedConcernId(null)} />;
+                })()}
                 {onlySale && (
                   <FilterChip label="On Sale" onRemove={() => setOnlySale(false)} />
                 )}
@@ -795,6 +1123,30 @@ const ProductsPage = () => {
 
                 <div className="h-px bg-zinc-100" />
 
+                {/* Category */}
+                {categories.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                      Category
+                    </p>
+                    <div className="relative">
+                      <select
+                        value={selectedCategoryId ?? ""}
+                        onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 pr-9 text-sm font-medium text-zinc-800 outline-none transition focus:border-tenzy-teal/40"
+                      >
+                        <option value="">All Categories</option>
+                        {categories.map((c) => (
+                          <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="h-px bg-zinc-100" />
+
                 {/* Brand */}
                 <div>
                   <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
@@ -822,6 +1174,32 @@ const ProductsPage = () => {
                     />
                   </div>
                 </div>
+
+                {concernsList.length > 0 && (
+                  <>
+                    <div className="h-px bg-zinc-100" />
+                    <div>
+                      <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                        Skin Concerns
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={selectedConcernId ?? ""}
+                          onChange={(e) => setSelectedConcernId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 pr-9 text-sm font-medium text-zinc-800 outline-none transition focus:border-tenzy-teal/40"
+                        >
+                          <option value="">All Concerns</option>
+                          {concernsList.map((ct) => {
+                            const cid   = ct.concernTypeId ?? ct.ConcernTypeId;
+                            const label = ct.name ?? ct.Name ?? ct.concernType ?? ct.ConcernType ?? "—";
+                            return <option key={cid} value={cid}>{label}</option>;
+                          })}
+                        </select>
+                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="h-px bg-zinc-100" />
 
@@ -885,160 +1263,19 @@ const ProductsPage = () => {
             ) : (
               <>
                 <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
-                  {pagedProducts.map((p) => {
-                    const outOfStock = p.outOfStock || p.stockCount === 0;
-
-                    return (
-                      <article
-                        key={p.id}
-                        className="pp-card group rounded-2xl border border-zinc-100 bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-                      >
-                        {/* Image */}
-                        <div
-                          className="relative aspect-4/5 overflow-hidden cursor-pointer"
-                          onClick={() => goToProduct(p)}
-                        >
-                          {p.image ? (
-                            <img
-                              src={p.image}
-                              alt={p.name}
-                              className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]
-                                ${outOfStock ? "blur-[2px] grayscale" : ""}`}
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-zinc-100 text-sm font-semibold text-zinc-300">
-                              No image available
-                            </div>
-                          )}
-
-                          {p.inSale && (
-                            <div className="absolute top-3 left-3 rounded-xl bg-tenzy-orange px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-tenzy-orange/25">
-                              IN SALE
-                            </div>
-                          )}
-
-                          <div
-                            className={`absolute top-3 right-3 rounded-xl px-3 py-1.5 text-xs font-semibold text-white backdrop-blur shadow-lg
-                              ${outOfStock
-                                ? "bg-black/60"
-                                : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
-                              }`}
-                          >
-                            {outOfStock
-                              ? "Out of stock"
-                              : `Stock: ${p.stockCount}`}
-                          </div>
-
-                          <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/45 to-transparent" />
-
-                          {/* Bottom actions */}
-                          <div className="absolute inset-x-0 bottom-0 p-3">
-                            <div className="rounded-2xl bg-white/80 backdrop-blur border border-white/30 shadow-sm p-2 flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  toggleWishlist(p);
-                                }}
-                                className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95
-                                  ${isWishlisted(p.id)
-                                    ? "bg-tenzy-orange/90 text-white"
-                                    : "bg-white text-slate-900 hover:bg-slate-50"
-                                  }`}
-                                aria-label="Wishlist"
-                                title="Wishlist"
-                              >
-                                <span className="text-base">
-                                  {isWishlisted(p.id) ? "♥" : "♡"}
-                                </span>
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={outOfStock}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  addToCart(p, 1);
-                                  showToast({
-                                    title: "Added to cart",
-                                    message: `${p.name} × 1`,
-                                    image: p.image,
-                                  });
-                                }}
-                                className={`flex-1 h-10 rounded-xl text-xs font-semibold transition active:scale-95
-                                  ${outOfStock
-                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                                    : "bg-tenzy-teal text-white hover:opacity-90"
-                                  }`}
-                              >
-                                Add to cart
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Details */}
-                        <div className="p-4">
-                          <p className="text-[11px] font-semibold text-zinc-400">
-                            {p.brand}
-                          </p>
-
-                          <h3
-                            className="mt-1 text-sm font-semibold text-zinc-900 leading-snug line-clamp-2 cursor-pointer hover:text-tenzy-teal transition"
-                            onClick={() => goToProduct(p)}
-                          >
-                            {p.name}
-                          </h3>
-
-                          <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5">
-                            {p.discountedPrice > 0 ? (
-                              <>
-                                <div className="flex items-end justify-between gap-2">
-                                  <div>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Price</p>
-                                    <p className="text-sm font-bold text-zinc-900">
-                                      LKR {formatLKR(p.discountedPrice)}
-                                    </p>
-                                  </div>
-                                  {p.discountPercent > 0 && (
-                                    <p className="text-xs font-bold text-tenzy-orange">
-                                      -{p.discountPercent}%
-                                    </p>
-                                  )}
-                                </div>
-                                {p.discountPercent > 0 && (
-                                  <p className="mt-1 text-xs text-zinc-400 line-through">
-                                    LKR {formatLKR(p.price)}
-                                  </p>
-                                )}
-                              </>
-                            ) : (
-                              <p className="text-[10px] text-zinc-400 italic">Price not available</p>
-                            )}
-                          </div>
-
-                          {(p.paymentProvider || p.minInstallments) && (
-                            <div className="mt-2 rounded-2xl border border-zinc-100 bg-white px-3 py-2.5">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Payment</p>
-                              <p className="mt-1 text-[11px] text-zinc-500">
-                                {p.paymentProvider ? (
-                                  <>
-                                    Pay with{" "}
-                                    <span className="font-semibold text-zinc-700">{p.paymentProvider}</span>
-                                    {p.minInstallments ? ` • ${p.minInstallments}+ instalments` : ""}
-                                  </>
-                                ) : (
-                                  `${p.minInstallments}+ instalment plan available`
-                                )}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
+                  {pagedProducts.map((p) => (
+                    <ProductCard
+                      key={p.id}
+                      p={p}
+                      variants={variantsByProductId.get(p.id) ?? []}
+                      paymentOptions={paymentOptionsByProductId.get(p.id) ?? []}
+                      addToCart={addToCart}
+                      showToast={showToast}
+                      toggleWishlist={toggleWishlist}
+                      isWishlisted={isWishlisted}
+                      goToProduct={goToProduct}
+                    />
+                  ))}
                 </div>
 
                 {/* Pagination */}
@@ -1214,6 +1451,28 @@ const ProductsPage = () => {
                     </div>
                   </div>
 
+                  {/* Category */}
+                  {categories.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                        Category
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={selectedCategoryId ?? ""}
+                          onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 pr-9 text-sm font-medium text-zinc-800 outline-none"
+                        >
+                          <option value="">All Categories</option>
+                          {categories.map((c) => (
+                            <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Brand */}
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
@@ -1231,7 +1490,7 @@ const ProductsPage = () => {
                         className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 pr-9 text-sm font-medium text-zinc-800 outline-none"
                       >
                         <option value="All">All Brands</option>
-                        {BrandsList.map((b) => {
+                        {brandsList.map((b) => {
                           const id = b.id ?? b.BrandID ?? b.brandId ?? b.brandID;
                           return (
                             <option key={id ?? b.name} value={String(id)}>
@@ -1246,6 +1505,30 @@ const ProductsPage = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Skin Concerns */}
+                  {concernsList.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                        Skin Concerns
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={selectedConcernId ?? ""}
+                          onChange={(e) => setSelectedConcernId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full appearance-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 pr-9 text-sm font-medium text-zinc-800 outline-none"
+                        >
+                          <option value="">All Concerns</option>
+                          {concernsList.map((ct) => {
+                            const cid   = ct.concernTypeId ?? ct.ConcernTypeId;
+                            const label = ct.name ?? ct.Name ?? ct.concernType ?? ct.ConcernType ?? "—";
+                            return <option key={cid} value={cid}>{label}</option>;
+                          })}
+                        </select>
+                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Toggles */}
                   <div className="space-y-2">

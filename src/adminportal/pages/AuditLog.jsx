@@ -55,17 +55,91 @@ function Pagination({ page, totalPages, onChange }) {
   );
 }
 
-/* ── JSON diff viewer ─────────────────────────────────────────────────────── */
-function JsonBlock({ label, json }) {
-  if (!json) return null;
-  let parsed;
-  try { parsed = JSON.parse(json); } catch { parsed = json; }
+/* ── Change summary (human-readable diff) ────────────────────────────────── */
+const SKIP_FIELDS = new Set([
+  "updatedAtUtc","UpdatedAtUtc","createdAtUtc","CreatedAtUtc",
+  "lastupdated","LastUpdated","createdate","CreateDate","createDate",
+  "lastStockUpdateUTC","LastStockUpdateUTC","appliedToProductAtUtc",
+  "pricingReviewStatus","PricingReviewStatus",
+]);
+
+const tryParse = (j) => {
+  if (!j) return null;
+  try { return typeof j === "object" ? j : JSON.parse(j); }
+  catch { return null; }
+};
+
+const fmtVal = (v) => {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  const s = String(v);
+  return s.length > 80 ? s.slice(0, 77) + "…" : s;
+};
+
+const friendlyLabel = (key) =>
+  key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/\bId\b/g, "ID").trim()
+    .replace(/^./, (c) => c.toUpperCase());
+
+function buildChanges(oldJson, newJson, action = "") {
+  const oldObj = tryParse(oldJson);
+  const newObj = tryParse(newJson);
+  const act = action.toLowerCase();
+  const isDel = act.includes("delete") || act.includes("deactivate") || act.includes("remove");
+  const isNew = act.includes("create") || act.includes("insert") || act.includes("add");
+
+  if (isDel && oldObj && !newObj) {
+    return Object.entries(oldObj)
+      .filter(([k]) => !SKIP_FIELDS.has(k))
+      .map(([k, v]) => ({ field: k, old: fmtVal(v), nw: null, type: "delete" }))
+      .slice(0, 10);
+  }
+  if (isNew && newObj && !oldObj) {
+    return Object.entries(newObj)
+      .filter(([k]) => !SKIP_FIELDS.has(k))
+      .map(([k, v]) => ({ field: k, old: null, nw: fmtVal(v), type: "create" }))
+      .slice(0, 10);
+  }
+  if (oldObj && newObj) {
+    const allKeys = [...new Set([...Object.keys(oldObj), ...Object.keys(newObj)])];
+    return allKeys
+      .filter((k) => !SKIP_FIELDS.has(k))
+      .map((k) => ({ field: k, old: fmtVal(oldObj[k]), nw: fmtVal(newObj[k]), type: "update" }))
+      .filter(({ old, nw }) => old !== nw);
+  }
+  if (newObj) return Object.entries(newObj).filter(([k]) => !SKIP_FIELDS.has(k)).map(([k, v]) => ({ field: k, old: null, nw: fmtVal(v), type: "create" })).slice(0, 10);
+  if (oldObj) return Object.entries(oldObj).filter(([k]) => !SKIP_FIELDS.has(k)).map(([k, v]) => ({ field: k, old: fmtVal(v), nw: null, type: "delete" })).slice(0, 10);
+  return [];
+}
+
+function ChangeSummary({ oldValues, newValues, action }) {
+  const changes = buildChanges(oldValues, newValues, action);
+
+  if (!changes.length) {
+    return <p className="text-xs text-slate-400 italic">No field changes recorded.</p>;
+  }
+
   return (
-    <div className="flex-1 min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{label}</p>
-      <pre className="text-[11px] bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-x-auto text-slate-700 leading-relaxed whitespace-pre-wrap break-all">
-        {typeof parsed === "object" ? JSON.stringify(parsed, null, 2) : String(parsed)}
-      </pre>
+    <div className="space-y-1.5">
+      {changes.map(({ field, old, nw, type }) => (
+        <div key={field} className="flex items-start gap-2 flex-wrap text-xs">
+          <span className="font-semibold text-slate-600 min-w-[130px] shrink-0">
+            {friendlyLabel(field)}
+          </span>
+          {type === "update" && (
+            <span className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-600 line-through opacity-80">{old}</span>
+              <span className="text-slate-400 font-bold">→</span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">{nw}</span>
+            </span>
+          )}
+          {type === "create" && (
+            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">{nw}</span>
+          )}
+          {type === "delete" && (
+            <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-600 opacity-80">{old}</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -118,12 +192,10 @@ function LogRow({ log }) {
         </td>
       </tr>
       {open && hasDetail && (
-        <tr className="bg-slate-50 border-b border-slate-200">
-          <td colSpan={8} className="px-4 py-4">
-            <div className="flex gap-4 flex-wrap">
-              <JsonBlock label="Before" json={log.oldValues} />
-              <JsonBlock label="After" json={log.newValues} />
-            </div>
+        <tr className="bg-slate-50/80 border-b border-slate-200">
+          <td colSpan={8} className="px-6 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Changes</p>
+            <ChangeSummary oldValues={log.oldValues} newValues={log.newValues} action={log.action} />
           </td>
         </tr>
       )}
@@ -230,7 +302,7 @@ export default function AuditLog() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter by admin, action, entity…"
-            className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20 transition"
+            className="w-full pl-8 pr-3 py-2 rounded-xl border border-tenzy-orange/50 bg-white text-sm outline-none focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20 transition"
           />
         </div>
 

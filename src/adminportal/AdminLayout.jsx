@@ -1,44 +1,62 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users,
   BarChart2, LogOut, Menu, X, Bell, ChevronRight,
-  Settings, Store, Star, PackagePlus, Database, Percent,
+  ExternalLink, Store, Star, PackagePlus, Database, Percent,
   BadgeCheck, Layers, Shield,
 } from "lucide-react";
+import { useAuth } from "../Context/AuthContext";
+import { supplyChainApi } from "../services/api";
 
-const NAV = [
+const ALL_NAV = [
   { to: "/admin",              label: "Dashboard",   icon: LayoutDashboard, end: true },
   { to: "/admin/orders",       label: "Orders",      icon: ShoppingCart },
   { to: "/admin/products",     label: "Products",    icon: Package },
-  { to: "/admin/procurement",  label: "UK Purchase", icon: PackagePlus },
+  { to: "/admin/procurement",  label: "UK Purchase", icon: PackagePlus,     superAdminOnly: true },
   { to: "/admin/arrival",      label: "Arrival",     icon: BadgeCheck },
-  { to: "/admin/pricing",      label: "Pricing",     icon: Percent },
+  { to: "/admin/pricing",      label: "Pricing",     icon: Percent,         superAdminOnly: true },
   { to: "/admin/dispatch",     label: "Dispatch",    icon: Truck },
   { to: "/admin/stock",        label: "Stock",       icon: Layers },
   { to: "/admin/customers",    label: "Customers",   icon: Users },
   { to: "/admin/reviews",      label: "Reviews",     icon: Star },
-  { to: "/admin/reports",      label: "Reports",     icon: BarChart2 },
+  { to: "/admin/reports",      label: "Reports",     icon: BarChart2,       superAdminOnly: true },
   { to: "/admin/audit-log",    label: "Audit Log",   icon: Shield },
   { to: "/admin/reference",    label: "Reference",   icon: Database },
 ];
 
-const BOTTOM_NAV = [
-  { to: "/admin",          label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/orders",   label: "Orders",    icon: ShoppingCart },
-  { to: "/admin/products", label: "Products",  icon: Package },
-  { to: "/admin/dispatch", label: "Dispatch",  icon: Truck },
-  { to: "/admin/reports",  label: "Reports",   icon: BarChart2 },
-];
+const ROLE_LABEL = { 3: "Super Admin", 1: "Admin", 4: "Manager", 2: "User" };
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen,    setSidebarOpen]    = useState(false);
+  const [pendingPricing, setPendingPricing] = useState(0);
+  const { user, isSuperAdmin, roleId } = useAuth();
+
+  // Fetch pending pricing count once on mount (super-admins only)
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    supplyChainApi.getEligiblePricing()
+      .then((rows) => {
+        const pending = (Array.isArray(rows) ? rows : [])
+          .filter((r) => r.pricingReviewStatus !== "applied_live").length;
+        setPendingPricing(pending);
+      })
+      .catch(() => {});
+  }, [isSuperAdmin]);
+
+  const NAV        = ALL_NAV.filter((item) => !item.superAdminOnly || isSuperAdmin);
+  const BOTTOM_NAV = NAV.filter((item) =>
+    ["/admin", "/admin/orders", "/admin/products", "/admin/dispatch", "/admin/reports"].includes(item.to)
+  );
 
   const handleLogout = () => {
     localStorage.removeItem("adminAuth");
     navigate("/signin");
   };
+
+  const initials = (user?.displayName || user?.email || "A")
+    .split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   const SidebarContent = ({ onClose }) => (
     <div className="flex flex-col h-full">
@@ -77,21 +95,28 @@ export default function AdminLayout() {
             }
           >
             <item.icon size={18} />
-            <span>{item.label}</span>
+            <span className="flex-1">{item.label}</span>
+            {item.to === "/admin/pricing" && pendingPricing > 0 && (
+              <span className="ml-auto rounded-full bg-tenzy-orange text-white text-[10px] font-bold px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+                {pendingPricing}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
 
       {/* Bottom */}
       <div className="px-3 pb-5 border-t border-white/10 pt-4 space-y-0.5">
-        <NavLink
-          to="/admin/settings"
+        <a
+          href="/#/"
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={onClose}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/60 hover:text-white hover:bg-white/8 transition-all"
         >
-          <Settings size={18} />
-          <span>Settings</span>
-        </NavLink>
+          <ExternalLink size={18} />
+          <span>Visit Website</span>
+        </a>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
@@ -147,11 +172,11 @@ export default function AdminLayout() {
             </button>
             <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
               <div className="w-8 h-8 rounded-full bg-tenzy-teal flex items-center justify-center text-white text-xs font-bold">
-                P
+                {initials}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold text-slate-800 leading-none">Poorna</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Administrator</p>
+                <p className="text-xs font-semibold text-slate-800 leading-none">{user?.displayName || "Admin"}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{ROLE_LABEL[roleId] ?? "Admin"}</p>
               </div>
             </div>
           </div>

@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildSimplePdf, padValue, tabulateReport } from "../src/adminportal/utils/simplePdf.js";
 
-test("padValue trims long values and marks truncation", () => {
-  assert.equal(padValue("abcdefghij", 6), "abcde~");
+test("padValue trims long values without adding truncation markers", () => {
+  assert.equal(padValue("abcdefghij", 6), "abcdef");
 });
 
 test("tabulateReport returns header, divider, and body lines", () => {

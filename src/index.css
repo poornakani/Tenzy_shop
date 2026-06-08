@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Serif+Text:ital@0;1&family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -7,9 +7,9 @@
   /* Tenzy brand colours (from logo) */
   --color-tenzy-orange: #E8522A;
   --color-tenzy-teal: #2BB9B4;
-  --font-sans: "Mona Sans", sans-serif;
+  --font-sans: "DM Sans", sans-serif;
   --font-modern-negra: "Cormorant Garamond", serif;
-  --font-serif: "DM Serif Text", serif;
+  --font-serif: "DM Sans", sans-serif;
 
   --screen-sm: 640px;
   --screen-md: 768px;
@@ -25,6 +25,7 @@ body {
   color: black;
   scroll-behavior: smooth;
   overflow-x: hidden;
+  font-family: "DM Sans", sans-serif;
 }
 
 @utility masked-img {
@@ -38,6 +39,14 @@ body {
   @apply flex justify-center items-center;
 }
 
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility radial-gradient {
   background: radial-gradient(
     circle at top,
@@ -46,6 +55,20 @@ body {
     #eeb868 10%
   );
 }
+
+/* ── Product description HTML rendering ───────────────────────────── */
+.description-html ul   { list-style: disc;    padding-left: 1.25rem; }
+.description-html ol   { list-style: decimal; padding-left: 1.25rem; }
+.description-html li   { margin-top: 0.2rem; margin-bottom: 0.2rem; }
+.description-html strong, .description-html b { font-weight: 700; color: #0f172a; }
+.description-html em,     .description-html i { font-style: italic; }
+.description-html h1, .description-html h2, .description-html h3,
+.description-html h4, .description-html h5, .description-html h6 {
+  font-weight: 700; color: #0f172a; margin-top: 0.6rem; margin-bottom: 0.2rem;
+}
+.description-html h2 { font-size: 1rem; }
+.description-html h3 { font-size: 0.9375rem; }
+.description-html p  { margin-top: 0.2rem; margin-bottom: 0.2rem; }
 
 @layer components {
   #banner2 {

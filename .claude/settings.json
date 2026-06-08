@@ -37,7 +37,27 @@
       "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Models\\\\ProductsModels\\\\CatagoryModel.cs\" -Force)",
       "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\ICategoryReader.cs\" -Force)",
       "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\CategoryReader.cs\" -Force)",
-      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\ICategoryWriter.cs\" -Force)"
+      "Bash(Remove-Item \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\Category\\\\ICategoryWriter.cs\" -Force)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\src\\\\adminportal\\\\pages\\\\\" -File | Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\" -Directory)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TenzyBackend.Data\\\\Products\\\\\" -Force | Select-Object Name, PSIsContainer | Format-List)",
+      "Bash(Find-Item -Path \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\TencyBackendApi\\\\Controllers\" -Filter \"*roduct*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Find-Item -Path \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\" -Name \"*.sql\")",
+      "Bash(Select-Object -First 1 -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\" -Recurse -File)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\" -Recurse -File -Include \"*.csproj\", \"appsettings*.json\", \"*.config\")",
+      "PowerShell(head -50)",
+      "Bash(npm uninstall *)",
+      "Bash(del \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\aveeno.png\" \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\cereve.jpg\" \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\lorial.jpg\" \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\madagaskar.jpg\" \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\ordinary.jpg\" \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\vichy.jpg\" \"c:\\\\Users\\\\poorn\\\\Tenzy_shop\\\\public\\\\images\\\\sellingProd\\\\vitac.jpg\")",
+      "Bash(npm install *)",
+      "Bash(git checkout *)",
+      "Bash(grep -E \"from\\\\s+['\\\\\"]\\\\.{1,2}/\")",
+      "Bash(Get-Content 049_pricing_profitability_report.sql)",
+      "Bash(Select-String -Pattern \"ALTER TABLE.*SupplyPricing|ADD.*SupplyPricing|CREATE TABLE.*SupplyPricing\" -AllMatches)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\poorn\\\\source\\\\repos\\\\TencyBackendApi\\\\Database\\\\migrations\\\\\" -Filter \"*.sql\" | Select-Object -ExpandProperty Name | Sort-Object)",
+      "Bash(cd /mnt/c/Users/poorn/source/repos/TencyBackendApi/Database/migrations && ls -1 *.sql | sort)",
+      "Read(//mnt/c/Users/poorn/source/repos/TencyBackendApi/Database/**)"
     ],
     "additionalDirectories": [
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\Database\\migrations",
@@ -48,7 +68,13 @@
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TencyBackendApi",
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Core\\Services\\SupplyChainService",
       "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Entity\\ProductsEntity",
-      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\SupplyChain"
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\SupplyChain",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\Products\\Category",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Core\\Services\\ProductsService\\CategoryService",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Core\\Services\\ProductsService\\ProductCatalogService",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\Products\\Brand",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.DBContext",
+      "C:\\Users\\poorn\\source\\repos\\TencyBackendApi\\TenzyBackend.Data\\Products\\ProductImage"
     ]
   }
 }

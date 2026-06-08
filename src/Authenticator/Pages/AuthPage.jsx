@@ -342,7 +342,7 @@ export default function AuthPage({ defaultMode = "signin" }) {
     setLoading(true);
     try {
       const user = await login(signIn.email, signIn.password);
-      if (user?.roleId === 3) {
+      if ([1, 3, 4].includes(Number(user?.roleId))) {
         setShowRoleChoice(true);
       } else {
         navigate("/home");

@@ -65,7 +65,7 @@ const FAQ = () => {
           </h2>
 
           <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl">
-            Quick answers to the most common questions. If you can’t find what
+            Quick answers to the most common questions. If you can't find what
             you need, contact us anytime.
           </p>
 

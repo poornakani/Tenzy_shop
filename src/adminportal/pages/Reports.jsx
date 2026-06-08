@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BarChart2, Calendar, ChevronLeft, ChevronRight, CreditCard, Download, Eye,
-  Filter, Package, RefreshCw, ShoppingBag, Truck, TrendingUp, X,
+  Archive, BarChart2, Calendar, ChevronDown, ChevronLeft, ChevronRight,
+  ChevronUp, CreditCard, Download, Eye, Package, RefreshCw,
+  ShoppingBag, Truck, TrendingUp, X,
 } from "lucide-react";
 import {
   BarChart, Bar, Cell, CartesianGrid, Legend, PieChart, Pie,
@@ -43,10 +44,27 @@ const getPurchaseDispatchLabel = (status) => {
 };
 const getProcurementRowDispatchedQty = (row) =>
   Number(row?.quantityAlreadyDispatched ?? row?.totalDispatchedQty ?? row?.quantityDispatched ?? row?.dispatchedQuantity ?? 0) || 0;
+// Resolve the best available item name (variant preferred over product name)
+const itemName = (row) => {
+  const vn  = String(row?.variantName ?? row?.VariantName ?? "").trim();
+  if (vn) return vn;
+  const name = String(row?.productName ?? row?.ProductName ?? "").trim();
+  const vol  = String(row?.volume ?? row?.Volume ?? "").trim();
+  if (vol) return `${name} ${vol}`.trim();
+  const wKg = Number(row?.weight ?? row?.Weight ?? row?.weightKg ?? row?.WeightKg ?? 0);
+  if (wKg > 0) return `${name} (${Math.round(wKg * 1000)}g)`;
+  return name || "—";
+};
+
+const productWithBrand = (row) => {
+  const product = itemName(row);
+  const brand   = String(row?.brandName ?? row?.BrandName ?? "").trim();
+  return brand && product && product !== "—" ? `${brand} - ${product}` : product || brand || "—";
+};
 
 /* ── tiny UI helpers ─────────────────────────────────────────────────────── */
 const Input = (props) => (
-  <input {...props} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20" />
+  <input {...props} className="w-full rounded-xl border border-tenzy-orange/50 bg-white px-3 py-2 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20" />
 );
 const Label = ({ children }) => <label className="mb-1 block text-xs font-semibold text-slate-500">{children}</label>;
 
@@ -226,7 +244,7 @@ function Filters({ filters, onChange, onApply }) {
         <div>
           <Label>Shipment status</Label>
           <select value={filters.shipmentStatus} onChange={(e) => onChange({ ...filters, shipmentStatus: e.target.value })}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-tenzy-teal/20 focus:border-tenzy-teal">
+            className="w-full rounded-xl border border-tenzy-orange/50 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-tenzy-teal/20 focus:border-tenzy-orange">
             <option value="">All</option>
             <option value="pending">Pending</option>
             <option value="dispatched">Dispatched</option>
@@ -320,7 +338,7 @@ function UKPurchaseTab({ rows, loading, onExport }) {
   }, [rows]);
 
   const itemColumns = [
-    { key: "productName",  label: "Product",      render: (r) => <span className="font-semibold text-slate-800">{r.productName}</span> },
+    { key: "productName",  label: "Product",      render: (r) => <span className="font-semibold text-slate-800">{itemName(r)}</span> },
     { key: "brandName",    label: "Brand" },
     { key: "quantity",     label: "Qty",           right: true, render: (r) => <span className="font-semibold">{r.quantity}</span> },
     { key: "unitPrice",    label: "Gross Unit £",  right: true, render: (r) => gbp(r.unitPrice) },
@@ -634,7 +652,7 @@ function CardChargesTab({ rows, loading, onExport }) {
           <select
             value={selectedCard}
             onChange={(e) => { setSelectedCard(e.target.value); setPage(1); }}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-tenzy-teal/20 focus:border-tenzy-teal"
+            className="rounded-xl border border-tenzy-orange/50 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-tenzy-teal/20 focus:border-tenzy-orange"
           >
             {cards.map((c) => (
               <option key={c} value={c}>{c === "all" ? "All cards" : c}</option>
@@ -750,43 +768,41 @@ function CardChargesTab({ rows, loading, onExport }) {
 
 /* ── DISPATCH TAB ─────────────────────────────────────────────────────────── */
 const DISPATCH_EXPORT_FIELDS = [
-  { key: "dispatchReference",        label: "Reference",      width: 18 },
-  { key: "dispatchDate",             label: "Date",           width: 12 },
-  { key: "courierName",              label: "Courier",        width: 16 },
-  { key: "productName",              label: "Product",        width: 20 },
-  { key: "quantityDispatched",       label: "Qty",            width: 6  },
-  { key: "totalDispatchedWeight",    label: "Weight kg",      width: 10 },
-  { key: "boxCount",                 label: "Boxes",          width: 8  },
-  { key: "homeToUkCourierPerBox",    label: "Home/box £",     width: 10 },
-  { key: "ukCourierCharge",          label: "Home→UK £",      width: 10 },
-  { key: "ukToSriLankaCourierPerKg", label: "UK→SL rate",     width: 10 },
-  { key: "sriLankaCourierCharge",    label: "UK→SL £",        width: 10 },
-  { key: "totalShipmentCharge",      label: "Total £",        width: 10 },
+  { key: "dispatchReference",     label: "Reference",   width: 18 },
+  { key: "dispatchDate",          label: "Date",        width: 12 },
+  { key: "courierName",           label: "Courier",     width: 16 },
+  { key: "boxNumber",             label: "Box",         width: 6  },
+  { key: "productName",           label: "Product",     width: 28, format: productWithBrand },
+  { key: "quantityDispatched",    label: "Qty",         width: 6  },
+  { key: "netUnitCost",           label: "Net Unit £",  width: 10 },
+  { key: "productCost",           label: "Net Total £", width: 12 },
+  { key: "totalShipmentCharge",   label: "Dispatch £",  width: 12 },
 ];
 
 function DispatchTab({ rows, loading, onExport }) {
   const [page, setPage] = useState(1);
   const [showCharts, setShowCharts] = useState(false);
-  const [modal, setModal] = useState(null);
-  const [showExportPicker, setShowExportPicker] = useState(false);
-  const [selectedExportKeys, setSelectedExportKeys] = useState(
-    () => new Set(["dispatchReference","dispatchDate","courierName","productName","quantityDispatched","totalDispatchedWeight","totalShipmentCharge"])
-  );
+  const [expandedDispatches, setExpandedDispatches] = useState(new Set());
+  const [expandedBoxes, setExpandedBoxes] = useState(new Set());
 
-  const toggleExportKey = (key) =>
-    setSelectedExportKeys((prev) => {
+  const toggleDispatch = (ref) => {
+    setExpandedDispatches((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(ref)) next.delete(ref); else next.add(ref);
       return next;
     });
-
-  const handleExportPdf = () => {
-    const selected = DISPATCH_EXPORT_FIELDS.filter((f) => selectedExportKeys.has(f.key));
-    onExport("dispatch", rows, selected);
-    setShowExportPicker(false);
   };
 
-  // Group by dispatchReference
+  const toggleBox = (ref, boxNum) => {
+    setExpandedBoxes((prev) => {
+      const k = `${ref}:${boxNum}`;
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+
+  // Group rows: dispatch → boxes → items
   const groups = useMemo(() => {
     const map = new Map();
     (rows ?? []).forEach((row) => {
@@ -799,48 +815,50 @@ function DispatchTab({ rows, loading, onExport }) {
           parcelNumber: row.parcelNumber,
           shipmentStatus: row.shipmentStatus,
           notes: row.notes,
-          items: [],
           totalProductCost: 0,
           totalShipmentCharge: 0,
-          ukCourierCharge: 0,
-          sriLankaCourierCharge: 0,
-          boxCount: 0,
-          homeToUkCourierPerBox: 0,
-          ukToSriLankaCourierPerKg: 0,
           totalDispatchedWeight: 0,
-          dispatchBoxWeight: 0,
+          boxCount: 0,
           totalQty: 0,
+          boxes: new Map(),
         });
       }
       const g = map.get(key);
-      g.items.push(row);
-      g.totalProductCost += Number(row.productCost ?? 0);
-      // Box-level charges are identical on every row for the same shipment — only read once
-      if (g.items.length === 1) {
+      // Shipment-level values are identical across all rows for the same dispatch
+      if (g.boxes.size === 0) {
         g.totalShipmentCharge = Number(row.totalShipmentCharge ?? 0);
-        g.ukCourierCharge = Number(row.ukCourierCharge ?? 0);
-        g.sriLankaCourierCharge = Number(row.sriLankaCourierCharge ?? 0);
+        g.totalDispatchedWeight = Number(row.totalDispatchedWeight ?? 0);
         g.boxCount = Number(row.boxCount ?? 0);
-        g.homeToUkCourierPerBox = Number(row.homeToUkCourierPerBox ?? 0);
-        g.ukToSriLankaCourierPerKg = Number(row.ukToSriLankaCourierPerKg ?? 0);
-        g.dispatchBoxWeight = Number(row.dispatchBoxWeight ?? row.totalDispatchedWeight ?? 0);
       }
-      g.totalDispatchedWeight += Number(row.totalDispatchedWeight ?? 0);
+      g.totalProductCost += Number(row.productCost ?? 0);
       g.totalQty += Number(row.quantityDispatched ?? 0);
+
+      const boxKey = row.boxNumber ?? 0;
+      if (!g.boxes.has(boxKey)) {
+        g.boxes.set(boxKey, { boxNumber: boxKey, items: [], totalQty: 0, totalWeightKg: 0 });
+      }
+      const box = g.boxes.get(boxKey);
+      box.items.push(row);
+      box.totalQty += Number(row.quantityDispatched ?? 0);
+      box.totalWeightKg += Number(row.dispatchBoxWeight ?? 0) * Number(row.quantityDispatched ?? 0);
     });
-    return [...map.values()].sort((a, b) => (b.dispatchDate ?? "").localeCompare(a.dispatchDate ?? ""));
+
+    return [...map.values()]
+      .map((g) => ({
+        ...g,
+        boxes: [...g.boxes.values()].sort((a, b) => (a.boxNumber ?? 0) - (b.boxNumber ?? 0)),
+      }))
+      .sort((a, b) => (b.dispatchDate ?? "").localeCompare(a.dispatchDate ?? ""));
   }, [rows]);
 
   const totalPages = Math.ceil(groups.length / PAGE_SIZE);
   const pageGroups = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // KPIs
-  const totalProductCost   = groups.reduce((s, g) => s + g.totalProductCost, 0);
-  const totalCourierCost   = groups.reduce((s, g) => s + g.totalShipmentCharge, 0);
-  const totalCombinedCost  = totalProductCost + totalCourierCost;
-  const totalQty           = groups.reduce((s, g) => s + g.totalQty, 0);
+  const totalProductCost  = groups.reduce((s, g) => s + g.totalProductCost, 0);
+  const totalCourierCost  = groups.reduce((s, g) => s + g.totalShipmentCharge, 0);
+  const totalCombinedCost = totalProductCost + totalCourierCost;
+  const totalQty          = groups.reduce((s, g) => s + g.totalQty, 0);
 
-  // Charts
   const courierChartData = useMemo(() => {
     const map = {};
     (rows ?? []).forEach((r) => { map[r.courierName || "Unknown"] = (map[r.courierName || "Unknown"] || 0) + (r.quantityDispatched ?? 0); });
@@ -848,49 +866,9 @@ function DispatchTab({ rows, loading, onExport }) {
   }, [rows]);
 
   const costBreakdownData = useMemo(() => [
-    { name: "Product cost",  value: +totalProductCost.toFixed(2) },
-    { name: "Courier cost",  value: +totalCourierCost.toFixed(2) },
+    { name: "Product cost", value: +totalProductCost.toFixed(2) },
+    { name: "Courier cost", value: +totalCourierCost.toFixed(2) },
   ], [totalProductCost, totalCourierCost]);
-
-  // Per-unit courier = box-level charge ÷ total qty dispatched in that box
-  const perUnit = (charge, row) => (row._groupTotalQty > 0 ? (charge ?? 0) / row._groupTotalQty : 0);
-  // Net unit cost comes directly from API (netUnitCost) or falls back to productCost / qty
-  const unitCost = (r) => r.netUnitCost ?? (r.productCost && r.quantityDispatched ? r.productCost / r.quantityDispatched : 0);
-  const hasDiscount = (r) => (r.discountTotal ?? 0) > 0;
-
-  const itemColumns = [
-    { key: "productName",      label: "Product",      render: (r) => <span className="font-semibold text-slate-800">{r.productName}</span> },
-    { key: "brandName",        label: "Brand" },
-    { key: "quantityDispatched", label: "Qty",        right: true, render: (r) => <span className="font-semibold">{r.quantityDispatched}</span> },
-    { key: "unitPrice",        label: "Gross Unit £", right: true, render: (r) => (r.unitPrice ?? 0) > 0 ? gbp(r.unitPrice) : "—" },
-    {
-      key: "_discount", label: "Discount", right: false,
-      render: (r) => hasDiscount(r) ? (
-        <div className="leading-tight">
-          {r.discountDescription && <span className="text-xs font-semibold text-amber-700">{r.discountDescription}</span>}
-          <span className={`text-xs font-semibold text-red-500${r.discountDescription ? " ml-1.5" : ""}`}>-{gbp(r.discountTotal)}</span>
-        </div>
-      ) : <span className="text-slate-400">—</span>,
-    },
-    { key: "_unitCost",   label: "Net Unit £",  right: true, render: (r) => gbp(unitCost(r)) },
-    { key: "_netTotal",   label: "Net Total £", right: true, render: (r) => <span className="font-bold text-slate-800">{gbp(unitCost(r) * (r.quantityDispatched ?? 0))}</span> },
-    { key: "ukCourierCharge",       label: "Home→UK/unit £",   right: true, render: (r) => gbp(perUnit(r.ukCourierCharge, r)) },
-    { key: "sriLankaCourierCharge", label: "UK→SL/unit £",     right: true, render: (r) => gbp(perUnit(r.sriLankaCourierCharge, r)) },
-    { key: "taxCharge",             label: "Tax/unit £",        right: true, render: (r) => gbp(perUnit(r.taxCharge, r)) },
-  ];
-
-  const dispatchPdfCols = [
-    { key: "productName",          label: "Product",         width: 18 },
-    { key: "brandName",            label: "Brand",           width: 14 },
-    { key: "quantityDispatched",   label: "Qty",             width: 5  },
-    { key: "unitPrice",            label: "Gross Unit £",    width: 12, format: (r) => (r.unitPrice ?? 0) > 0 ? gbp(r.unitPrice) : "—" },
-    { key: "_discount",            label: "Discount",        width: 22, format: (r) => hasDiscount(r) ? `${r.discountDescription ?? ""} -${gbp(r.discountTotal)}`.trim() : "—" },
-    { key: "_unitCost",            label: "Net Unit £",      width: 11, format: (r) => gbp(unitCost(r)) },
-    { key: "_netTotal",            label: "Net Total £",     width: 12, format: (r) => gbp(unitCost(r) * (r.quantityDispatched ?? 0)) },
-    { key: "ukCourierCharge",      label: "Home→UK/unit",    width: 16, format: (r) => gbp(perUnit(r.ukCourierCharge, r)) },
-    { key: "sriLankaCourierCharge",label: "UK→SL/unit",      width: 16, format: (r) => gbp(perUnit(r.sriLankaCourierCharge, r)) },
-    { key: "taxCharge",            label: "Tax/unit £",      width: 12, format: (r) => gbp(perUnit(r.taxCharge, r)) },
-  ];
 
   if (loading) return <Spinner />;
 
@@ -898,52 +876,20 @@ function DispatchTab({ rows, loading, onExport }) {
     <div className="space-y-5">
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KpiCard icon={Truck}      label="Dispatch records"     value={groups.length}         color="teal" />
-        <KpiCard icon={Package}    label="Total units sent"     value={totalQty}              color="indigo" />
-        <KpiCard icon={TrendingUp} label="Product cost (GBP)"   value={gbp(totalProductCost)} color="amber" />
-        <KpiCard icon={BarChart2}  label="Total incl. courier"  value={gbp(totalCombinedCost)} color="rose" />
+        <KpiCard icon={Truck}      label="Dispatches"           value={groups.length}          color="teal"   />
+        <KpiCard icon={Package}    label="Total units sent"     value={totalQty}               color="indigo" />
+        <KpiCard icon={TrendingUp} label="Product cost (GBP)"   value={gbp(totalProductCost)}  color="amber"  />
+        <KpiCard icon={BarChart2}  label="Total incl. courier"  value={gbp(totalCombinedCost)} color="rose"   />
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-slate-700">{groups.length} dispatch records</p>
-        <div className="flex gap-2">
-          <button onClick={() => setShowCharts((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${showCharts ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
-            <BarChart2 size={13} /> {showCharts ? "Hide charts" : "Show charts"}
-          </button>
-          <button
-            onClick={() => setShowExportPicker((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${showExportPicker ? "bg-tenzy-teal text-white border-tenzy-teal" : "bg-tenzy-teal text-white border-tenzy-teal hover:opacity-90"}`}>
-            <Download size={13} /> Export PDF
-          </button>
-        </div>
+        <p className="text-sm font-bold text-slate-700">{groups.length} dispatches</p>
+        <button
+          onClick={() => setShowCharts((v) => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${showCharts ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+          <BarChart2 size={13} /> {showCharts ? "Hide charts" : "Show charts"}
+        </button>
       </div>
-
-      {showExportPicker && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-          <p className="text-xs font-bold text-slate-600 mb-3">Select columns to include in PDF:</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2.5 mb-4">
-            {DISPATCH_EXPORT_FIELDS.map((f) => (
-              <label key={f.key} className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input type="checkbox" checked={selectedExportKeys.has(f.key)} onChange={() => toggleExportKey(f.key)} className="accent-tenzy-teal" />
-                <span className="text-xs text-slate-700">{f.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleExportPdf}
-              disabled={selectedExportKeys.size === 0}
-              className="px-4 py-1.5 bg-tenzy-teal text-white text-xs font-semibold rounded-xl disabled:opacity-50 hover:opacity-90 transition"
-            >
-              Download PDF
-            </button>
-            <button onClick={() => setShowExportPicker(false)} className="text-xs text-slate-400 hover:text-slate-600 transition">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {showCharts && rows.length > 0 && (
         <div className="grid md:grid-cols-2 gap-5">
@@ -975,79 +921,170 @@ function DispatchTab({ rows, loading, onExport }) {
         </div>
       )}
 
+      {/* Dispatch table with inline expand */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide border-b border-slate-200">
               <tr>
-                <th className="text-left px-5 py-3">Reference</th>
-                <th className="text-left px-5 py-3">Date</th>
-                <th className="text-left px-5 py-3">Courier</th>
-                <th className="text-left px-5 py-3">Parcel</th>
-                <th className="text-center px-5 py-3">Status</th>
-                <th className="text-right px-5 py-3">Units</th>
-                <th className="text-right px-5 py-3">Goods kg</th>
-                <th className="text-right px-5 py-3">Box kg</th>
-                <th className="text-right px-5 py-3">Product £</th>
-                <th className="text-right px-5 py-3">Courier £</th>
-                <th className="text-right px-5 py-3">Grand total £</th>
-                <th className="px-5 py-3"></th>
+                <th className="w-10 px-3 py-3" />
+                <th className="text-left px-4 py-3">Reference</th>
+                <th className="text-left px-4 py-3">Date</th>
+                <th className="text-left px-4 py-3">Courier</th>
+                <th className="text-center px-4 py-3">Status</th>
+                <th className="text-right px-4 py-3">Boxes</th>
+                <th className="text-right px-4 py-3">Units</th>
+                <th className="text-right px-4 py-3">Weight kg</th>
+                <th className="text-right px-4 py-3">Product £</th>
+                <th className="text-right px-4 py-3">Dispatch cost £</th>
+                <th className="text-right px-4 py-3">Grand total £</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pageGroups.length === 0 && (
-                <tr><td colSpan={12} className="px-5 py-10 text-center text-slate-400">No dispatch records found.</td></tr>
+                <tr><td colSpan={11} className="px-5 py-10 text-center text-slate-400">No dispatch records found.</td></tr>
               )}
               {pageGroups.map((g) => {
-                const hasOverride = g.dispatchBoxWeight > 0 && Math.abs(g.dispatchBoxWeight - g.totalDispatchedWeight) > 0.001;
+                const isOpen = expandedDispatches.has(g.reference);
                 return (
-                <tr key={g.reference} className="hover:bg-slate-50/60 transition">
-                  <td className="px-5 py-3 font-semibold text-slate-800">{g.reference}</td>
-                  <td className="px-5 py-3 text-slate-600">{date(g.dispatchDate)}</td>
-                  <td className="px-5 py-3 text-slate-700">{g.courierName}</td>
-                  <td className="px-5 py-3 text-slate-500 text-xs">{g.parcelNumber}</td>
-                  <td className="px-5 py-3 text-center">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${DISPATCH_STATUS_BADGE[g.shipmentStatus] ?? "bg-slate-100 text-slate-600"}`}>
-                      {cap(g.shipmentStatus)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right text-slate-600">{g.totalQty}</td>
-                  <td className="px-5 py-3 text-right text-slate-500">{g.totalDispatchedWeight > 0 ? `${g.totalDispatchedWeight.toFixed(3)} kg` : "—"}</td>
-                  <td className="px-5 py-3 text-right">
-                    <span className={hasOverride ? "font-semibold text-amber-700" : "text-slate-500"}>
-                      {g.dispatchBoxWeight > 0 ? `${g.dispatchBoxWeight.toFixed(3)} kg` : "—"}
-                    </span>
-                    {hasOverride && (
-                      <span className="ml-1 text-[10px] text-amber-500" title="Weight was rounded up for courier calculation">↑</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-right text-slate-700">{gbp(g.totalProductCost)}</td>
-                  <td className="px-5 py-3 text-right text-slate-700">{gbp(g.totalShipmentCharge)}</td>
-                  <td className="px-5 py-3 text-right font-bold text-slate-900">{gbp(g.totalProductCost + g.totalShipmentCharge)}</td>
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      onClick={() => setModal({
-                        title: `${g.reference}`,
-                        subtitle: `${g.courierName} · ${date(g.dispatchDate)} · ${g.totalQty} units${g.notes ? ` · ${g.notes}` : ""}`,
-                        items: g.items.map((item) => ({ ...item, _groupTotalQty: g.totalQty })),
-                      })}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal transition"
+                  <React.Fragment key={g.reference}>
+                    {/* ── Dispatch row ── */}
+                    <tr
+                      className="hover:bg-slate-50/70 transition cursor-pointer"
+                      onClick={() => toggleDispatch(g.reference)}
                     >
-                      <Eye size={12} /> View items
-                    </button>
-                  </td>
-                </tr>
+                      <td className="px-3 py-3 text-slate-400">
+                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{g.reference}</td>
+                      <td className="px-4 py-3 text-slate-600">{date(g.dispatchDate)}</td>
+                      <td className="px-4 py-3 text-slate-700">{g.courierName}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${DISPATCH_STATUS_BADGE[g.shipmentStatus] ?? "bg-slate-100 text-slate-600"}`}>
+                          {cap(g.shipmentStatus)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-500">{g.boxCount}</td>
+                      <td className="px-4 py-3 text-right text-slate-600">{g.totalQty}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">
+                        {g.totalDispatchedWeight > 0 ? `${Number(g.totalDispatchedWeight).toFixed(3)}` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-700">{gbp(g.totalProductCost)}</td>
+                      <td className="px-4 py-3 text-right text-slate-700">{gbp(g.totalShipmentCharge)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-slate-900">{gbp(g.totalProductCost + g.totalShipmentCharge)}</td>
+                    </tr>
+
+                    {/* ── Expanded boxes panel ── */}
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={11} className="p-0 bg-teal-50/30">
+                          <div className="px-6 py-4 space-y-3">
+                            {/* Dispatch cost summary banner */}
+                            <div className="flex items-center gap-6 text-xs font-semibold text-teal-800 bg-teal-100/70 rounded-xl px-4 py-2.5">
+                              <span><Truck size={12} className="inline mr-1.5 opacity-70" />{g.courierName}</span>
+                              {g.parcelNumber && <span>Parcel: {g.parcelNumber}</span>}
+                              <span>Dispatch cost: <span className="text-teal-700 font-bold">{gbp(g.totalShipmentCharge)}</span></span>
+                              <span>Grand total: <span className="text-slate-900 font-bold">{gbp(g.totalProductCost + g.totalShipmentCharge)}</span></span>
+                              {g.notes && <span className="text-teal-600 italic truncate max-w-xs">{g.notes}</span>}
+                            </div>
+
+                            {/* Box list */}
+                            <div className="space-y-2">
+                              {g.boxes.map((box) => {
+                                const boxKey = `${g.reference}:${box.boxNumber}`;
+                                const boxOpen = expandedBoxes.has(boxKey);
+                                const boxLabel = box.boxNumber ? `Box ${box.boxNumber}` : "Unassigned";
+                                return (
+                                  <div key={boxKey} className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                                    {/* Box header row */}
+                                    <button
+                                      className="w-full flex items-center gap-4 px-4 py-2.5 text-sm hover:bg-slate-50 transition text-left"
+                                      onClick={() => toggleBox(g.reference, box.boxNumber)}
+                                    >
+                                      {boxOpen ? <ChevronUp size={13} className="text-slate-400 shrink-0" /> : <ChevronDown size={13} className="text-slate-400 shrink-0" />}
+                                      <span className="font-semibold text-slate-700 w-24 shrink-0">{boxLabel}</span>
+                                      <span className="text-slate-400 text-xs">{box.items.length} item{box.items.length !== 1 ? "s" : ""}</span>
+                                      <span className="text-slate-400 text-xs">· {box.totalQty} units</span>
+                                      {box.totalWeightKg > 0 && (
+                                        <span className="text-slate-400 text-xs">· {box.totalWeightKg.toFixed(3)} kg</span>
+                                      )}
+                                    </button>
+
+                                    {/* Box items table */}
+                                    {boxOpen && (
+                                      <div className="border-t border-slate-100 overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                          <thead className="bg-slate-50 text-slate-400 uppercase tracking-wide">
+                                            <tr>
+                                              <th className="text-left px-4 py-2">Product</th>
+                                              <th className="text-left px-4 py-2">Brand</th>
+                                              <th className="text-left px-4 py-2">Category</th>
+                                              <th className="text-right px-4 py-2">Qty</th>
+                                              <th className="text-right px-4 py-2">Weight kg</th>
+                                              <th className="text-right px-4 py-2">Gross Unit £</th>
+                                              <th className="text-right px-4 py-2">Net Unit £</th>
+                                              <th className="text-right px-4 py-2">Net Total £</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-100">
+                                            {box.items.map((item) => {
+                                              const unitCost = Number(item.netUnitCost ?? 0);
+                                              const qty = Number(item.quantityDispatched ?? 0);
+                                              const weightPerUnit = Number(item.dispatchBoxWeight ?? 0);
+                                              return (
+                                                <tr key={item.shipmentItemId} className="hover:bg-teal-50/30 transition">
+                                                  <td className="px-4 py-2.5">
+                                                    <span className="font-semibold text-slate-800">{itemName(item)}</span>
+                                                  </td>
+                                                  <td className="px-4 py-2.5 text-slate-500">{item.brandName || "—"}</td>
+                                                  <td className="px-4 py-2.5 text-slate-400">{item.categoryName || "—"}</td>
+                                                  <td className="px-4 py-2.5 text-right font-semibold text-slate-700">{qty}</td>
+                                                  <td className="px-4 py-2.5 text-right text-slate-500">
+                                                    {weightPerUnit > 0 ? (weightPerUnit * qty).toFixed(3) : "—"}
+                                                  </td>
+                                                  <td className="px-4 py-2.5 text-right text-slate-500">
+                                                    {(item.unitPrice ?? 0) > 0 ? gbp(item.unitPrice) : "—"}
+                                                  </td>
+                                                  <td className="px-4 py-2.5 text-right text-slate-700">{gbp(unitCost)}</td>
+                                                  <td className="px-4 py-2.5 text-right font-bold text-slate-900">{gbp(unitCost * qty)}</td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                          <tfoot className="border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
+                                            <tr>
+                                              <td colSpan={3} className="px-4 py-2">Box total</td>
+                                              <td className="px-4 py-2 text-right">{box.totalQty}</td>
+                                              <td colSpan={3} className="px-4 py-2" />
+                                              <td className="px-4 py-2 text-right">
+                                                {gbp(box.items.reduce((s, r) => s + Number(r.netUnitCost ?? 0) * Number(r.quantityDispatched ?? 0), 0))}
+                                              </td>
+                                            </tr>
+                                          </tfoot>
+                                        </table>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
+
         {/* Total footer */}
         {groups.length > 0 && (
           <div className="border-t border-slate-200 px-5 py-3 flex items-center justify-end gap-8 text-sm bg-slate-50">
             <span className="text-slate-500">All records total:</span>
             <span className="text-slate-600">Product: <strong>{gbp(totalProductCost)}</strong></span>
-            <span className="text-slate-600">Courier: <strong>{gbp(totalCourierCost)}</strong></span>
+            <span className="text-slate-600">Dispatch cost: <strong>{gbp(totalCourierCost)}</strong></span>
             <span className="font-bold text-slate-900">Grand total: {gbp(totalCombinedCost)}</span>
           </div>
         )}
@@ -1055,17 +1092,6 @@ function DispatchTab({ rows, loading, onExport }) {
           <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       </div>
-
-      {modal && (
-        <ItemsModal
-          title={modal.title}
-          subtitle={modal.subtitle}
-          columns={itemColumns}
-          rows={modal.items}
-          onClose={() => setModal(null)}
-          pdfExportCols={dispatchPdfCols}
-        />
-      )}
     </div>
   );
 }
@@ -1183,11 +1209,467 @@ function MonthlyTab({ rows, loading, onExport }) {
   );
 }
 
+/* ── PRICING TAB ─────────────────────────────────────────────────────────── */
+function PricingTab({ rows, loading }) {
+  const [view, setView]             = useState("product");
+  const [openDispatch, setOpenDispatch] = useState(null);
+  const [openBox, setOpenBox]       = useState(null);
+  const [brandFilter, setBrandFilter]   = useState("");
+  const [expandedProduct, setExpandedProduct] = useState(null); // productId expanded
+
+  const pricingRows = useMemo(() => (rows ?? []).map((r) => {
+    const ukCost      = Number(r.ukPurchaseUnitCost ?? 0);
+    const logCost     = Number(r.logisticsUnitCost  ?? 0);
+    const landed      = (ukCost + logCost) || Number(r.landedUnitCost ?? 0);
+    const lkr         = Number(r.landedUnitCostLkr  ?? 0);   // cost per unit in LKR
+    const rate        = Number(r.exchangeRateGbpToLkr ?? 0); // GBP→LKR rate at pricing time
+    const wholesale   = Number(r.wholesalePrice     ?? 0);   // LKR
+    const website     = Number(r.websitePrice ?? r.finalSellingPrice ?? 0); // LKR
+    const qty         = Number(r.approvedQuantity ?? 0);
+
+    // WholesalePrice and WebsitePrice are stored in LKR — no rate conversion needed.
+    // Profit (LKR) = (qty × price_LKR) − (qty × cost_LKR)
+    const wsProfitPerUnitLkr  = wholesale > 0 && lkr > 0 ? wholesale - lkr : null;
+    const webProfitPerUnitLkr = lkr > 0 ? website - lkr : null;
+
+    return {
+      ...r,
+      ukCost, logCost, landed, lkr, rate,
+      wholesale, website,
+      wsProfitPerUnitLkr,
+      webProfitPerUnitLkr,
+      totalWsProfitLkr:  wsProfitPerUnitLkr  != null ? qty * wsProfitPerUnitLkr  : null,
+      totalWebProfitLkr: webProfitPerUnitLkr != null ? qty * webProfitPerUnitLkr : null,
+      totalCost: qty * landed,  // GBP — landed cost total
+    };
+  }), [rows]);
+
+  // ── Group by product (product-level rows, variants inside) ────────────────
+  const byProduct = useMemo(() => {
+    const map = new Map();
+    pricingRows.forEach((r) => {
+      const key = r.productId ?? r.productName;
+      if (!map.has(key)) map.set(key, {
+        productId: key,
+        productName: r.productName ?? "",
+        brandName: r.brandName ?? "",
+        variants: [],
+        qty: 0, totalUkCost: 0, totalLogCost: 0, totalCost: 0,
+        totalWsRevLkr: 0, totalWebRevLkr: 0,
+        totalWsProfitLkr: 0, wsLkrCount: 0,
+        totalWebProfitLkr: 0, webLkrCount: 0,
+        lkrSum: 0, lkrCount: 0, margin: [],
+      });
+      const g = map.get(key);
+      g.variants.push(r);
+      g.qty              += r.approvedQuantity;
+      g.totalUkCost      += r.approvedQuantity * r.ukCost;
+      g.totalLogCost     += r.approvedQuantity * r.logCost;
+      g.totalCost        += r.totalCost;
+      g.totalWsRevLkr    += r.wholesale > 0 ? r.approvedQuantity * r.wholesale : 0;
+      g.totalWebRevLkr   += r.approvedQuantity * r.website;
+      if (r.totalWsProfitLkr  != null) { g.totalWsProfitLkr  += r.totalWsProfitLkr;  g.wsLkrCount++;  }
+      if (r.totalWebProfitLkr != null) { g.totalWebProfitLkr += r.totalWebProfitLkr; g.webLkrCount++; }
+      if (r.lkr > 0) { g.lkrSum += r.lkr; g.lkrCount++; }
+      g.margin.push(Number(r.marginPercent ?? 0));
+    });
+    return [...map.values()]
+      .map((g) => ({
+        ...g,
+        avgMargin: g.margin.length > 0 ? g.margin.reduce((s, v) => s + v, 0) / g.margin.length : 0,
+        avgLkr: g.lkrCount > 0 ? g.lkrSum / g.lkrCount : 0,
+      }))
+      .sort((a, b) => (b.totalWebProfitLkr ?? 0) - (a.totalWebProfitLkr ?? 0));
+  }, [pricingRows]);
+
+  // ── Group by dispatch → box ───────────────────────────────────────────────
+  const lkrFmt = (v) => v > 0 ? `Rs ${Number(v).toLocaleString("en-LK", { maximumFractionDigits: 0 })}` : null;
+
+  const byDispatch = useMemo(() => {
+    const map = new Map();
+    pricingRows.forEach((r) => {
+      if (!map.has(r.dispatchReference)) {
+        map.set(r.dispatchReference, { dispatchReference: r.dispatchReference, dispatchDate: r.dispatchDate, boxes: new Map(), totalCost: 0, totalCostLkr: 0 });
+      }
+      const d = map.get(r.dispatchReference);
+      d.totalCost    += r.totalCost;
+      d.totalCostLkr += r.approvedQuantity * r.lkr;
+      const boxKey = r.boxNumber ?? 0;
+      if (!d.boxes.has(boxKey)) d.boxes.set(boxKey, { boxNumber: boxKey, items: [], totalCost: 0, totalCostLkr: 0 });
+      const b = d.boxes.get(boxKey);
+      b.items.push(r);
+      b.totalCost    += r.totalCost;
+      b.totalCostLkr += r.approvedQuantity * r.lkr;
+    });
+    return [...map.values()]
+      .map((d) => ({ ...d, boxes: [...d.boxes.values()].sort((a, b) => a.boxNumber - b.boxNumber) }))
+      .sort((a, b) => (b.dispatchDate ?? "").localeCompare(a.dispatchDate ?? ""));
+  }, [pricingRows]);
+
+  // ── Brand filter (By Product view) ───────────────────────────────────────
+  const brands = useMemo(() =>
+    [...new Set(pricingRows.map(r => r.brandName).filter(Boolean))].sort(),
+  [pricingRows]);
+
+  const filteredByProduct = useMemo(() =>
+    brandFilter ? byProduct.filter(p => p.brandName === brandFilter) : byProduct,
+  [byProduct, brandFilter]);
+
+  const productTotals = useMemo(() => filteredByProduct.reduce((acc, p) => {
+    const ukPu       = p.qty > 0 ? p.totalUkCost      / p.qty : 0;
+    const logPu      = p.qty > 0 ? p.totalLogCost     / p.qty : 0;
+    const costPu     = p.qty > 0 ? p.totalCost         / p.qty : 0;
+    const wsPu       = p.qty > 0 ? p.totalWsRevLkr    / p.qty : 0;
+    const webPu      = p.qty > 0 ? p.totalWebRevLkr   / p.qty : 0;
+    const wsProfitPu = p.wsLkrCount  > 0 && p.qty > 0 ? p.totalWsProfitLkr  / p.qty : 0;
+    const webProfitPu= p.webLkrCount > 0 && p.qty > 0 ? p.totalWebProfitLkr / p.qty : 0;
+    return {
+      qty:             acc.qty             + p.qty,
+      ukPu:            acc.ukPu            + ukPu,
+      logPu:           acc.logPu           + logPu,
+      costPu:          acc.costPu          + costPu,
+      avgLkr:          acc.avgLkr          + p.avgLkr,
+      wsPu:            acc.wsPu            + wsPu,
+      wsProfitPu:      acc.wsProfitPu      + wsProfitPu,
+      wsProfitLkr:     acc.wsProfitLkr     + p.totalWsProfitLkr,
+      webPu:           acc.webPu           + webPu,
+      webProfitPu:     acc.webProfitPu     + webProfitPu,
+      webProfitLkr:    acc.webProfitLkr    + p.totalWebProfitLkr,
+      marginSum:       acc.marginSum        + p.avgMargin,
+      count:           acc.count            + 1,
+    };
+  }, { qty:0, ukPu:0, logPu:0, costPu:0, avgLkr:0, wsPu:0, wsProfitPu:0, wsProfitLkr:0, webPu:0, webProfitPu:0, webProfitLkr:0, marginSum:0, count:0 }),
+  [filteredByProduct]);
+
+  // ── KPIs ─────────────────────────────────────────────────────────────────
+  const totalCostAll    = pricingRows.reduce((s, r) => s + r.totalCost, 0);          // sum(qty × cost/unit)
+  const totalWsProfLkr  = pricingRows.reduce((s, r) => s + (r.totalWsProfitLkr ?? 0), 0);
+  const totalWebProfLkr = pricingRows.reduce((s, r) => s + (r.totalWebProfitLkr ?? 0), 0);
+  const avgMarginAll    = pricingRows.length ? pricingRows.reduce((s, r) => s + Number(r.marginPercent ?? 0), 0) / pricingRows.length : 0;
+  const rsKpi = (v) => `Rs ${Number(v || 0).toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
+
+  if (loading) return <Spinner />;
+  if (!pricingRows.length) return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-14 text-center">
+      <TrendingUp size={32} className="mx-auto mb-3 text-slate-300" />
+      <p className="font-semibold text-slate-600">No pricing data yet</p>
+      <p className="mt-1 text-sm text-slate-400">Approve pricing for arrival items to see profitability here.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <KpiCard icon={Package}    label="Total products"        value={byProduct.length}             color="teal" />
+        <KpiCard icon={TrendingUp} label="Total products cost"  value={gbp(totalCostAll)}            color="indigo" />
+        <KpiCard icon={ShoppingBag}label="Wholesale profit"     value={rsKpi(totalWsProfLkr)}        color="amber" />
+        <KpiCard icon={BarChart2}  label="Website sale profit"  value={rsKpi(totalWebProfLkr)}       color="emerald" />
+        <KpiCard icon={Truck}      label="Avg margin"           value={`${avgMarginAll.toFixed(1)}%`} color="rose" />
+      </div>
+
+      {/* View toggle */}
+      <div className="flex gap-2">
+        {[
+          { id: "product",  label: "By Product",          icon: Package },
+          { id: "dispatch", label: "By Dispatch & Box",   icon: Archive },
+        ].map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setView(id)}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border transition ${
+              view === id ? "bg-tenzy-teal text-white border-tenzy-teal" : "bg-white text-slate-600 border-slate-200 hover:border-tenzy-teal hover:text-tenzy-teal"
+            }`}>
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── By Product ── */}
+      {view === "product" && (
+        <div className="space-y-3">
+          {/* Brand filter */}
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide shrink-0">Brand</label>
+            <select
+              value={brandFilter}
+              onChange={e => setBrandFilter(e.target.value)}
+              className="rounded-xl border border-tenzy-orange/50 bg-white px-3 py-2 text-sm outline-none focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
+            >
+              <option value="">All brands</option>
+              {brands.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            {brandFilter && (
+              <button onClick={() => setBrandFilter("")} className="text-xs text-slate-400 hover:text-slate-600 underline">Clear</button>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-3">Product / Variant</th>
+                  <th className="text-right px-3 py-3">Qty</th>
+                  <th className="text-right px-3 py-3">Buy £/unit</th>
+                  <th className="text-right px-3 py-3 text-indigo-500">Logistics £/unit</th>
+                  <th className="text-right px-3 py-3 font-bold text-slate-700">Total £/unit</th>
+                  <th className="text-right px-3 py-3 font-bold text-slate-700">Total LKR/unit</th>
+                  <th className="text-right px-3 py-3 text-amber-600">Wholesale Rs</th>
+                  <th className="text-right px-3 py-3 text-amber-700">WS Profit Rs</th>
+                  <th className="text-right px-3 py-3 text-teal-600">Website Rs</th>
+                  <th className="text-right px-3 py-3 text-emerald-600">Web Profit Rs</th>
+                  <th className="text-right px-3 py-3">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredByProduct.map((p) => {
+                  const isOpen = expandedProduct === p.productId;
+                  return (
+                    <>
+                      {/* ── Product summary row — click to expand ── */}
+                      <tr key={`prod-${p.productId}`}
+                        onClick={() => setExpandedProduct(isOpen ? null : p.productId)}
+                        className="border-b border-slate-200 cursor-pointer hover:bg-slate-50 transition bg-white">
+                        <td className="px-4 py-3" colSpan={10}>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-slate-400 text-[10px] transition-transform inline-block ${isOpen ? "rotate-90" : ""}`}>▶</span>
+                            <p className="font-bold text-slate-800">{p.productName}</p>
+                            <span className="text-xs text-slate-400">{p.brandName}</span>
+                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                              {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                              {p.qty} units total
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${p.avgMargin >= 30 ? "bg-emerald-100 text-emerald-700" : p.avgMargin >= 15 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+                            {p.avgMargin.toFixed(1)}% avg
+                          </span>
+                        </td>
+                      </tr>
+                      {/* ── Variant detail rows ── */}
+                      {isOpen && p.variants.map((v) => {
+                        const ukCost    = Number(v.ukCost    || 0);
+                        const logCost   = Number(v.logCost   || 0);
+                        const totalCostGbp = (ukCost + logCost) * v.approvedQuantity;
+                        const lkr       = Number(v.lkr       || 0);
+                        const ws        = Number(v.wholesale  || 0);
+                        const web       = Number(v.website    || 0);
+                        const wsProfit  = v.totalWsProfitLkr;
+                        const webProfit = v.totalWebProfitLkr;
+                        const margin    = Number(v.marginPercent || 0);
+                        return (
+                          <tr key={`var-${v.pricingId}`} className="border-b border-teal-100/50 bg-teal-50/20 hover:bg-teal-50/40 transition">
+                            <td className="px-4 py-2.5 pl-10">
+                              <p className="text-[11px] text-slate-400">{v.productName}</p>
+                              <p className="text-sm font-semibold text-tenzy-teal">{v.variantName || v.productName}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{v.dispatchReference}</p>
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-sm font-semibold text-slate-700">{v.approvedQuantity}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-slate-600">{ukCost > 0 ? gbp(ukCost) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-indigo-600">{logCost > 0 ? gbp(logCost) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs font-bold text-slate-800">{(ukCost + logCost) > 0 ? gbp(ukCost + logCost) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs font-bold text-slate-800">{lkr > 0 ? lkrFmt(lkr) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-amber-700">{ws > 0 ? lkrFmt(ws) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-amber-600 font-semibold">{wsProfit != null ? lkrFmt(wsProfit) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-teal-700">{web > 0 ? lkrFmt(web) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right text-xs text-emerald-600 font-bold">{webProfit != null ? lkrFmt(webProfit) : "—"}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              {margin > 0 ? (
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${margin >= 30 ? "bg-emerald-100 text-emerald-700" : margin >= 15 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+                                  {margin.toFixed(1)}%
+                                </span>
+                              ) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-slate-50 border-t-2 border-slate-200 text-xs font-bold">
+                <tr>
+                  <td className="px-4 py-3 text-slate-700 text-sm">Total</td>
+                  <td className="px-3 py-3 text-right text-slate-800 text-sm">{productTotals.qty}</td>
+                  <td className="px-3 py-3 text-right text-slate-600">{productTotals.ukPu > 0 ? gbp(productTotals.ukPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-indigo-600">{productTotals.logPu > 0 ? gbp(productTotals.logPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-slate-800">{productTotals.costPu > 0 ? gbp(productTotals.costPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-slate-600">{productTotals.avgLkr > 0 ? `Rs ${Math.round(productTotals.avgLkr).toLocaleString("en-LK")}` : "—"}</td>
+                  <td className="px-3 py-3 text-right text-amber-700">{productTotals.wsPu > 0 ? lkrFmt(productTotals.wsPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-amber-600">{productTotals.wsProfitPu > 0 ? lkrFmt(productTotals.wsProfitPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-amber-700">{productTotals.wsProfitLkr > 0 ? lkrFmt(productTotals.wsProfitLkr) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-teal-700">{productTotals.webPu > 0 ? lkrFmt(productTotals.webPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-teal-600">{productTotals.webProfitPu > 0 ? lkrFmt(productTotals.webProfitPu) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-emerald-700">{productTotals.webProfitLkr > 0 ? lkrFmt(productTotals.webProfitLkr) : "—"}</td>
+                  <td className="px-3 py-3 text-right text-slate-600">{productTotals.count > 0 ? (productTotals.marginSum / productTotals.count).toFixed(1) + "%" : "—"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── By Dispatch & Box ── */}
+      {view === "dispatch" && (
+        <div className="space-y-3">
+          {byDispatch.map((d) => {
+            const isOpen = openDispatch === d.dispatchReference;
+            return (
+              <div key={d.dispatchReference} className="rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                {/* Dispatch header */}
+                <button onClick={() => { setOpenDispatch(isOpen ? null : d.dispatchReference); setOpenBox(null); }}
+                  className="w-full flex items-center gap-4 px-5 py-4 text-left bg-white hover:bg-slate-50/60 transition">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Truck size={14} className="text-tenzy-teal shrink-0" />
+                      <p className="font-bold text-slate-900">{d.dispatchReference}</p>
+                      <span className="text-xs text-slate-400">{d.dispatchDate?.slice(0, 10)}</span>
+                      <span className="text-xs text-slate-500">· {d.boxes.length} box{d.boxes.length !== 1 ? "es" : ""}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-5 shrink-0 text-sm">
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Total Box Cost (GBP)</p>
+                      <p className="font-bold text-slate-800">{gbp(d.totalCost)}</p>
+                    </div>
+                    {d.totalCostLkr > 0 && (
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-slate-400">Total Box Cost (LKR)</p>
+                        <p className="font-bold text-indigo-700">{lkrFmt(d.totalCostLkr)}</p>
+                      </div>
+                    )}
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isOpen ? "bg-tenzy-teal text-white" : "bg-slate-100 text-slate-400"}`}>
+                      {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Boxes inside dispatch */}
+                {isOpen && (
+                  <div className="border-t border-slate-100 divide-y divide-slate-50 bg-slate-50/30">
+                    {d.boxes.map((b) => {
+                      const boxKey = `${d.dispatchReference}-${b.boxNumber}`;
+                      const isBoxOpen = openBox === boxKey;
+                      const boxLabel = b.boxNumber > 0 ? `Box ${b.boxNumber}` : "Unassigned";
+                      return (
+                        <div key={boxKey}>
+                          {/* Box row */}
+                          <button onClick={() => setOpenBox(isBoxOpen ? null : boxKey)}
+                            className="w-full flex items-center gap-3 px-6 py-3 text-left bg-white/60 hover:bg-white transition">
+                            <div className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex flex-col items-center justify-center shrink-0 shadow-sm">
+                              <Archive size={12} className="text-indigo-500" />
+                              <span className="text-[8px] font-bold text-slate-500">{b.boxNumber > 0 ? `B${b.boxNumber}` : "—"}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-800">{boxLabel}</p>
+                              <p className="text-xs text-slate-500">{b.items.length} product{b.items.length !== 1 ? "s" : ""} · {b.items.reduce((s, i) => s + i.approvedQuantity, 0)} units</p>
+                            </div>
+                            <div className="flex items-center gap-4 shrink-0 text-xs">
+                              <div className="text-right">
+                                <p className="text-slate-400">Total Box Cost (£)</p>
+                                <p className="font-bold text-slate-800">{gbp(b.totalCost)}</p>
+                              </div>
+                              {b.totalCostLkr > 0 && (
+                                <div className="text-right hidden sm:block">
+                                  <p className="text-slate-400">Total Box Cost (LKR)</p>
+                                  <p className="font-bold text-indigo-700">{lkrFmt(b.totalCostLkr)}</p>
+                                </div>
+                              )}
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isBoxOpen ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-400"}`}>
+                                {isBoxOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                              </div>
+                            </div>
+                          </button>
+
+                          {/* Products inside box */}
+                          {isBoxOpen && (
+                            <div className="bg-white border-t border-slate-100">
+                              <table className="w-full text-xs">
+                                <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase border-b border-slate-100">
+                                  <tr>
+                                    <th className="text-left px-5 py-2.5">Product</th>
+                                    <th className="text-right px-3 py-2.5">Units</th>
+                                    <th className="text-right px-3 py-2.5">UK Purchase</th>
+                                    <th className="text-right px-3 py-2.5 text-indigo-500">Logistics</th>
+                                    <th className="text-right px-3 py-2.5 text-slate-600 font-bold">Cost (£)</th>
+                                    <th className="text-right px-3 py-2.5 text-slate-500">Cost (LKR)</th>
+                                    <th className="text-right px-3 py-2.5 text-amber-500">Wholesale</th>
+                                    <th className="text-right px-3 py-2.5 text-amber-500">WS profit/unit</th>
+                                    <th className="text-right px-3 py-2.5 text-amber-600">WS profit (LKR)</th>
+                                    <th className="text-right px-3 py-2.5 text-teal-500">Website price</th>
+                                    <th className="text-right px-3 py-2.5 text-teal-500">Web profit/unit</th>
+                                    <th className="text-right px-3 py-2.5 text-emerald-600">Web profit (LKR)</th>
+                                    <th className="text-right px-3 py-2.5">Margin</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                  {b.items.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50/60 transition">
+                                      <td className="px-5 py-2.5">
+                                        <p className="font-semibold text-slate-800">{itemName(item)}</p>
+                                        <p className="text-slate-400 text-[10px]">{item.brandName}</p>
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{item.approvedQuantity}</td>
+                                      <td className="px-3 py-2.5 text-right text-slate-600">{gbp(item.ukCost)}</td>
+                                      <td className="px-3 py-2.5 text-right text-indigo-600">{gbp(item.logCost)}</td>
+                                      <td className="px-3 py-2.5 text-right font-semibold text-slate-800">{gbp(item.landed)}</td>
+                                      <td className="px-3 py-2.5 text-right text-slate-600">
+                                        {item.lkr > 0 ? `Rs ${Number(item.lkr).toLocaleString("en-LK", { maximumFractionDigits: 0 })}` : <span className="text-slate-300">—</span>}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right text-amber-700">{item.wholesale > 0 ? lkrFmt(item.wholesale) : <span className="text-slate-300">—</span>}</td>
+                                      <td className="px-3 py-2.5 text-right text-amber-500">{item.wsProfitPerUnitLkr != null ? lkrFmt(item.wsProfitPerUnitLkr) : <span className="text-slate-300">—</span>}</td>
+                                      <td className="px-3 py-2.5 text-right font-semibold text-amber-700">
+                                        {item.totalWsProfitLkr != null ? lkrFmt(item.totalWsProfitLkr) : <span className="text-slate-300">—</span>}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right text-teal-700">{item.website > 0 ? lkrFmt(item.website) : <span className="text-slate-300">—</span>}</td>
+                                      <td className="px-3 py-2.5 text-right text-teal-500">{item.webProfitPerUnitLkr != null ? lkrFmt(item.webProfitPerUnitLkr) : <span className="text-slate-300">—</span>}</td>
+                                      <td className="px-3 py-2.5 text-right font-bold text-emerald-600">
+                                        {item.totalWebProfitLkr != null ? lkrFmt(item.totalWebProfitLkr) : <span className="text-slate-300">—</span>}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right">
+                                        <span className={`rounded-full px-2 py-0.5 font-semibold ${Number(item.marginPercent) >= 30 ? "bg-emerald-100 text-emerald-700" : Number(item.marginPercent) >= 15 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"}`}>
+                                          {Number(item.marginPercent).toFixed(1)}%
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot className="bg-slate-50 border-t border-slate-100 text-xs font-bold">
+                                  <tr>
+                                    <td className="px-6 py-2 text-slate-600">Box total</td>
+                                    <td className="px-3 py-2 text-right text-slate-700">{b.items.reduce((s, i) => s + i.approvedQuantity, 0)}</td>
+                                    <td colSpan={2} />
+                                    <td className="px-3 py-2 text-right text-slate-800">{gbp(b.totalCost)}</td>
+                                    <td className="px-3 py-2 text-right text-indigo-700">{b.totalCostLkr > 0 ? lkrFmt(b.totalCostLkr) : "—"}</td>
+                                    <td colSpan={7} />
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Page ────────────────────────────────────────────────────────────── */
 const TABS = [
   { id: "purchase", label: "UK Purchase",    icon: ShoppingBag },
   { id: "card",     label: "Card Charges",   icon: CreditCard  },
   { id: "dispatch", label: "Dispatch",       icon: Truck },
+  { id: "pricing",  label: "Pricing",        icon: TrendingUp  },
   { id: "monthly",  label: "Monthly",        icon: Calendar },
 ];
 
@@ -1212,31 +1694,32 @@ function formatRow(row) {
 }
 
 export default function Reports() {
-  const [activeTab, setActiveTab] = useState("purchase");
-  const [filters, setFilters] = useState({ startDate: "", endDate: "", shop: "", courier: "", brand: "", product: "", shipmentStatus: "" });
+  const [activeTab, setActiveTab]       = useState("purchase");
   const [procurementRows, setProcurementRows] = useState([]);
   const [dispatchRows,    setDispatchRows]    = useState([]);
   const [monthlyRows,     setMonthlyRows]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [applyTick, setApplyTick] = useState(0);
+  const [pricingRows,     setPricingRows]     = useState([]);
+  const [loading, setLoading]           = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [proc, disp, monthly] = await Promise.all([
-        supplyChainApi.getProcurementReport(filters),
-        supplyChainApi.getDispatchReport(filters),
-        supplyChainApi.getMonthlyDispatchSummary(filters),
+      const [proc, disp, monthly, pricing] = await Promise.all([
+        supplyChainApi.getProcurementReport({}),
+        supplyChainApi.getDispatchReport({}),
+        supplyChainApi.getMonthlyDispatchSummary({}),
+        supplyChainApi.getPricingReport(),
       ]);
       setProcurementRows(proc    ?? []);
       setDispatchRows(disp       ?? []);
       setMonthlyRows(monthly     ?? []);
+      setPricingRows(pricing     ?? []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [applyTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
@@ -1248,54 +1731,43 @@ export default function Reports() {
       title: `Tenzy ${kind} report`,
       subtitle: `Generated ${new Date().toISOString().slice(0, 10)}`,
       columns: fields,
-      rows: rows.map(formatRow),
+      rows: rows.map((row) => {
+        const formatted = formatRow(row);
+        fields.forEach((field) => {
+          if (field.format) formatted[field.key] = field.format(row);
+        });
+        return formatted;
+      }),
     });
   };
-
-  // Overall KPIs derived from dispatch data
-  const totalDispatches  = new Set(dispatchRows.map((r) => r.dispatchReference).filter(Boolean)).size;
-  const totalUnits       = dispatchRows.reduce((s, r) => s + (r.quantityDispatched ?? 0), 0);
-  const totalProductCost = dispatchRows.reduce((s, r) => s + (r.productCost ?? 0), 0);
-  const totalCourier     = monthlyRows.reduce((s, r) => s + (r.totalShipmentCost ?? 0), 0);
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Supply Chain Reports</h1>
-          <p className="text-sm text-slate-500 mt-1">Track every pound spent dispatching and shipping products to Sri Lanka.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Business Reports</h1>
+          <p className="text-sm text-slate-500 mt-1">Track purchases, dispatches and profitability across all products.</p>
         </div>
-        <button onClick={() => setApplyTick((t) => t + 1)}
+        <button onClick={load}
           className="flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition shadow-sm">
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
 
-      {/* Top-level KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KpiCard icon={Truck}      label="Dispatches"         value={totalDispatches}        color="teal" />
-        <KpiCard icon={Package}    label="Total units sent"   value={totalUnits}             color="indigo" />
-        <KpiCard icon={TrendingUp} label="Product cost (GBP)" value={gbp(totalProductCost)}  color="amber" />
-        <KpiCard icon={BarChart2}  label="Total courier cost" value={gbp(totalCourier)}       color="rose" />
-      </div>
-
-      {/* Filters */}
-      <Filters filters={filters} onChange={setFilters} onApply={() => setApplyTick((t) => t + 1)} />
-
       {/* Tabs */}
-      <div className="flex gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+      <div className="flex gap-1 rounded-2xl border border-tenzy-orange/50 bg-white p-1 overflow-x-auto">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition whitespace-nowrap ${
+                activeTab === tab.id ? "bg-tenzy-teal text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <Icon size={14} className={activeTab === tab.id ? "text-tenzy-teal" : ""} />
+              <Icon size={14} />
               <span className="hidden sm:inline">{tab.label}</span>
             </button>
           );
@@ -1303,18 +1775,11 @@ export default function Reports() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "purchase" && (
-        <UKPurchaseTab rows={procurementRows} loading={loading} onExport={exportPdf} />
-      )}
-      {activeTab === "card" && (
-        <CardChargesTab rows={procurementRows} loading={loading} onExport={exportPdf} />
-      )}
-      {activeTab === "dispatch" && (
-        <DispatchTab rows={dispatchRows} loading={loading} onExport={exportPdf} />
-      )}
-      {activeTab === "monthly" && (
-        <MonthlyTab rows={monthlyRows} loading={loading} onExport={exportPdf} />
-      )}
+      {activeTab === "purchase"  && <UKPurchaseTab  rows={procurementRows} loading={loading} onExport={exportPdf} />}
+      {activeTab === "card"      && <CardChargesTab  rows={procurementRows} loading={loading} onExport={exportPdf} />}
+      {activeTab === "dispatch"  && <DispatchTab     rows={dispatchRows}    loading={loading} onExport={exportPdf} />}
+      {activeTab === "pricing"   && <PricingTab      rows={pricingRows}     loading={loading} />}
+      {activeTab === "monthly"   && <MonthlyTab      rows={monthlyRows}     loading={loading} onExport={exportPdf} />}
     </div>
   );
 }

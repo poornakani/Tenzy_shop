@@ -91,7 +91,7 @@ export default function AuthLayout({
                   </h2>
                   <p className="mt-3 max-w-md text-slate-600">
                     Sign in to track orders, manage your routine, and discover
-                    products matched to your skin concerns.
+                    products matched to your skin category.
                   </p>
                 </div>
 

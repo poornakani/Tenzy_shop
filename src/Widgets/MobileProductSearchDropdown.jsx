@@ -31,6 +31,7 @@ const MobileProductSearchDropdown = ({
     setActive(0);
   }, [query]);
 
+
   useLayoutEffect(() => {
     if (!open || !boxRef.current) return;
 

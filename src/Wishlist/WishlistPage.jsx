@@ -127,8 +127,7 @@ const WishlistPage = () => {
                   <img
                     src={p.image}
                     alt={p.name}
-                    className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]
-                      ${p.outOfStock ? "blur-[2px] grayscale" : ""}`}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                   />
 
                   {/* Sale */}
@@ -139,16 +138,17 @@ const WishlistPage = () => {
                   )}
 
                   {/* Stock */}
-                  <div
-                    className={`absolute top-3 right-3 rounded-xl px-3 py-1.5 text-xs font-semibold text-white backdrop-blur shadow-lg
-                      ${
-                        p.outOfStock
-                          ? "bg-black/60"
-                          : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
-                      }`}
-                  >
-                    {p.outOfStock ? "Out of stock" : `Stock: ${p.stockCount}`}
-                  </div>
+                  {!p.outOfStock && (
+                    <div className="absolute top-3 right-3 rounded-xl px-3 py-1.5 text-xs font-semibold text-white backdrop-blur shadow-lg bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20">
+                      Stock: {p.stockCount}
+                    </div>
+                  )}
+
+                  {p.outOfStock && (
+                    <div className="absolute bottom-0 inset-x-0 py-2.5 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                      <span className="text-xs font-bold tracking-widest uppercase text-white">Out of Stock</span>
+                    </div>
+                  )}
 
                   {/* Bottom actions */}
                   <div className="absolute inset-x-0 bottom-0 p-3">

@@ -5,6 +5,7 @@ import {
   Save, Trash2, Truck, User, X,
 } from "lucide-react";
 import { supplyChainApi } from "../../services/api";
+import { useAuth } from "../../Context/AuthContext";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 const COURIER_KEY = "tenzy_couriers_v2";
@@ -14,6 +15,26 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const roundUpKg = (weight) => {
   const n = Number(weight) || 0;
   return n > 0 ? Math.ceil(n) : 0;
+};
+
+// Build display name (best available):
+//  1. VariantName  e.g. "Niacinamide 30ml"   (set when variant was linked)
+//  2. productName + Volume                    (set during UK purchase)
+//  3. productName + weight in grams           (always available as fallback)
+//  4. productName alone
+const itemLabel = (item) => {
+  const vn = item.variantName ?? item.VariantName ?? "";
+  if (vn) return vn;
+  const name = item.productName ?? item.ProductName ?? "";
+  const vol  = item.volume ?? item.Volume ?? item.itemVolume ?? "";
+  if (vol) return `${name} ${vol}`.trim();
+  // item.weight from ProductVariants is in grams
+  const wG = Number(item.weight ?? item.Weight ?? 0);
+  if (wG > 0) return `${name} (${Math.round(wG)}g)`;
+  // item.weightKg from dispatch items is in kg
+  const wKg = Number(item.weightKg ?? item.WeightKg ?? 0);
+  if (wKg > 0) return `${name} (${Math.round(wKg * 1000)}g)`;
+  return name;
 };
 
 const genParcel = () => {
@@ -30,8 +51,13 @@ const saveCouriers  = (list) => localStorage.setItem(COURIER_KEY, JSON.stringify
 const availQty = (item) =>
   Math.max(0, (item.quantity ?? item.Quantity ?? 0) - (item.quantityAlreadyDispatched ?? item.QuantityAlreadyDispatched ?? 0));
 
-const itemWeightKg = (item) =>
-  Number(item.weight ?? item.Weight ?? item.weightKg ?? item.WeightKg ?? item.productWeight ?? item.ProductWeight ?? 0) || 0;
+const itemWeightKg = (item) => {
+  // item.weight from ProductVariants is in grams — convert to kg for dispatch calculations
+  const wG = Number(item.weight ?? item.Weight ?? 0);
+  if (wG > 0) return wG / 1000;
+  // item.weightKg from shipment items is already in kg
+  return Number(item.weightKg ?? item.WeightKg ?? item.productWeight ?? item.ProductWeight ?? 0) || 0;
+};
 
 /* ── tiny UI ─────────────────────────────────────────────────────────────── */
 const Input  = (p) => <input  {...p} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20" />;
@@ -213,15 +239,16 @@ function Step1SelectItems({ procurements, stagedItems, setStagedItems, addToast 
     if (q <= 0 || q > free) { addToast("error", `Enter a quantity between 1 and ${free}.`); return; }
     setStagedItems((p) => [...p, {
       procurementItemId: item.procurementItemId,
-      productName: item.productName,
-      brandName: item.brandName ?? "",
+      variantId:         item.variantId ?? item.VariantId ?? null,
+      productName:       itemLabel(item),
+      brandName:         item.brandName ?? "",
       quantityDispatched: q,
-      netUnitCost: item.netUnitCost ?? item.NetUnitCost ?? 0,
-      weight: itemWeightKg(item),
-      procRef: proc.procurementReference ?? proc.invoiceReference ?? String(proc.procurementId),
+      netUnitCost:       item.netUnitCost ?? item.NetUnitCost ?? 0,
+      weight:            itemWeightKg(item),
+      procRef:           proc.procurementReference ?? proc.invoiceReference ?? String(proc.procurementId),
     }]);
     setDraftQty((p) => ({ ...p, [item.procurementItemId]: "" }));
-    addToast("success", `"${item.productName}" ×${q} staged.`);
+    addToast("success", `"${itemLabel(item)}" ×${q} staged.`);
   };
 
   const unstage = (i) => setStagedItems((p) => p.filter((_, idx) => idx !== i));
@@ -257,7 +284,7 @@ function Step1SelectItems({ procurements, stagedItems, setStagedItems, addToast 
                   {!isLoading && items.filter((item) => freeQty(item) > 0).map((item) => (
                     <div key={item.procurementItemId} className="px-4 py-3 flex items-center gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{item.productName}</p>
+                        <p className="text-sm font-semibold text-slate-800 truncate">{itemLabel(item)}</p>
                         <p className="text-xs text-slate-500">{item.brandName} · {gbp(item.netUnitCost)}/unit · <span className="font-semibold text-tenzy-teal">{freeQty(item)} available</span></p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -297,6 +324,7 @@ function Step1SelectItems({ procurements, stagedItems, setStagedItems, addToast 
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-slate-800 truncate">{item.productName}</p>
                 <p className="text-[11px] text-slate-500">{item.brandName} · ×{item.quantityDispatched} · {gbp(item.netUnitCost * item.quantityDispatched)}</p>
+
                 <p className="text-[10px] text-slate-400 mt-0.5">Ref: {item.procRef}</p>
               </div>
               <button onClick={() => unstage(i)} className="p-1 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition shrink-0 mt-0.5"><X size={12} /></button>
@@ -466,6 +494,7 @@ function Step2OrganiseBoxes({ stagedItems, boxes, setBoxes, addToast }) {
                     <option value="">+ Add item to this box</option>
                     {unassigned.map(({ idx, productName, remainingQuantity }) => (
                       <option key={idx} value={idx}>{productName} ×{remainingQuantity}</option>
+
                     ))}
                   </select>
                 )}
@@ -778,7 +807,13 @@ function DispatchHistory({ dispatches, loading, onRefresh }) {
                     <span className="rounded-lg bg-slate-50 px-2 py-1 text-slate-500">Courier <strong className="text-slate-800">{gbp(courierCost)}</strong></span>
                     <span className="rounded-lg bg-slate-50 px-2 py-1 text-slate-500">Products <strong className="text-slate-800">{gbp(productCost)}</strong></span>
                   </div>
-                  <p className="text-xs text-slate-500">{d.courierName} · {d.dispatchDate?.slice(0, 10)} · {d.boxCount ?? "?"} box{d.boxCount !== 1 ? "es" : ""}</p>
+                  <p className="text-xs text-slate-500">
+                    {d.courierName}
+                    {(d.ukToSriLankaCourierPerKg ?? d.UkToSriLankaCourierPerKg ?? d.ratePerKg ?? d.RatePerKg) != null
+                      ? <> · <strong className="text-indigo-500">£{Number(d.ukToSriLankaCourierPerKg ?? d.UkToSriLankaCourierPerKg ?? d.ratePerKg ?? d.RatePerKg).toFixed(2)}/kg</strong></>
+                      : null}
+                    {" · "}{d.dispatchDate?.slice(0, 10)} · {d.boxCount ?? "?"} box{d.boxCount !== 1 ? "es" : ""}
+                  </p>
                 </div>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS[d.shipmentStatus] ?? STATUS.pending}`}>
                   {d.shipmentStatus ?? "pending"}
@@ -820,7 +855,7 @@ function DispatchHistory({ dispatches, loading, onRefresh }) {
                       ["Parcel", detail.parcelNumber],
                       ["Status", detail.shipmentStatus],
                       ["Boxes", detail.boxCount],
-                      ["Rate/kg", gbp(detail.ukToSriLankaCourierPerKg)],
+                      ["Rate/kg", gbp(detail.ukToSriLankaCourierPerKg ?? detail.UkToSriLankaCourierPerKg ?? detail.ratePerKg ?? detail.RatePerKg ?? detail.courierRatePerKg ?? detail.CourierRatePerKg)],
                     ].map(([label, val]) => (
                       <div key={label} className="bg-slate-50 rounded-xl px-3 py-2">
                         <p className="text-xs text-slate-400">{label}</p>
@@ -829,34 +864,98 @@ function DispatchHistory({ dispatches, loading, onRefresh }) {
                     ))}
                   </div>
 
-                  {/* Items table */}
-                  {detail.items?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Items</p>
-                      <div className="rounded-xl border border-slate-200 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                            <tr>
-                              <th className="text-left px-3 py-2.5">Product</th>
-                              <th className="text-right px-3 py-2.5">Qty</th>
-                              <th className="text-right px-3 py-2.5">Net Unit</th>
-                              <th className="text-right px-3 py-2.5">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {detail.items.map((item, i) => (
-                              <tr key={i} className="hover:bg-slate-50/60">
-                                <td className="px-3 py-2.5 font-medium text-slate-800">{item.productName}</td>
-                                <td className="px-3 py-2.5 text-right text-slate-600">{item.quantityDispatched}</td>
-                                <td className="px-3 py-2.5 text-right text-slate-600">{gbp(item.netUnitCost)}</td>
-                                <td className="px-3 py-2.5 text-right font-bold text-slate-900">{gbp((item.netUnitCost ?? 0) * (item.quantityDispatched ?? 0))}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                  {/* Items table — grouped by box when BoxNumber is available */}
+                  {detail.items?.length > 0 && (() => {
+                    const hasBoxes = detail.items.some((i) => i.boxNumber != null && i.boxNumber > 0);
+                    if (!hasBoxes) {
+                      return (
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Items</p>
+                          <div className="rounded-xl border border-slate-200 overflow-hidden">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                                <tr>
+                                  <th className="text-left px-3 py-2.5">Product</th>
+                                  <th className="text-right px-3 py-2.5">Qty</th>
+                                  <th className="text-right px-3 py-2.5">Unit Price</th>
+                                  <th className="text-right px-3 py-2.5">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {detail.items.map((item, i) => {
+                                  const unitPrice = item.netUnitCost ?? 0;
+                                  const total     = unitPrice * (item.quantityDispatched ?? 0);
+                                  return (
+                                    <tr key={i} className="hover:bg-slate-50/60">
+                                      <td className="px-3 py-2.5 font-medium text-slate-800">{itemLabel(item)}</td>
+                                      <td className="px-3 py-2.5 text-right text-slate-600">{item.quantityDispatched}</td>
+                                      <td className="px-3 py-2.5 text-right text-slate-600">{gbp(unitPrice)}</td>
+                                      <td className="px-3 py-2.5 text-right font-bold text-slate-900">{gbp(total)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    }
+                    // Group by box number
+                    const boxMap = new Map();
+                    detail.items.forEach((item) => {
+                      const k = item.boxNumber ?? 0;
+                      if (!boxMap.has(k)) boxMap.set(k, []);
+                      boxMap.get(k).push(item);
+                    });
+                    const boxGroups = [...boxMap.entries()].sort(([a], [b]) => a - b);
+                    return (
+                      <div className="space-y-3">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Items by box</p>
+                        {boxGroups.map(([boxNum, items]) => {
+                          const boxTotal = items.reduce((s, i) => s + (i.netUnitCost ?? 0) * (i.quantityDispatched ?? 0), 0);
+                          const boxUnits = items.reduce((s, i) => s + (i.quantityDispatched ?? 0), 0);
+                          return (
+                            <div key={boxNum} className="rounded-xl border border-slate-200 overflow-hidden">
+                              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                                <Archive size={12} className="text-indigo-500" />
+                                <span className="text-xs font-bold text-indigo-700">
+                                  {boxNum > 0 ? `Box ${boxNum}` : "Unassigned"}
+                                </span>
+                                <span className="text-xs text-indigo-400">
+                                  {items.length} product{items.length !== 1 ? "s" : ""} · {boxUnits} units
+                                </span>
+                                <span className="ml-auto text-xs font-bold text-indigo-700">{gbp(boxTotal)}</span>
+                              </div>
+                              <table className="w-full text-sm">
+                                <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                                  <tr>
+                                    <th className="text-left px-3 py-2">Product</th>
+                                    <th className="text-right px-3 py-2">Qty</th>
+                                    <th className="text-right px-3 py-2">Unit Price</th>
+                                    <th className="text-right px-3 py-2">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {items.map((item, i) => {
+                                    const unitPrice = item.netUnitCost ?? item.netAmount / (item.quantityDispatched || 1) ?? 0;
+                                    const total     = unitPrice * (item.quantityDispatched ?? 0);
+                                    return (
+                                      <tr key={i} className="hover:bg-slate-50/60">
+                                        <td className="px-3 py-2.5 font-medium text-slate-800">{itemLabel(item)}</td>
+                                        <td className="px-3 py-2.5 text-right text-slate-600">{item.quantityDispatched}</td>
+                                        <td className="px-3 py-2.5 text-right text-slate-600">{gbp(unitPrice)}</td>
+                                        <td className="px-3 py-2.5 text-right font-bold text-slate-900">{gbp(total)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Charges */}
                   {detail.charges?.length > 0 && (
@@ -885,11 +984,13 @@ function DispatchHistory({ dispatches, loading, onRefresh }) {
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 export default function Dispatch() {
   const { toasts, add: addToast } = useToast();
+  const { isSuperAdmin } = useAuth();
   const [couriers,     setCouriers]     = useState(loadCouriers);
   const [procurements, setProcurements] = useState([]);
   const [dispatches,   setDispatches]   = useState([]);
   const [pageLoading,  setPageLoading]  = useState(true);
-  const [activeView,   setActiveView]   = useState("create"); // "create" | "history"
+  // Admin/manager lands on history — only super admin can create dispatches
+  const [activeView,   setActiveView]   = useState(isSuperAdmin ? "create" : "history");
   const [step,         setStep]         = useState(1);
   const [stagedItems,  setStagedItems]  = useState([]);
   const [boxes,        setBoxes]        = useState([{ id: "box-1", number: 1, items: [], roundedWeight: "", homeToUkCourier: "" }]);
@@ -941,9 +1042,11 @@ export default function Dispatch() {
       const rate = Number(courierForm.ukToSriLankaCourierPerKg) || 0;
       const allItems = filledBoxes.flatMap((b) => b.items.map((item) => ({
         procurementItemId: item.procurementItemId,
+        variantId:         item.variantId ?? null,
         quantityDispatched: Number(item.quantityDispatched),
         taxAmount: 0,
         weightKg: Number(item.weight ?? 0),
+        boxNumber: b.number,
       })));
       const boxMeta = filledBoxes.map((b) => {
         const autoW   = b.items.reduce((s, i) => s + (i.weight ?? 0) * i.quantityDispatched, 0);
@@ -1019,15 +1122,19 @@ export default function Dispatch() {
           <p className="text-sm text-slate-500 mt-0.5">Organise stock into boxes and create shipments to Sri Lanka</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowCourierPanel(true)}
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition shadow-sm">
-            <Truck size={13} /> Manage Couriers
-            {couriers.length > 0 && <span className="rounded-full bg-tenzy-teal text-white px-1.5 py-0.5 text-[10px] font-bold">{couriers.length}</span>}
-          </button>
-          <button onClick={() => setActiveView("create")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition ${activeView === "create" ? "bg-tenzy-teal text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
-            New Dispatch
-          </button>
+          {isSuperAdmin && (
+            <button onClick={() => setShowCourierPanel(true)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition shadow-sm">
+              <Truck size={13} /> Manage Couriers
+              {couriers.length > 0 && <span className="rounded-full bg-tenzy-teal text-white px-1.5 py-0.5 text-[10px] font-bold">{couriers.length}</span>}
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button onClick={() => setActiveView("create")}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition ${activeView === "create" ? "bg-tenzy-teal text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+              New Dispatch
+            </button>
+          )}
           <button onClick={() => setActiveView("history")}
             className={`px-4 py-2 text-xs font-bold rounded-xl transition ${activeView === "history" ? "bg-tenzy-teal text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
             History <span className="ml-1 opacity-60">({dispatches.length})</span>
@@ -1035,8 +1142,8 @@ export default function Dispatch() {
         </div>
       </div>
 
-      {/* Create flow */}
-      {activeView === "create" && (
+      {/* Create flow — super admin only */}
+      {activeView === "create" && isSuperAdmin && (
         <div className="space-y-5">
           {/* Step bar */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex items-center justify-between flex-wrap gap-4">

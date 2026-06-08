@@ -144,7 +144,7 @@ function EditProcurementItemDialog({ item, onSave, onCancel }) {
       {children}
     </div>
   );
-  const inp = "w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition";
+  const inp = "w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-orange transition";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -206,7 +206,7 @@ function EditDispatchItemDialog({ item, onSave, onCancel }) {
         <p className="text-sm text-slate-600 mb-2 font-medium">{item.productName}</p>
         <label className="text-xs font-semibold text-slate-500 block mb-1">Quantity Dispatched</label>
         <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)}
-          className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition mb-3" />
+          className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-orange transition mb-3" />
         {err && <p className="text-xs text-red-500 mb-2">{err}</p>}
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">Cancel</button>

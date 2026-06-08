@@ -48,12 +48,25 @@ import AuditLog from "./adminportal/pages/AuditLog";
 const AdminGuard = ({ children }) => {
   const hasAdminFlag = localStorage.getItem("adminAuth") === "true";
   const hasToken     = !!localStorage.getItem("authToken");
-  if (hasAdminFlag && hasToken) return children;
-  // Clear stale flags so the login page starts clean
+  let roleId = Number(localStorage.getItem("userRole") || 0);
+  try {
+    roleId = Number(JSON.parse(localStorage.getItem("authUser") || "{}")?.roleId || roleId);
+  } catch {
+    // Keep the legacy role fallback.
+  }
+  if (hasAdminFlag && hasToken && [1, 3, 4].includes(roleId)) return children;
   localStorage.removeItem("adminAuth");
   localStorage.removeItem("authToken");
   localStorage.removeItem("authUser");
   return <Navigate to="/signin" replace />;
+};
+
+// Blocks non-super-admins from accessing a route — redirects to dashboard
+const SuperAdminOnly = ({ children }) => {
+  let roleId = 0;
+  try { roleId = Number(JSON.parse(localStorage.getItem("authUser") || "{}")?.roleId || 0); } catch {}
+  if (roleId === 3) return children;
+  return <Navigate to="/admin" replace />;
 };
 
 const Home = () => {
@@ -63,7 +76,6 @@ const Home = () => {
       <Header />
       <Banner01 />
       <BestSelling />
-      {/* <Banner02 /> */}
       <Brands />
       <FAQ />
       <Footer />
@@ -102,14 +114,14 @@ const App = () => {
                   <Route index element={<Dashboard />} />
                   <Route path="orders" element={<Orders />} />
                   <Route path="products" element={<AdminProducts />} />
-                  <Route path="procurement" element={<Procurement />} />
+                  <Route path="procurement" element={<SuperAdminOnly><Procurement /></SuperAdminOnly>} />
                   <Route path="arrival" element={<ArrivalVerification />} />
-                  <Route path="pricing" element={<PricingManagement />} />
+                  <Route path="pricing" element={<SuperAdminOnly><PricingManagement /></SuperAdminOnly>} />
                   <Route path="dispatch" element={<Dispatch />} />
                   <Route path="stock" element={<Stock />} />
                   <Route path="customers" element={<Customers />} />
                   <Route path="reviews" element={<Reviews />} />
-                  <Route path="reports" element={<Reports />} />
+                  <Route path="reports" element={<SuperAdminOnly><Reports /></SuperAdminOnly>} />
                   <Route path="audit-log" element={<AuditLog />} />
                   <Route path="reference" element={<ReferenceData />} />
                 </Route>

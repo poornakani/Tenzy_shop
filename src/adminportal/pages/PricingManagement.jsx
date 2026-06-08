@@ -27,6 +27,11 @@ const getWeightG = (row) => Number(
 const getProductId = (row) => row?.productId ?? row?.ProductId ?? row?.productID ?? row?.ProductID ?? null;
 const getProcurementItemId = (row) => row?.procurementItemId ?? row?.ProcurementItemId ?? row?.sourceProcurementItemId ?? row?.SourceProcurementItemId ?? null;
 const getProductName = (row) => String(row?.productName ?? row?.ProductName ?? row?.name ?? row?.Name ?? "").trim().toLowerCase();
+const getItemLabel  = (row) => {
+  const vn = row?.variantName ?? row?.VariantName ?? "";
+  const pn = row?.productName ?? row?.ProductName ?? row?.name ?? row?.Name ?? "";
+  return vn ? vn : pn;
+};
 const getShipmentChargesGbp = (dispatch) => Number(dispatch?.totalShipmentCharges ?? dispatch?.totalShipmentCharge ?? 0) || 0;
 const getPurchaseCostGbp = (row) => Number(
   row?.purchaseCostGbp ??
@@ -151,13 +156,13 @@ const getWeightAllocation = (row, dispatchRows, dispatch) => {
 const Input = ({ className = "", ...props }) => (
   <input
     {...props}
-    className={`w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20 ${className}`}
+    className={`w-full rounded-2xl border border-tenzy-orange/50 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20 ${className}`}
   />
 );
 const Select = (props) => (
   <select
     {...props}
-    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+    className="w-full rounded-2xl border border-tenzy-orange/50 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
   />
 );
 const Label = ({ children }) => <label className="mb-1 block text-xs font-semibold text-slate-500">{children}</label>;
@@ -359,7 +364,10 @@ export default function PricingManagement() {
         };
       });
 
-  const pendingByDispatch = useMemo(() => groupByDispatch(pendingRows, dispatches), [pendingRows, dispatches]);
+  const pendingByDispatch = useMemo(
+    () => groupByDispatch(pendingRows, dispatches).filter((g) => g.pricedCount < g.items.length),
+    [pendingRows, dispatches]
+  );
   const liveByDispatch    = useMemo(() => groupByDispatch(liveRows,    dispatches), [liveRows,    dispatches]);
   const reportByDispatch  = useMemo(() => groupByDispatch(pricingRowsWithWeights, dispatches), [pricingRowsWithWeights, dispatches]);
 
@@ -484,7 +492,7 @@ export default function PricingManagement() {
         customerDiscountAmount:  form.discountMode === "amount"  ? Number(form.customerDiscountAmount  || 0) : 0,
         wholesalePrice:          wholesalePriceLkr,
         landingCostGbp:          round4(logisticsCostGbp),
-        landingCostLkr:          lkrRateNum > 0 ? Math.round(logisticsCostGbp * lkrRateNum) : null,
+        landingCostLkr:          totalUnitCostLkr,   // (unitCost + logistics) × rate
         courierPerKgUk:          selectedFreight.effectivePerKgGbp,
         wrappingPerUnit:         Number(form.wrappingChargesGbp) || 0,
         otherChargesPerUnit:     Number(form.otherChargesGbp)    || 0,
@@ -551,7 +559,7 @@ export default function PricingManagement() {
             type="number" min="1" step="0.01" value={lkrRate}
             onChange={(e) => setLkrRate(e.target.value)}
             placeholder="e.g. 350"
-            className="w-28 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm outline-none focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+            className="w-28 rounded-xl border border-tenzy-orange/50 bg-white px-3 py-1.5 text-sm outline-none focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
           />
           <span className="text-sm text-slate-500">LKR</span>
         </div>
@@ -610,7 +618,7 @@ export default function PricingManagement() {
                   <optgroup key={dispatchRef} label={`${dispatchRef}  (${items.length} item${items.length !== 1 ? "s" : ""})`}>
                     {items.map((row) => (
                       <option key={row.arrivalItemId} value={row.arrivalItemId}>
-                        {row.productName} · qty {row.approvedQuantity} · {getStatus(row.pricingReviewStatus).label}
+                        {getItemLabel(row)} · qty {row.approvedQuantity} · {getStatus(row.pricingReviewStatus).label}
                       </option>
                     ))}
                   </optgroup>
@@ -624,7 +632,10 @@ export default function PricingManagement() {
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-800 break-words leading-snug">{selectedEligible.productName}</p>
+                      <p className="font-bold text-slate-800 break-words leading-snug">{getItemLabel(selectedEligible)}</p>
+                      {selectedEligible.variantName && (
+                        <p className="text-xs text-slate-500 mt-0.5">{selectedEligible.productName}</p>
+                      )}
                       <p className="text-xs text-slate-500 mt-0.5">{selectedEligible.brandName} · {selectedEligible.dispatchReference}</p>
                     </div>
                     <span className="shrink-0 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1">
@@ -715,7 +726,7 @@ export default function PricingManagement() {
                 </div>
 
                 {/* ── STEP 2: Total unit cost ─────────────────────── */}
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                <div className="rounded-2xl border border-tenzy-orange/50 bg-white p-4 space-y-2">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-5 h-5 rounded-full bg-slate-600 text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
                     <h3 className="text-sm font-bold text-slate-800">Total unit cost</h3>
@@ -762,12 +773,24 @@ export default function PricingManagement() {
                       min={totalUnitCostLkr ?? 0}
                       step="1"
                       value={form.wholesalePriceLkr !== "" ? form.wholesalePriceLkr : suggestedWholesalePriceLkr ?? ""}
-                      onChange={(e) => setForm({ ...form, wholesalePriceLkr: e.target.value })}
+                      onChange={(e) => {
+                        const typed = e.target.value;
+                        const typedNum = Math.round(Number(typed) || 0);
+                        let newMarginValue = form.wholesaleMarginValue;
+                        if (typedNum > 0 && totalUnitCostLkr && totalUnitCostLkr > 0) {
+                          if (form.wholesaleMarginMode === "percent") {
+                            newMarginValue = String(round2(((typedNum - totalUnitCostLkr) / totalUnitCostLkr) * 100));
+                          } else {
+                            newMarginValue = String(typedNum - totalUnitCostLkr);
+                          }
+                        }
+                        setForm({ ...form, wholesalePriceLkr: typed, wholesaleMarginValue: newMarginValue });
+                      }}
                       onBlur={(e) => {
                         if (totalUnitCostLkr !== null) {
                           const val = Math.round(Number(e.target.value) || 0);
                           if (val > 0 && val < totalUnitCostLkr) {
-                            setForm({ ...form, wholesalePriceLkr: String(totalUnitCostLkr) });
+                            setForm({ ...form, wholesalePriceLkr: String(totalUnitCostLkr), wholesaleMarginValue: "0" });
                           }
                         }
                       }}
@@ -920,14 +943,14 @@ export default function PricingManagement() {
                       </button>
                     ))}
                   </div>
-                  <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 cursor-pointer">
+                  <label className="flex items-center gap-2 rounded-2xl border border-tenzy-orange/50 bg-white px-4 py-3 text-sm text-slate-600 cursor-pointer">
                     <input type="checkbox" checked={form.isApproved} onChange={(e) => setForm({ ...form, isApproved: e.target.checked })} />
                     Mark as approved
                   </label>
                   <div>
                     <Label>Pricing notes</Label>
                     <textarea rows={2} value={form.pricingNotes} onChange={(e) => setForm({ ...form, pricingNotes: e.target.value })}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+                      className="w-full rounded-2xl border border-tenzy-orange/50 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
                       placeholder="Batch notes, promotional context, or reason for pricing decision" />
                   </div>
                 </div>
@@ -1004,7 +1027,7 @@ export default function PricingManagement() {
                         <div key={row.arrivalItemId} className={`rounded-xl border p-3 transition ${isSelected ? "border-tenzy-teal bg-tenzy-teal/5" : "border-white bg-white"}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{row.productName}</p>
+                              <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{getItemLabel(row)}</p>
                               <p className="text-xs text-slate-500 mt-0.5">
                                 qty <strong>{row.approvedQuantity}</strong> · cost <strong>{fmtGbp(getPurchaseCostGbp(row))}</strong>
                                 {rowWeightG > 0 ? <> · {rowWeightG}g</> : <span className="text-amber-500"> · no weight</span>}
@@ -1024,8 +1047,18 @@ export default function PricingManagement() {
                               </button>
                             )}
                           </div>
-                          {row.pricingReviewStatus === "awaiting_stock_depletion" && Number(row.currentStockQuantity || 0) > 0 && (
-                            <p className="mt-1.5 text-[10px] text-slate-400">Waiting — {row.currentStockQuantity} units still in live stock.</p>
+                          {row.pricingReviewStatus === "awaiting_stock_depletion" && (
+                            <div className="mt-1.5 space-y-0.5">
+                              {Number(row.pendingSellingPrice || 0) > 0 && (
+                                <p className="text-[10px] text-slate-500">
+                                  Live: <strong>{fmtLkr(row.currentSellingPrice)}</strong>
+                                  {" · "}Pending: <strong>{fmtLkr(row.pendingSellingPrice)}</strong>
+                                </p>
+                              )}
+                              {Number(row.currentStockQuantity || 0) > 0
+                                ? <p className="text-[10px] text-amber-600">Waiting — {row.currentStockQuantity} units still in live stock</p>
+                                : <p className="text-[10px] text-emerald-600">Stock depleted — ready to activate</p>}
+                            </div>
                           )}
                         </div>
                       );
@@ -1065,19 +1098,19 @@ export default function PricingManagement() {
                   const sellGbp   = lkrRateNum > 0 ? round2(sellLkr / lkrRateNum) : null;
                   const finalGbp  = lkrRateNum > 0 ? round2(finalLkr / lkrRateNum) : null;
                   const wholesale = Number(row.wholesalePrice) || 0;
-                  // Compute markup/margin correctly in LKR (landed cost LKR = netUnitCost*rate + landingCostLkr)
+                  // landingCostLkr = (unitCost + logistics) × rate — already the total landed cost in LKR
                   const rowRate    = Number(row.exchangeRateGbpToLkr) || lkrRateNum;
                   const rowProcure = getPurchaseCostGbp(row);
-                  const rowCostLkr = rowRate > 0 && rowProcure > 0
-                    ? Math.round(rowProcure * rowRate) + (Number(row.landingCostLkr) || 0)
-                    : null;
+                  const rowCostLkr = Number(row.landingCostLkr) > 0
+                    ? Number(row.landingCostLkr)
+                    : (rowRate > 0 && rowProcure > 0 ? Math.round(rowProcure * rowRate) : null);
                   const liveMarkup = rowCostLkr && rowCostLkr > 0 ? round2((finalLkr - rowCostLkr) / rowCostLkr * 100) : null;
                   const liveMargin = finalLkr > 0 && rowCostLkr ? round2((finalLkr - rowCostLkr) / finalLkr * 100) : null;
                   return (
                     <div key={row.pricingId} className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4">
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 break-words leading-snug">{row.productName}</p>
+                          <p className="font-semibold text-slate-800 break-words leading-snug">{getItemLabel(row)}</p>
                           <p className="text-xs text-slate-500">{row.brandName} · qty {row.approvedQuantity}</p>
                         </div>
                         <span className="rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5">Live</span>
@@ -1166,7 +1199,7 @@ export default function PricingManagement() {
                       const status = getStatus(row.pricingReviewStatus);
                       return (
                         <tr key={row.pricingId} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="px-2.5 py-2 font-medium text-slate-800 min-w-[220px] max-w-[340px] whitespace-normal break-words leading-snug">{row.productName}</td>
+                          <td className="px-2.5 py-2 font-medium text-slate-800 min-w-[220px] max-w-[340px] whitespace-normal break-words leading-snug">{getItemLabel(row)}</td>
                           <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">{wg || "—"}</td>
                           <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">{fmtGbp(procure)}</td>
                           <td className="px-2.5 py-2 text-indigo-600 whitespace-nowrap">{freight.effectivePerKgGbp > 0 ? fmtGbp(ukShip) : "—"}</td>

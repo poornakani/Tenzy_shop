@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
     const rt = userObj?.refreshHasToken;
     if (rt) localStorage.setItem("refreshToken", rt);
     // Keep legacy adminAuth key so AdminGuard still works
-    if (userObj?.roleId === 3) localStorage.setItem("adminAuth", "true");
+    if ([1, 3, 4].includes(Number(userObj?.roleId))) localStorage.setItem("adminAuth", "true");
     setUser(userObj);
   }, []);
 
@@ -45,10 +45,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  const isAdmin = user?.roleId === 3;
+  const roleId       = Number(user?.roleId ?? 0);
+  const isAdmin      = [1, 3, 4].includes(roleId); // 1=Admin 3=SuperAdmin 4=Manager
+  const isSuperAdmin = roleId === 3;                // SuperAdmin only
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isAdmin, isSuperAdmin, roleId }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,12 +9,7 @@ import header3 from "../public/images/header3.jpg";
 import header4 from "../public/images/header4.jpg";
 import banner01 from "../public/images/header4.jpg";
 
-import aveeno from "../public/images/sellingProd/aveeno.png";
-import cereve from "../public/images/sellingProd/cereve.jpg";
-import lorial from "../public/images/sellingProd/lorial.jpg";
-import madagskar from "../public/images/sellingProd/madagaskar.jpg";
-import vitac from "../public/images/sellingProd/vitac.jpg";
-import ordinary from "../public/images/sellingProd/ordinary.jpg";
+import placeholder from "../public/images/sellingProd/placeholder.svg";
 import check from "../public/images/check.png";
 
 export const assets = {
@@ -32,12 +27,12 @@ export const assets = {
 };
 
 export const sellingpro = {
-  aveeno,
-  cereve,
-  lorial,
-  madagskar,
-  ordinary,
-  vitac,
+  aveeno:    placeholder,
+  cereve:    placeholder,
+  lorial:    placeholder,
+  madagskar: placeholder,
+  ordinary:  placeholder,
+  vitac:     placeholder,
 };
 
 export const slides = [
@@ -63,79 +58,6 @@ export const slides = [
   },
 ];
 
-export const CatSelections = [
-  {
-    image:
-      "https://images.unsplash.com/photo-1620916566393-7c3a4a4f3f10?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Skin Care",
-    category: "Skin",
-    description:
-      "Daily essentials to keep your skin soft, smooth, and glowing.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Face Care",
-    category: "Face",
-    description: "Cleansers, serums, and creams for a fresh, bright face.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Head Care",
-    category: "Head",
-    description: "Hair & scalp care for healthy shine and comfort.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1629198726018-41b7b7a4b3b2?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Hand Care",
-    category: "Hand",
-    description: "Moisturizers and repair creams for soft hands all day.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1585232351009-aa87416fca90?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Body Care",
-    category: "Body",
-    description: "Lotions, scrubs, and body essentials for full-body glow.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Lip Care",
-    category: "Lips",
-    description: "Balms and treatments for smooth, hydrated lips.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1620916566653-8fd8f4c86b2b?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Sun Care",
-    category: "Sun",
-    description: "SPF and after-sun comfort for everyday protection.",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1612810436541-15f7a2f29f8c?q=80&h=800&w=800&auto=format&fit=crop",
-    title: "Acne Care",
-    category: "Acne",
-    description: "Spot care and gentle formulas for blemish-prone skin.",
-  },
-];
-
-export const beautyArtListsLeft = [
-  "Dermatologist-tested formulas",
-  "Hydrating glow finish",
-  "Non-comedogenic (won’t clog pores)",
-  "Clean & cruelty-free ingredients",
-];
-
-export const beautyArtListsRight = [
-  "Long-lasting wear (8–12 hours)",
-  "Lightweight, breathable texture",
-  "Vitamin C + Niacinamide blend",
-  "Suitable for all skin types",
-];
 
 export const Testimonials = [
   {

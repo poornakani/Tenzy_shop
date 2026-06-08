@@ -6,8 +6,9 @@ import {
 } from "lucide-react";
 import {
   brandsApi, concernsApi, paymentApi, productFaqApi,
-  productImageApi, productsApi, supplyChainApi, uploadApi,
+  productImageApi, productsApi, supplyChainApi, uploadApi, productVariantsApi,
 } from "../../services/api";
+import ProductDescriptionEditor from "../components/ProductDescriptionEditor";
 // paymentCardsApi is accessed via supplyChainApi.getPaymentCards()
 
 const emptyItem = {
@@ -17,7 +18,13 @@ const emptyItem = {
   brandName: "",
   quantity: 1,
   unitPrice: "",
-  _productWeight: null, // pre-filled from product for validation only — not shown in UI
+  // Physical properties — entered at purchase time, not read from the base product
+  itemWeight: "",          // grams, mandatory for dispatch
+  itemVolume: "",          // e.g. "30ml", "60ml"
+  itemTabletCount: "",
+  showWeight: true,
+  showVolume: false,
+  showTabletCount: false,
   batchNote: "",
   sourceProcurementId: null,
   sourceProcurementItemId: null,
@@ -30,7 +37,7 @@ const emptyItem = {
   _shopId: "",
   _shopName: "",
   _invoiceReference: "",
-  _paymentCardName: "",
+  _cardId: "",
   _paymentReference: "",
   _purchaseNote: "",
   _cardSpendAmount: "",
@@ -40,10 +47,9 @@ const emptyForm = {
   procurementId: null,
   procurementReference: "",
   shopId: "",
-  shopName: "",
   purchaseDate: new Date().toISOString().slice(0, 10),
   invoiceReference: "",
-  paymentCardName: "",
+  cardId: "",
   paymentReference: "",
   purchaseNote: "",
   cardSpendAmount: "",
@@ -77,17 +83,37 @@ const emptyProductForm = () => ({
 
 const money = (value) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(value ?? 0);
 
+// Build item display name (best available):
+//  1. VariantName  e.g. "Niacinamide 30ml"
+//  2. productName + Volume
+//  3. productName + weight in grams (fallback for old records with no volume)
+//  4. productName alone
+const itemLabel = (item) => {
+  const vn = item.variantName ?? item.VariantName ?? "";
+  if (vn) return vn;
+  const name = item.productName ?? item.ProductName ?? "";
+  const vol  = item.volume ?? item.Volume ?? item.itemVolume ?? "";
+  if (vol) return `${name} ${vol}`.trim();
+  // item.weight from ProductVariants is in grams — display directly
+  const wG = Number(item.weight ?? item.Weight ?? 0);
+  if (wG > 0) return `${name} (${Math.round(wG)}g)`;
+  // item.weightKg from dispatch items is in kg — convert for display
+  const wKg = Number(item.weightKg ?? item.WeightKg ?? 0);
+  if (wKg > 0) return `${name} (${Math.round(wKg * 1000)}g)`;
+  return name;
+};
+
 const Input = (props) => (
   <input
     {...props}
-    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+    className="w-full rounded-2xl border border-tenzy-orange/50 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
   />
 );
 
 const Select = (props) => (
   <select
     {...props}
-    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+    className="w-full rounded-2xl border border-tenzy-orange/50 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
   />
 );
 
@@ -179,14 +205,14 @@ function getDraftItemAmounts(item) {
   const quantity = Number(item.quantity) || 0;
   const unitPrice = Number(item.unitPrice) || 0;
   const grossAmount = quantity * unitPrice;
-  const discountAmount = estimateItemDiscount(item);
-  const netAmount = Math.max(grossAmount - discountAmount, 0);
+  const discountAmount = estimateItemDiscount(item);   // saving
+  const netAmount = Math.max(grossAmount - discountAmount, 0); // net cost paid
 
   return {
     grossAmount,
-    discountAmount,
+    discountAmount,   // discount saving  → DB DiscountAmount
+    netAmount,        // net cost paid    → DB NetTotal
     savedAmount: discountAmount,
-    netAmount,
   };
 }
 
@@ -195,10 +221,9 @@ function mapDetailToDraft(detail) {
     procurementId: detail.procurementId,
     procurementReference: detail.procurementReference ?? "",
     shopId: detail.shopId != null ? String(detail.shopId) : "",
-    shopName: detail.shopName ?? "",
     purchaseDate: String(detail.purchaseDate ?? "").slice(0, 10),
     invoiceReference: detail.invoiceReference ?? "",
-    paymentCardName: detail.paymentCardName ?? "",
+    cardId: detail.cardId != null ? String(detail.cardId) : "",
     paymentReference: detail.paymentReference ?? "",
     purchaseNote: detail.purchaseNote ?? "",
     cardSpendAmount: detail.cardSpendAmount != null ? String(detail.cardSpendAmount) : "",
@@ -210,12 +235,18 @@ function mapDetailToDraft(detail) {
       brandName: item.brandName ?? "",
       quantity: item.quantity ?? 1,
       unitPrice: item.unitPrice ?? "",
-      _productWeight: item.weight != null ? Number(item.weight) : null,
-      batchNote: item.batchNote ?? "",
+      // weight from ProductVariants is in grams — use directly
+      itemWeight:      item.weight != null && item.weight > 0 ? String(item.weight) : "",
+      itemVolume:      item.volume ?? item.Volume ?? "",
+      itemTabletCount: item.tabletCount != null ? String(item.tabletCount) : "",
+      showWeight:      item.showWeight ?? item.ShowWeight ?? true,
+      showVolume:      item.showVolume ?? item.ShowVolume ?? false,
+      showTabletCount: item.showTabletCount ?? item.ShowTabletCount ?? false,
+      batchNote:       item.batchNote ?? "",
       _shopId: detail.shopId != null ? String(detail.shopId) : "",
       _shopName: detail.shopName ?? "",
       _invoiceReference: detail.invoiceReference ?? "",
-      _paymentCardName: detail.paymentCardName ?? "",
+      _cardId: detail.cardId != null ? String(detail.cardId) : "",
       _paymentReference: detail.paymentReference ?? "",
       _purchaseNote: detail.purchaseNote ?? "",
       _cardSpendAmount: detail.cardSpendAmount != null ? String(detail.cardSpendAmount) : "",
@@ -291,6 +322,8 @@ export default function Procurement() {
   const [remainingByItem, setRemainingByItem] = useState({});
   const [form, setForm] = useState(emptyForm);
   const [draftItem, setDraftItem] = useState(emptyItem);
+  const [productVariants, setProductVariants] = useState([]); // existing product items for selected product
+  const [selectedVariantId, setSelectedVariantId] = useState(""); // "new" or variantId
   const [brandModalOpen, setBrandModalOpen] = useState(false);
   const [brandForm, setBrandForm] = useState(emptyBrandForm);
   const [brandUploading, setBrandUploading] = useState(false);
@@ -313,6 +346,9 @@ export default function Procurement() {
     payQuantity: "",
     discountNote: "",
   });
+  const [ukPurchaseByVariant, setUkPurchaseByVariant] = useState({});
+  const [dispatchedByVariant, setDispatchedByVariant] = useState({});
+  const [arrivedByVariant, setArrivedByVariant] = useState({});
 
   const addToast = (type, message) => {
     const id = Date.now() + Math.random();
@@ -323,15 +359,15 @@ export default function Procurement() {
   const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   const shopHeaderFilled =
-    form.shopName.trim() &&
+    form.shopId &&
     form.invoiceReference.trim() &&
-    form.paymentCardName.trim() &&
+    form.cardId &&
     form.paymentReference.trim();
 
   const loadPage = async () => {
     setLoading(true);
     try {
-      const [procurements, productList, brandList, dispatchList, concernList, paymentList, cardList, shopList] = await Promise.all([
+      const [procurements, productList, brandList, dispatchList, concernList, paymentList, cardList, shopList, arrivalList] = await Promise.all([
         supplyChainApi.getProcurements(),
         productsApi.getAllAdmin(),
         brandsApi.getAll(),
@@ -340,6 +376,7 @@ export default function Procurement() {
         paymentApi.getAll(),
         supplyChainApi.getPaymentCards(),
         supplyChainApi.getShops().catch(() => []),
+        supplyChainApi.getArrivals().catch(() => []),
       ]);
 
       setRecords(procurements ?? []);
@@ -369,6 +406,47 @@ export default function Procurement() {
       });
 
       setRemainingByItem(remainingMap);
+
+      // Build procurementItemId → variantId map for pipeline stock computation
+      const procItemToVariant = {};
+      fullProcurementDetails.forEach((proc) => {
+        (proc.items ?? []).forEach((item) => {
+          const vid = item.variantId ?? item.VariantId;
+          if (vid && item.procurementItemId) procItemToVariant[item.procurementItemId] = vid;
+        });
+      });
+
+      // UK purchase stock remaining per variant
+      const ukByVariant = {};
+      Object.entries(remainingMap).forEach(([procItemId, remaining]) => {
+        const vid = procItemToVariant[procItemId];
+        if (vid) ukByVariant[vid] = (ukByVariant[vid] ?? 0) + remaining;
+      });
+
+      // Dispatched stock per variant (units sent from UK)
+      const dByVariant = {};
+      dispatchDetails.forEach((dispatch) => {
+        (dispatch.items ?? []).forEach((item) => {
+          const vid = item.variantId ?? item.VariantId ?? procItemToVariant[item.procurementItemId];
+          if (vid) dByVariant[vid] = (dByVariant[vid] ?? 0) + (item.quantityDispatched ?? 0);
+        });
+      });
+
+      // Arrival stock per variant (units that have been verified at arrival)
+      const arrivalDetails = await Promise.all(
+        (arrivalList ?? []).map((a) => supplyChainApi.getArrivalById(a.arrivalVerificationId).catch(() => ({ items: [] })))
+      );
+      const aByVariant = {};
+      arrivalDetails.forEach((arrival) => {
+        (arrival?.items ?? []).forEach((item) => {
+          const vid = item.variantId ?? item.VariantId ?? procItemToVariant[item.procurementItemId];
+          if (vid) aByVariant[vid] = (aByVariant[vid] ?? 0) + (item.approvedQuantity ?? item.quantityReceived ?? 0);
+        });
+      });
+
+      setUkPurchaseByVariant(ukByVariant);
+      setDispatchedByVariant(dByVariant);
+      setArrivedByVariant(aByVariant);
     } finally {
       setLoading(false);
     }
@@ -387,13 +465,13 @@ export default function Procurement() {
   const itemsByShop = useMemo(() => {
     const groups = new Map();
     form.items.forEach((item, index) => {
-      const key = `${item._shopName}|||${item._invoiceReference}`;
+      const key = `${item._shopId}|||${item._invoiceReference}`;
       if (!groups.has(key)) {
         groups.set(key, {
           shopId: item._shopId,
           shopName: item._shopName,
           invoiceReference: item._invoiceReference,
-          paymentCardName: item._paymentCardName,
+          cardId: item._cardId,
           cardSpendAmount: item._cardSpendAmount,
           items: [],
         });
@@ -408,15 +486,24 @@ export default function Procurement() {
     const brandId = selected?.brandId ?? selected?.BrandId ?? selected?.brandid ?? "";
     const brand = brands.find((entry) => String(normalizeBrandId(entry)) === String(brandId));
 
-    const productWeight = selected?.weight ?? selected?.Weight ?? null;
     setDraftItem((current) => ({
       ...current,
       productId,
       productName: selected?.name ?? "",
       brandId: brandId ? String(brandId) : "",
       brandName: brand?.name ?? "",
-      _productWeight: productWeight != null ? Number(productWeight) : null,
+      itemWeight: "", itemVolume: "", itemTabletCount: "",
+      showWeight:      selected?.showWeight      ?? selected?.ShowWeight      ?? true,
+      showVolume:      selected?.showVolume      ?? selected?.ShowVolume      ?? false,
+      showTabletCount: selected?.showTabletCount ?? selected?.ShowTabletCount ?? false,
     }));
+    setSelectedVariantId("");
+    setProductVariants([]);
+    if (productId) {
+      productVariantsApi.getAll(productId)
+        .then((v) => setProductVariants(Array.isArray(v) ? v : []))
+        .catch(() => setProductVariants([]));
+    }
   };
 
   const onBrandChange = (brandId) => {
@@ -428,7 +515,7 @@ export default function Procurement() {
     }));
   };
 
-  const openBrandModal = () => {
+  const _openBrandModal = () => {
     setBrandForm(emptyBrandForm);
     setBrandPreviewError(false);
     setBrandModalOpen(true);
@@ -482,7 +569,7 @@ export default function Procurement() {
     }
   };
 
-  const openProductDrawer = () => {
+  const _openProductDrawer = () => {
     const initialBrandId = draftItem.brandId || (brands[0] ? String(normalizeBrandId(brands[0])) : "");
     setProductForm({
       ...emptyProductForm(),
@@ -683,18 +770,18 @@ export default function Procurement() {
     }
   };
 
-  const addItem = () => {
+  const addItem = async () => {
     // Require shop header to be filled first
-    if (!form.shopName.trim()) {
-      addToast("warning", "Please enter the shop / vendor name before adding items.");
+    if (!form.shopId) {
+      addToast("warning", "Please select a shop before adding items.");
       return;
     }
     if (!form.invoiceReference.trim()) {
       addToast("warning", "Please enter the invoice / receipt reference before adding items.");
       return;
     }
-    if (!form.paymentCardName.trim()) {
-      addToast("warning", "Please enter the payment card / issuer before adding items.");
+    if (!form.cardId) {
+      addToast("warning", "Please select a payment card before adding items.");
       return;
     }
     if (!form.paymentReference.trim()) {
@@ -709,10 +796,51 @@ export default function Procurement() {
       addToast("error", "Please complete the product, brand, quantity, and unit price.");
       return;
     }
-    if (draftItem.productId && (draftItem._productWeight == null || draftItem._productWeight <= 0)) {
-      addToast("error", `"${draftItem.productName}" has no weight set. Edit the product in the Products page to add a weight before purchasing.`);
+    if (!selectedVariantId) {
+      addToast("error", "Select a Product Item (variant) or choose '+ Create new product item'.");
       return;
     }
+    if (selectedVariantId === "new" && !draftItem.variantName?.trim()) {
+      addToast("error", "Variant name is required when creating a new product item.");
+      return;
+    }
+    if (!draftItem.itemWeight || parseFloat(draftItem.itemWeight) <= 0) {
+      addToast("error", "Weight (g) is required — it is used to calculate dispatch costs.");
+      return;
+    }
+    if (draftItem.showVolume && !draftItem.itemVolume?.trim()) {
+      addToast("error", "Volume is required because it is set to show on the product page.");
+      return;
+    }
+    if (draftItem.showTabletCount && (!draftItem.itemTabletCount || parseInt(draftItem.itemTabletCount, 10) <= 0)) {
+      addToast("error", "Tablet count is required because it is set to show on the product page.");
+      return;
+    }
+
+    // When "Create new product item" — create the ProductVariants record immediately
+    // so it appears on the product page right away (with stock=0, price=0 until arrival/pricing)
+    if (selectedVariantId === "new" && draftItem.productId) {
+      try {
+        const newVariant = await productVariantsApi.create(parseInt(draftItem.productId, 10), {
+          variantName: draftItem.variantName.trim(),
+          volume:         draftItem.itemVolume?.trim() || null,
+          weight:         parseFloat(draftItem.itemWeight) || 0,
+          sellingPrice:   0,
+          wholesalePrice: null,
+          stock:          0,
+          isVisible:      false,
+          sortOrder:      0,
+        });
+        // Store the new variant ID so it gets saved on the procurement item
+        if (newVariant?.variantId || newVariant?.VariantId) {
+          const createdVid = newVariant.variantId ?? newVariant.VariantId;
+          setDraftItem((prev) => ({ ...prev, _variantId: createdVid }));
+        }
+      } catch (err) {
+        console.warn("Product item creation failed (non-blocking):", err.message);
+      }
+    }
+
     setForm((current) => ({
       ...current,
       items: [
@@ -722,10 +850,14 @@ export default function Procurement() {
           productId: draftItem.productId || "",
           quantity: Number(draftItem.quantity),
           unitPrice: Number(draftItem.unitPrice),
+          variantName: draftItem.variantName?.trim() || draftItem.productName,
+          // capture variant ID: from newly created ("new") or selected existing
+          _variantId: draftItem._variantId
+            || (selectedVariantId && selectedVariantId !== "new" ? selectedVariantId : null),
           _shopId: current.shopId,
-          _shopName: current.shopName,
+          _shopName: shops.find(s => String(normalizeShopId(s)) === String(current.shopId)) ? normalizeShopName(shops.find(s => String(normalizeShopId(s)) === String(current.shopId))) : current.shopId,
           _invoiceReference: current.invoiceReference,
-          _paymentCardName: current.paymentCardName,
+          _cardId: current.cardId,
           _paymentReference: current.paymentReference,
           _purchaseNote: current.purchaseNote,
           _cardSpendAmount: current.cardSpendAmount,
@@ -733,6 +865,8 @@ export default function Procurement() {
       ],
     }));
     setDraftItem(emptyItem);
+    setSelectedVariantId("");
+    setProductVariants([]);
     addToast("success", `"${draftItem.productName}" added to the list.`);
   };
 
@@ -807,23 +941,20 @@ export default function Procurement() {
   // Clear current shop header fields so user can enter the next shop
   const clearShopHeader = () => {
     const currentShopItems = form.items.filter(
-      (item) => item._shopName === form.shopName && item._invoiceReference === form.invoiceReference
+      (item) => item._shopId === form.shopId && item._invoiceReference === form.invoiceReference
     );
     if (currentShopItems.length === 0) {
       addToast("warning", "Add at least one item for this shop before clearing the shop details.");
       return;
     }
+    const shopLabel = shops.find(s => String(normalizeShopId(s)) === String(form.shopId));
     setForm((current) => ({
       ...current,
-      shopId: "",
-      shopName: "",
-      invoiceReference: "",
-      paymentCardName: "",
-      paymentReference: "",
-      purchaseNote: "",
-      cardSpendAmount: "",
+      shopId: "", invoiceReference: "",
+      cardId: "", paymentReference: "",
+      purchaseNote: "", cardSpendAmount: "",
     }));
-    addToast("success", `${currentShopItems.length} item(s) saved for "${form.shopName}". Fill in the next shop details to continue.`);
+    addToast("success", `${currentShopItems.length} item(s) saved for "${shopLabel ? normalizeShopName(shopLabel) : form.shopId}". Fill in the next shop details to continue.`);
   };
 
   const openDetail = async (procurementId) => {
@@ -849,10 +980,7 @@ export default function Procurement() {
       const response = await supplyChainApi.getProcurementById(procurementId);
       setDetail(response);
       const draft = mapDetailToDraft(response);
-      if (!draft.shopId && draft.shopName) {
-        const matchedShop = shops.find((shop) => normalizeShopName(shop).toLowerCase() === draft.shopName.toLowerCase());
-        if (matchedShop) draft.shopId = String(normalizeShopId(matchedShop));
-      }
+      // shopId comes directly from the procurement record now
       setForm(draft);
       setDraftItem(emptyItem);
       setCarryForwardItemId("");
@@ -878,28 +1006,75 @@ export default function Procurement() {
     }
 
     // For edit mode, still require shop fields
-    if (form.procurementId && (!form.shopName.trim() || !form.invoiceReference.trim())) {
-      addToast("error", "Shop name and invoice reference are required.");
+    if (form.procurementId && (!form.shopId || !form.invoiceReference.trim())) {
+      addToast("error", "Shop and invoice reference are required.");
       return;
     }
+
+    // ── Card spend amount vs estimated net total validation ──────────────
+    const calcNetTotal = (items) =>
+      items.reduce((sum, item) => sum + getDraftItemAmounts(item).netAmount, 0);
+
+    if (form.procurementId) {
+      // Edit mode: single group
+      const cardAmt = form.cardSpendAmount ? Number(form.cardSpendAmount) : null;
+      if (!cardAmt || cardAmt <= 0) {
+        addToast("error", "Card spend amount is required.");
+        return;
+      }
+      const netTotal = calcNetTotal(form.items);
+      if (Math.abs(cardAmt - netTotal) > 0.01) {
+        addToast(
+          "error",
+          `Card spend (£${cardAmt.toFixed(2)}) does not match estimated net total (£${netTotal.toFixed(2)}). Please correct the amounts before saving.`
+        );
+        return;
+      }
+    } else {
+      // Create mode: validate per shop group
+      const groupMap = new Map();
+      form.items.forEach((item) => {
+        const key = `${item._shopId}|||${item._invoiceReference}`;
+        if (!groupMap.has(key)) groupMap.set(key, { cardSpendAmount: item._cardSpendAmount, shopName: item._shopName, items: [] });
+        groupMap.get(key).items.push(item);
+      });
+      for (const [, group] of groupMap) {
+        const cardAmt = group.cardSpendAmount ? Number(group.cardSpendAmount) : null;
+        const shopName = group.shopName || "this shop";
+        if (!cardAmt || cardAmt <= 0) {
+          addToast("error", `Card spend amount is required for "${shopName}".`);
+          return;
+        }
+        const netTotal = calcNetTotal(group.items);
+        if (Math.abs(cardAmt - netTotal) > 0.01) {
+          addToast(
+            "error",
+            `Card spend (£${cardAmt.toFixed(2)}) for "${shopName}" does not match estimated net total (£${netTotal.toFixed(2)}). Please correct before saving.`
+          );
+          return;
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────
 
     let confirmMessage;
     let shopGroups = null;
 
     if (form.procurementId) {
       // Edit mode
-      confirmMessage = `Update this UK purchase record from "${form.shopName}"?`;
+      const shopLabel = shops.find(s => String(normalizeShopId(s)) === String(form.shopId));
+      confirmMessage = `Update this UK purchase record from "${shopLabel ? normalizeShopName(shopLabel) : form.shopId}"?`;
     } else {
       // Create mode — group items by shop
       const groupMap = new Map();
       form.items.forEach((item) => {
-        const key = `${item._shopName}|||${item._invoiceReference}`;
+        const key = `${item._shopId}|||${item._invoiceReference}`;
         if (!groupMap.has(key)) {
           groupMap.set(key, {
             shopId: item._shopId,
             shopName: item._shopName,
             invoiceReference: item._invoiceReference,
-            paymentCardName: item._paymentCardName,
+            cardId: item._cardId,
             paymentReference: item._paymentReference,
             purchaseNote: item._purchaseNote,
             cardSpendAmount: item._cardSpendAmount,
@@ -926,25 +1101,37 @@ export default function Procurement() {
             // The SP (migration 019) deletes non-dispatched items from DB then inserts this list.
             const editableItems = form.items.filter((item) => !isItemDispatched(item));
             const payload = {
-              procurementId: form.procurementId,
+              procurementId:        form.procurementId,
               procurementReference: form.procurementReference || null,
-              shopId: form.shopId ? Number(form.shopId) : null,
-              shopName: form.shopName.trim(),
-              purchaseDate: `${form.purchaseDate}T00:00:00`,
-              invoiceReference: form.invoiceReference.trim(),
-              paymentCardName: form.paymentCardName?.trim() || null,
-              paymentReference: form.paymentReference?.trim() || null,
-              purchaseNote: form.purchaseNote?.trim() || null,
-              cardSpendAmount: form.cardSpendAmount ? Number(form.cardSpendAmount) : null,
-              items: editableItems.map((item) => ({
-                productId: item.productId ? Number(item.productId) : null,
-                productName: item.productName.trim(),
-                brandName: item.brandName.trim(),
-                quantity: Number(item.quantity),
-                unitPrice: Number(item.unitPrice),
-                weight: item._productWeight != null ? +(item._productWeight / 1000).toFixed(3) : null,
-                batchNote: item.batchNote?.trim() || null,
-              })),
+              shopId:               form.shopId ? Number(form.shopId) : null,
+              purchaseDate:         `${form.purchaseDate}T00:00:00`,
+              invoiceReference:     form.invoiceReference.trim(),
+              cardId:               form.cardId ? Number(form.cardId) : null,
+              paymentReference:     form.paymentReference?.trim() || null,
+              purchaseNote:         form.purchaseNote?.trim() || null,
+              cardSpendAmount:      form.cardSpendAmount ? Number(form.cardSpendAmount) : null,
+              items: editableItems.map((item) => {
+                const { grossAmount, discountAmount, netAmount } = getDraftItemAmounts(item);
+                const qty = Number(item.quantity) || 0;
+                return {
+                  productId: item.productId ? Number(item.productId) : null,
+                  productName: item.productName.trim(),
+                  brandName: item.brandName.trim(),
+                  quantity: qty,
+                  unitPrice: Number(item.unitPrice),
+                  grossAmount,
+                  discountAmount,  // net cost paid
+                  netAmount,       // discount saving
+                  netUnitCost: qty > 0 ? +(netAmount / qty).toFixed(4) : Number(item.unitPrice),
+                  weight:         item.itemWeight ? +(parseFloat(item.itemWeight) / 1000).toFixed(3) : null,
+                  tabletCount:    item.itemTabletCount ? parseInt(item.itemTabletCount, 10) : null,
+                  volume:         item.itemVolume?.trim() || null,
+                  showWeight:     item.showWeight ?? true,
+                  showTabletCount:item.showTabletCount ?? false,
+                  showVolume:     item.showVolume ?? false,
+                  batchNote:      item.batchNote?.trim() || null,
+                };
+              }),
               discounts: editableItems.map(buildDiscountFromItem).filter(Boolean),
             };
             await supplyChainApi.saveProcurement(payload);
@@ -952,27 +1139,42 @@ export default function Procurement() {
             // Create mode: one procurement per shop group
             for (const group of shopGroups) {
               const groupItems = form.items.filter(
-                (item) => item._shopName === group.shopName && item._invoiceReference === group.invoiceReference
+                (item) => item._shopId === group.shopId && item._invoiceReference === group.invoiceReference
               );
               const payload = {
                 procurementReference: form.procurementReference || null,
-                shopId: group.shopId ? Number(group.shopId) : null,
-                shopName: group.shopName.trim(),
-                purchaseDate: `${form.purchaseDate}T00:00:00`,
-                invoiceReference: group.invoiceReference.trim(),
-                paymentCardName: group.paymentCardName?.trim() || null,
-                paymentReference: group.paymentReference?.trim() || null,
-                purchaseNote: group.purchaseNote?.trim() || null,
-                cardSpendAmount: group.cardSpendAmount ? Number(group.cardSpendAmount) : null,
-                items: groupItems.map((item) => ({
-                  productId: item.productId ? Number(item.productId) : null,
-                  productName: item.productName.trim(),
-                  brandName: item.brandName.trim(),
-                  quantity: Number(item.quantity),
-                  unitPrice: Number(item.unitPrice),
-                  weight: item._productWeight != null ? +(item._productWeight / 1000).toFixed(3) : null,
-                  batchNote: item.batchNote?.trim() || null,
-                })),
+                shopId:               group.shopId ? Number(group.shopId) : null,
+                purchaseDate:         `${form.purchaseDate}T00:00:00`,
+                invoiceReference:     group.invoiceReference.trim(),
+                cardId:               group.cardId ? Number(group.cardId) : null,
+                paymentReference:     group.paymentReference?.trim() || null,
+                purchaseNote:         group.purchaseNote?.trim() || null,
+                cardSpendAmount:      group.cardSpendAmount ? Number(group.cardSpendAmount) : null,
+                items: groupItems.map((item) => {
+                  const { grossAmount, discountAmount, netAmount } = getDraftItemAmounts(item);
+                  const qty = Number(item.quantity) || 0;
+                  return {
+                    productId: item.productId ? Number(item.productId) : null,
+                    productName: item.productName.trim(),
+                    brandName: item.brandName.trim(),
+                    quantity: qty,
+                    unitPrice: Number(item.unitPrice),
+                    grossAmount,
+                    discountAmount,  // net cost paid
+                    netAmount,       // discount saving
+                    netUnitCost: qty > 0 ? +(netAmount / qty).toFixed(4) : Number(item.unitPrice),
+                    weight:         item.itemWeight ? +(parseFloat(item.itemWeight) / 1000).toFixed(3) : null,
+                    tabletCount:    item.itemTabletCount ? parseInt(item.itemTabletCount, 10) : null,
+                    volume:         item.itemVolume?.trim() || null,
+                    showWeight:     item.showWeight ?? true,
+                    showTabletCount:item.showTabletCount ?? false,
+                    showVolume:     item.showVolume ?? false,
+                    variantId:      item._variantId
+                      ? parseInt(item._variantId, 10)
+                      : (selectedVariantId && selectedVariantId !== "new" ? parseInt(selectedVariantId, 10) : null),
+                    batchNote:      item.batchNote?.trim() || null,
+                  };
+                }),
                 discounts: groupItems.map(buildDiscountFromItem).filter(Boolean),
               };
               await supplyChainApi.saveProcurement(payload);
@@ -998,11 +1200,6 @@ export default function Procurement() {
     });
   };
 
-  const procurementLookup = useMemo(() => {
-    const map = new Map();
-    records.forEach((record) => map.set(record.procurementId, record));
-    return map;
-  }, [records]);
 
   // An item is "dispatched" when its remaining quantity is less than its purchased quantity,
   // meaning at least one unit has entered a shipment and the row is FK-locked in the DB.
@@ -1096,11 +1293,10 @@ export default function Procurement() {
                   setForm({
                     ...form,
                     shopId: e.target.value,
-                    shopName: shop ? normalizeShopName(shop) : "",
                   });
                 }}
                 className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
-                  !form.shopName.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                  !form.shopId ? "border-amber-300 bg-amber-50 focus:border-tenzy-orange" : "border-slate-200 bg-slate-50 focus:border-tenzy-orange"
                 }`}
               >
                 <option value="">Select shop</option>
@@ -1121,7 +1317,7 @@ export default function Procurement() {
                 onChange={(e) => setForm({ ...form, invoiceReference: e.target.value })}
                 placeholder="Receipt number"
                 className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
-                  !form.invoiceReference.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                  !form.invoiceReference.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-orange" : "border-slate-200 bg-slate-50 focus:border-tenzy-orange"
                 }`}
               />
             </div>
@@ -1130,15 +1326,15 @@ export default function Procurement() {
                 Payment card / issuer <span className="text-red-400">*</span>
               </Label>
               <select
-                value={form.paymentCardName}
-                onChange={(e) => setForm({ ...form, paymentCardName: e.target.value })}
+                value={form.cardId}
+                onChange={(e) => setForm({ ...form, cardId: e.target.value })}
                 className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
-                  !form.paymentCardName.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                  !form.cardId ? "border-amber-300 bg-amber-50 focus:border-tenzy-orange" : "border-slate-200 bg-slate-50 focus:border-tenzy-orange"
                 }`}
               >
                 <option value="">Select card</option>
                 {paymentCards.map((card) => (
-                  <option key={card.cardId} value={card.cardName}>{card.cardName}</option>
+                  <option key={card.cardId} value={card.cardId}>{card.cardName}</option>
                 ))}
               </select>
             </div>
@@ -1151,7 +1347,7 @@ export default function Procurement() {
                 onChange={(e) => setForm({ ...form, paymentReference: e.target.value })}
                 placeholder="Card ref, bank ref, or transaction id"
                 className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
-                  !form.paymentReference.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal" : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                  !form.paymentReference.trim() ? "border-amber-300 bg-amber-50 focus:border-tenzy-orange" : "border-slate-200 bg-slate-50 focus:border-tenzy-orange"
                 }`}
               />
             </div>
@@ -1162,7 +1358,19 @@ export default function Procurement() {
                 min="0"
                 step="0.01"
                 value={form.cardSpendAmount}
-                onChange={(e) => setForm({ ...form, cardSpendAmount: e.target.value })}
+                onChange={(e) => {
+                  const newVal = e.target.value;
+                  setForm((prev) => ({
+                    ...prev,
+                    cardSpendAmount: newVal,
+                    // keep items in sync so validation always uses the latest value
+                    items: prev.items.map((item) =>
+                      item._shopId === prev.shopId && item._invoiceReference === prev.invoiceReference
+                        ? { ...item, _cardSpendAmount: newVal }
+                        : item
+                    ),
+                  }));
+                }}
                 placeholder="Total charged to card e.g. 45.80"
               />
             </div>
@@ -1174,7 +1382,7 @@ export default function Procurement() {
               value={form.purchaseNote}
               onChange={(e) => setForm({ ...form, purchaseNote: e.target.value })}
               rows={2}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20"
+              className="w-full rounded-2xl border border-tenzy-orange/50 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20"
               placeholder="Batch note, shelf offer note, or supplier comment"
             />
           </div>
@@ -1183,7 +1391,7 @@ export default function Procurement() {
           {!form.procurementId && shopHeaderFilled && (
             <div className="mt-4 flex items-center justify-between rounded-2xl bg-teal-50 border border-teal-200 px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-teal-800">Shop: {form.shopName}</p>
+                <p className="text-sm font-semibold text-teal-800">Shop: {normalizeShopName(shops.find(s => String(normalizeShopId(s)) === String(form.shopId)) ?? {})}</p>
                 <p className="text-xs text-teal-600 mt-0.5">After adding all items for this shop, click "Clear shop" to start the next shop.</p>
               </div>
               <button
@@ -1237,16 +1445,6 @@ export default function Procurement() {
                   placeholder="Select an existing product or type a new name"
                   disabled={!shopHeaderFilled}
                 />
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={openProductDrawer}
-                    disabled={!shopHeaderFilled}
-                    className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-tenzy-teal px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Create New Product
-                  </button>
-                </div>
               </div>
               <div>
                 <Label>Brand</Label>
@@ -1258,34 +1456,169 @@ export default function Procurement() {
                     </option>
                   ))}
                 </Select>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={openBrandModal}
-                    disabled={!shopHeaderFilled}
-                    className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-tenzy-orange px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Create New Brand
-                  </button>
-                </div>
-              </div>
-              <div>
-                <Label>Quantity</Label>
-                <Input type="number" min="1" value={draftItem.quantity} onChange={(e) => setDraftItem({ ...draftItem, quantity: e.target.value })} disabled={!shopHeaderFilled} />
-              </div>
-              <div>
-                <Label>Unit price (GBP)</Label>
-                <Input type="number" step="0.01" min="0" value={draftItem.unitPrice} onChange={(e) => setDraftItem({ ...draftItem, unitPrice: e.target.value })} disabled={!shopHeaderFilled} />
               </div>
             </div>
 
-            {/* Weight warning — shown when an existing product has no weight set */}
-            {draftItem.productId && shopHeaderFilled && (draftItem._productWeight == null || draftItem._productWeight <= 0) && (
-              <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
-                <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-500" />
-                <p className="text-xs text-amber-700">
-                  <strong>"{draftItem.productName}" has no weight.</strong> Go to the Products page and edit this product to add a weight before you can purchase it.
+            {/* Product Item selector — pick existing variant or create new */}
+            {draftItem.productId && shopHeaderFilled && (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                <Label>
+                  Product Item (size / variant)
+                  <span className="ml-1 text-[10px] text-slate-400 font-normal">— select an existing item or create a new one</span>
+                </Label>
+                <select
+                  value={selectedVariantId}
+                  onChange={(e) => {
+                    const vid = e.target.value;
+                    setSelectedVariantId(vid);
+                    if (vid && vid !== "new") {
+                      const v = productVariants.find((pv) =>
+                        String(pv.variantId ?? pv.VariantId) === String(vid)
+                      );
+                      if (v) {
+                        setDraftItem((prev) => ({
+                          ...prev,
+                          variantName:     v.variantName ?? v.VariantName ?? "",
+                          itemVolume:      v.volume      ?? v.Volume      ?? "",
+                          itemWeight:      (v.weight ?? v.Weight) != null ? String(Number(v.weight ?? v.Weight)) : "",
+                          itemTabletCount: v.tabletCount ?? v.TabletCount ?? "",
+                        }));
+                      }
+                    } else if (vid === "new") {
+                      setDraftItem((prev) => ({ ...prev, variantName: prev.productName, itemVolume: "", itemWeight: "", itemTabletCount: "" }));
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20 transition"
+                >
+                  <option value="">— Select —</option>
+                  {productVariants.map((v) => {
+                    const vid   = v.variantId  ?? v.VariantId;
+                    const vname = v.variantName ?? v.VariantName ?? "";
+                    const stk   = Number(v.stock ?? v.Stock ?? 0);
+
+                    return (
+                      <option key={vid} value={vid}>
+                        {vname} · Stock: {stk}
+                      </option>
+                    );
+                  })}
+                  <option value="new">＋ Create new product item</option>
+                </select>
+                {selectedVariantId && selectedVariantId !== "new" && (
+                  <p className="text-[11px] text-tenzy-teal font-semibold">
+                    ✓ Fields below pre-filled from existing item — adjust if needed.
+                  </p>
+                )}
+                {selectedVariantId === "new" && (
+                  <p className="text-[11px] text-amber-700 font-semibold">
+                    New product item will be created with the details below.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Pipeline stock table — shown when product has variants */}
+            {draftItem.productId && shopHeaderFilled && productVariants.length > 0 && (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 py-2 border-b border-slate-100 bg-slate-50">
+                  Pipeline stock
                 </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-400 text-left">
+                        <th className="px-3 py-2 font-semibold">Variant</th>
+                        <th className="px-3 py-2 font-semibold text-right">UK Purchase</th>
+                        <th className="px-3 py-2 font-semibold text-right">Dispatch</th>
+                        <th className="px-3 py-2 font-semibold text-right">Arrival</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {productVariants.map((v) => {
+                        const vid = v.variantId ?? v.VariantId;
+                        const name = v.variantName ?? v.VariantName ?? "";
+                        const ukStock = ukPurchaseByVariant[vid] ?? 0;
+                        const dispatched = dispatchedByVariant[vid] ?? 0;
+                        const arrived = arrivedByVariant[vid] ?? 0;
+                        const dispatchStock = Math.max(0, dispatched - arrived);
+                        const isSelected = String(vid) === String(selectedVariantId);
+                        return (
+                          <tr key={vid} className={isSelected ? "bg-teal-50" : "hover:bg-slate-50"}>
+                            <td className="px-3 py-2 font-medium text-slate-800">{name}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{ukStock}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{dispatchStock}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{arrived}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Quantity and price — shown once variant is selected */}
+            {draftItem.productId && shopHeaderFilled && selectedVariantId !== "" && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Quantity</Label>
+                  <Input type="number" min="1" value={draftItem.quantity}
+                    onChange={(e) => setDraftItem({ ...draftItem, quantity: e.target.value })}
+                    disabled={!shopHeaderFilled} />
+                </div>
+                <div>
+                  <Label>Unit price (GBP)</Label>
+                  <Input type="number" step="0.01" min="0" value={draftItem.unitPrice}
+                    onChange={(e) => setDraftItem({ ...draftItem, unitPrice: e.target.value })}
+                    disabled={!shopHeaderFilled} />
+                </div>
+              </div>
+            )}
+
+            {/* Physical properties — entered at purchase time */}
+            {draftItem.productId && shopHeaderFilled && (selectedVariantId !== "") && (
+              <div className="mt-3 rounded-2xl border-2 border-tenzy-teal/30 bg-teal-50/30 p-4 space-y-3">
+                <p className="text-xs font-bold text-tenzy-teal uppercase tracking-wide">
+                  Physical properties for this purchase
+                </p>
+                {selectedVariantId === "new" && (
+                  <div>
+                    <Label>Variant name <span className="text-red-400">*</span></Label>
+                    <Input
+                      value={draftItem.variantName}
+                      onChange={(e) => setDraftItem({ ...draftItem, variantName: e.target.value })}
+                      placeholder="e.g. CeraVe Moisturising Cream 50ml"
+                      className={!draftItem.variantName?.trim() ? "border-red-300 focus:border-red-400" : ""} />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Starts with the product name — add size or type to make it unique.</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Volume {draftItem.showVolume && <span className="text-red-400">*</span>} <span className="text-slate-400 font-normal text-[10px]">(e.g. 30ml)</span></Label>
+                    <Input value={draftItem.itemVolume}
+                      onChange={(e) => setDraftItem({ ...draftItem, itemVolume: e.target.value })}
+                      placeholder="30ml, 60ml, 250g…"
+                      className={draftItem.showVolume && !draftItem.itemVolume?.trim() ? "border-red-300 focus:border-red-400" : ""} />
+                  </div>
+                  <div>
+                    <Label>Weight (g) <span className="text-red-400">*</span></Label>
+                    <Input type="number" min="0.1" step="0.1"
+                      value={draftItem.itemWeight}
+                      onChange={(e) => setDraftItem({ ...draftItem, itemWeight: e.target.value })}
+                      placeholder="e.g. 45"
+                      className={!draftItem.itemWeight ? "border-red-300 focus:border-red-400" : ""} />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Used for dispatch cost calculation</p>
+                  </div>
+                  <div>
+                    <Label>Tablet count {draftItem.showTabletCount && <span className="text-red-400">*</span>}</Label>
+                    <Input type="number" min="1" step="1"
+                      value={draftItem.itemTabletCount}
+                      onChange={(e) => setDraftItem({ ...draftItem, itemTabletCount: e.target.value })}
+                      placeholder="e.g. 30"
+                      className={draftItem.showTabletCount && !draftItem.itemTabletCount ? "border-red-300 focus:border-red-400" : ""} />
+                  </div>
+                </div>
+
               </div>
             )}
 
@@ -1429,7 +1762,7 @@ export default function Procurement() {
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-semibold text-slate-800">{item.productName}</p>
+                                    <p className="font-semibold text-slate-800">{itemLabel(item)}</p>
                                     {dispatched && (
                                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
                                         Dispatched
@@ -1678,15 +2011,18 @@ export default function Procurement() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {detail.items?.map((item) => (
                     <div key={item.procurementItemId} className="rounded-2xl bg-slate-50 p-4">
-                      <p className="font-semibold text-slate-800">{item.productName}</p>
+                      <p className="font-semibold text-slate-800">{itemLabel(item)}</p>
                       <p className="mt-1 text-xs text-slate-500">{item.brandName}</p>
                       <div className="mt-3 space-y-1">
                         <p className="text-sm text-slate-700">Purchased: <strong>{item.quantity}</strong></p>
                         <p className="text-sm text-slate-700">Remaining in UK: <strong>{remainingByItem[item.procurementItemId] ?? item.quantity}</strong></p>
                         <p className="text-sm text-slate-700">Net unit cost: <strong>{money(item.netUnitCost)}</strong></p>
                         <p className="text-xs text-slate-500">Discount total: {money(item.discountTotal)}</p>
-                        {item.weight != null && (
-                          <p className="text-xs text-slate-500">Weight: <strong>{item.weight} kg</strong></p>
+                        {(item.volume ?? item.Volume) && (
+                          <p className="text-xs text-slate-500">Volume: <strong>{item.volume ?? item.Volume}</strong></p>
+                        )}
+                        {item.weight != null && item.weight > 0 && (
+                          <p className="text-xs text-slate-500">Weight: <strong>{item.weight}g</strong></p>
                         )}
                         {item.tabletCount != null && (
                           <p className="text-xs text-slate-500">Tablets: <strong>{item.tabletCount}</strong></p>
@@ -1819,7 +2155,10 @@ export default function Procurement() {
                 </div>
                 <div>
                   <Label>Description</Label>
-                  <textarea rows={3} value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20" />
+                  <ProductDescriptionEditor
+                    value={productForm.description}
+                    onChange={(description) => setProductForm({ ...productForm, description })}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1835,8 +2174,8 @@ export default function Procurement() {
                       placeholder="e.g. 250"
                       className={`w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-tenzy-teal/20 ${
                         !productForm.weight || parseFloat(productForm.weight) <= 0
-                          ? "border-amber-300 bg-amber-50 focus:border-tenzy-teal"
-                          : "border-slate-200 bg-slate-50 focus:border-tenzy-teal"
+                          ? "border-amber-300 bg-amber-50 focus:border-tenzy-orange"
+                          : "border-slate-200 bg-slate-50 focus:border-tenzy-orange"
                       }`}
                     />
                   </div>
@@ -1847,7 +2186,7 @@ export default function Procurement() {
                 </div>
 
                 {/* Visibility toggles */}
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="rounded-2xl border border-tenzy-orange/50 bg-white px-4 py-3">
                   <p className="text-xs font-bold text-slate-600 mb-3">Show on website</p>
                   <div className="flex flex-wrap gap-5">
                     <label className="flex items-center gap-2.5 cursor-pointer">
@@ -2015,7 +2354,7 @@ export default function Procurement() {
                         <button onClick={() => removeProductFaq(faq.faqId)} className="text-slate-400 hover:text-red-500"><X size={13} /></button>
                       </div>
                       <Input value={faq.question} onChange={(e) => updateProductFaq(faq.faqId, "question", e.target.value)} placeholder="Question…" />
-                      <textarea rows={2} value={faq.answer} onChange={(e) => updateProductFaq(faq.faqId, "answer", e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-teal/20" placeholder="Answer…" />
+                      <textarea rows={2} value={faq.answer} onChange={(e) => updateProductFaq(faq.faqId, "answer", e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-tenzy-orange focus:ring-2 focus:ring-tenzy-orange/20" placeholder="Answer…" />
                     </div>
                   ))}
                   <button onClick={addProductFaq} className="w-full py-2 rounded-xl border-2 border-dashed border-slate-200 text-xs font-semibold text-slate-500 hover:border-tenzy-teal hover:text-tenzy-teal transition flex items-center justify-center gap-1.5">

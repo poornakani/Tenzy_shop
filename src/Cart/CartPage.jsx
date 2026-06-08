@@ -26,6 +26,7 @@ const CartPage = () => {
     clearCart,
   } = useCart();
 
+
   useEffect(() => {
     if (!wrapRef.current) return;
     const ctx = gsap.context(() => {
@@ -37,14 +38,7 @@ const CartPage = () => {
       gsap.fromTo(
         ".cart-card",
         { y: 16, opacity: 0, scale: 0.99 },
-        {
-          y: 0,
-          opacity: 1,
-          scale: 1,
-          duration: 0.35,
-          ease: "power2.out",
-          stagger: 0.05,
-        }
+        { y: 0, opacity: 1, scale: 1, duration: 0.35, ease: "power2.out", stagger: 0.05 }
       );
     }, wrapRef);
     return () => ctx.revert();

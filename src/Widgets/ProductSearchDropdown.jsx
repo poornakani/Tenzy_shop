@@ -236,7 +236,7 @@ export default function ProductSearchDropdown({ products = [], onClose }) {
           )}
         </div>
 
-        {/* Footer hint (optional micro UI; remove if you want zero extras) */}
+        {/* Footer hint */}
         <div className="px-4 py-3 border-t border-white/10 text-xs text-white/60 flex items-center justify-between">
           <span>↑ ↓ to navigate</span>
           <button

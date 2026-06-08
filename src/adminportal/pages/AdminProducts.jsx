@@ -2,12 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Search, X, Plus, Edit2, Trash2, AlertTriangle, Star, StarOff,
   ChevronUp, ChevronDown, ImagePlus, Tag, DollarSign,
-  Info, MessageSquare, CreditCard,
+  Info, MessageSquare, CreditCard, Package, Shield,
 } from "lucide-react";
 import {
   productsApi, brandsApi, concernsApi, paymentApi, uploadApi, productImageApi, productFaqApi,
-  supplyChainApi,
+  supplyChainApi, categoriesApi, productVariantsApi,
 } from "../../services/api";
+import ProductDescriptionEditor  from "../components/ProductDescriptionEditor";
+import IngredientsTableEditor   from "../components/IngredientsTableEditor";
+import HowToUseStepsEditor      from "../components/HowToUseStepsEditor";
+import DescriptionStatsEditor   from "../components/DescriptionStatsEditor";
 
 
 const fmt = (n) => new Intl.NumberFormat("en-LK").format(n);
@@ -57,16 +61,16 @@ const Field = ({ label, required, children }) => (
   </div>
 );
 
-const Input = ({ ...props }) => (
+const Input = ({ className = "", ...props }) => (
   <input
-    className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition"
+    className={`w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-orange transition ${className}`}
     {...props}
   />
 );
 
 const Sel = ({ children, ...props }) => (
   <select
-    className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition"
+    className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-orange transition"
     {...props}
   >
     {children}
@@ -74,12 +78,11 @@ const Sel = ({ children, ...props }) => (
 );
 
 const emptyForm = () => ({
-  name: "", brandId: "", description: "", weight: "",
-  tabletCount: "", showWeight: true, showTabletCount: false,
-  inSale: false, stock: "", price: "", discountRate: "0",
-  wholesalePrice: "",
-  startUTC: new Date().toISOString().slice(0, 10), endUTC: "",
+  name: "", brandId: "", description: "", howToUse: "", ingredients: "",
+  showWeight: false, showTabletCount: false, showVolume: false,
+  inSale: false,
   images: [], concerns: [], paymentOptions: [], faqs: [],
+  categoryId: null, subCategoryIds: [],
 });
 
 const toApiDate = (value) => (value ? `${value}T00:00:00Z` : null);
@@ -142,25 +145,708 @@ const filterStyles = {
   sort: `${filterSelectBase} bg-slate-50 border-slate-200 text-slate-700 focus:ring-slate-200 focus:border-slate-400`,
 };
 
+/* ── Variant Images panel (inline, inside each variant card) ─────────────── */
+function VariantImagesPanel({ productId, variantId }) {
+  const [images,    setImages]    = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [saving,    setSaving]    = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const imgs = await productImageApi.getByVariant(productId, variantId);
+      setImages(Array.isArray(imgs) ? imgs : []);
+    } catch { setImages([]); }
+    finally { setLoading(false); }
+  }, [productId, variantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploading(true);
+    try {
+      const url = await uploadApi.uploadImage(file);
+      await productImageApi.create({
+        productId,
+        variantId,
+        imageUrl:  url,
+        isPrimary: images.length === 0,
+        sortOrder: images.length + 1,
+        isActive:  true,
+      });
+      await load();
+    } catch (err) { alert(err.message || "Upload failed."); }
+    finally { setUploading(false); }
+  };
+
+  const handleSetPrimary = async (img) => {
+    const isPrimary = img.isPrimary ?? img.IsPrimary ?? false;
+    if (isPrimary) return;
+    setSaving(true);
+    try {
+      await productImageApi.update({
+        imageId:   img.imageId ?? img.ImageId,
+        productId,
+        variantId,
+        imageUrl:  img.imageUrl ?? img.ImageUrl,
+        isPrimary: true,
+        sortOrder: img.sortOrder ?? img.SortOrder ?? 1,
+        isActive:  true,
+      });
+      await load();
+    } catch (err) { alert(err.message || "Failed to set primary."); }
+    finally { setSaving(false); }
+  };
+
+  const handleRemove = async (imageId) => {
+    if (!window.confirm("Remove this image?")) return;
+    setSaving(true);
+    try {
+      await productImageApi.deactivate(imageId);
+      await load();
+    } catch (err) { alert(err.message || "Failed to remove."); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="border-t border-slate-100 bg-white px-4 py-3 space-y-2">
+      {loading ? (
+        <div className="flex justify-center py-2">
+          <div className="w-4 h-4 rounded-full border-2 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
+        </div>
+      ) : (
+        <>
+          {images.length === 0 ? (
+            <p className="text-[10px] text-slate-400 text-center py-2 bg-slate-50 rounded-lg">
+              No images for this variant yet.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {images.map((img) => {
+                const imgId     = img.imageId ?? img.ImageId;
+                const isPrimary = img.isPrimary ?? img.IsPrimary ?? false;
+                return (
+                  <div key={imgId} className="relative group">
+                    <img
+                      src={img.imageUrl ?? img.ImageUrl}
+                      alt=""
+                      className={`w-14 h-14 rounded-lg object-cover border-2 transition ${isPrimary ? "border-amber-400" : "border-slate-200"}`}
+                      onError={(e) => { e.target.style.display = "none"; }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center gap-0.5 bg-black/50 rounded-lg opacity-0 group-hover:opacity-100 transition">
+                      <button onClick={() => handleSetPrimary(img)} disabled={saving || isPrimary}
+                        className="p-1 rounded bg-white/90 text-amber-500 disabled:opacity-40" title="Set as primary">
+                        <Star size={10} fill="currentColor" />
+                      </button>
+                      <button onClick={() => handleRemove(imgId)} disabled={saving}
+                        className="p-1 rounded bg-white/90 text-red-500 disabled:opacity-40" title="Remove">
+                        <X size={10} />
+                      </button>
+                    </div>
+                    {isPrimary && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center">
+                        <Star size={7} fill="white" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <label className={`flex items-center justify-center gap-1.5 w-full py-2 rounded-xl border-2 border-dashed cursor-pointer transition text-[11px] font-semibold
+            ${uploading || saving ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed" : "border-tenzy-teal/40 hover:border-tenzy-teal hover:bg-tenzy-teal/5 text-tenzy-teal"}`}>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+              disabled={uploading || saving} onChange={handleUpload} />
+            <ImagePlus size={12} />
+            <span>{uploading ? "Uploading…" : saving ? "Saving…" : "Add image"}</span>
+          </label>
+          <p className="text-[9px] text-slate-400 text-center">★ = primary shown for this variant on the website</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Product Items section (inside Edit dialog) ───────────────────────────── */
+const emptyVariant = { variantName: "", volume: "", weight: "", tabsCount: "", sellingPrice: "", wholesalePrice: "", stock: "", isVisible: true, sortOrder: "" };
+
+function VariantsSection({ productId, showVolume: initialShowVolume, initialShowForm = false }) {
+  const [variants,    setVariants]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showVolume,  setShowVolume]  = useState(initialShowVolume);
+  const [showForm,    setShowForm]    = useState(initialShowForm);
+  const [editVariant, setEditVariant] = useState(null);
+  const [vform,       setVform]       = useState(emptyVariant);
+  const [saving,        setSaving]        = useState(false);
+  const [stockWarn,     setStockWarn]     = useState(null); // { vid, stk }
+  const [imagesOpenFor, setImagesOpenFor] = useState(null); // variantId or null
+
+  const loadVariants = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await productVariantsApi.getAll(productId);
+      setVariants(Array.isArray(d) ? d : []);
+    } catch { setVariants([]); }
+    finally { setLoading(false); }
+  }, [productId]);
+
+  useEffect(() => { loadVariants(); }, [loadVariants]);
+
+  const toggleShowVolume = async () => {
+    const next = !showVolume;
+    setShowVolume(next);
+    try { await productVariantsApi.setShowVolume(productId, next); }
+    catch { setShowVolume(!next); alert("Failed to update volume display setting."); }
+  };
+
+  const openAdd = () => { setEditVariant(null); setVform(emptyVariant); setShowForm(true); };
+  const openEdit = (v) => {
+    setEditVariant(v);
+    setVform({
+      variantName:    v.VariantName  ?? v.variantName  ?? "",
+      volume:         v.Volume       ?? v.volume       ?? "",
+      weight:         String(v.Weight ?? v.weight ?? ""),
+      tabsCount:      String(v.TabsCount ?? v.tabsCount ?? v.TabletCount ?? v.tabletCount ?? ""),
+      sellingPrice:   String(v.SellingPrice ?? v.sellingPrice ?? ""),
+      wholesalePrice: String(v.WholesalePrice ?? v.wholesalePrice ?? ""),
+      stock:          String(v.Stock ?? v.stock ?? ""),
+      isVisible:      v.IsVisible    ?? v.isVisible    ?? true,
+      sortOrder:      String(v.SortOrder ?? v.sortOrder ?? ""),
+    });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!vform.variantName.trim()) { alert("Item name is required."); return; }
+    if (!vform.weight || parseFloat(vform.weight) <= 0) { alert("Weight (g) is required and must be > 0."); return; }
+    setSaving(true);
+    try {
+      const body = {
+        variantName:    vform.variantName.trim(),
+        volume:         vform.volume.trim() || null,
+        weight:         parseFloat(vform.weight) || 0,
+        tabsCount:      vform.tabsCount ? parseInt(vform.tabsCount, 10) : null,
+        sellingPrice:   parseFloat(vform.sellingPrice) || 0,
+        wholesalePrice: vform.wholesalePrice ? parseFloat(vform.wholesalePrice) : null,
+        stock:          parseInt(vform.stock) || 0,
+        isVisible:      vform.isVisible,
+        sortOrder:      parseInt(vform.sortOrder) || 0,
+      };
+      if (editVariant) {
+        await productVariantsApi.update(editVariant.VariantId ?? editVariant.variantId, body);
+      } else {
+        await productVariantsApi.create(productId, body);
+      }
+      setShowForm(false);
+      setEditVariant(null);
+      loadVariants();
+    } catch (err) { alert(err.message || "Save failed."); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (vid, stk) => {
+    if (stk > 0) { setStockWarn({ vid, stk }); return; }
+    if (!window.confirm("Remove this product item?")) return;
+    try { await productVariantsApi.remove(vid); loadVariants(); }
+    catch (err) { alert(err.message || "Delete failed."); }
+  };
+
+  const fmtV = (n) => new Intl.NumberFormat("en-LK").format(n ?? 0);
+
+  return (
+    <Section icon={Package} title="Product Items">
+      {/* Show Volume toggle */}
+      <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold text-slate-700">Show size selector on website</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Customers will see tabs for each in-stock item</p>
+        </div>
+        <button type="button" onClick={toggleShowVolume}
+          className={`relative w-11 h-6 rounded-full transition-colors ${showVolume ? "bg-tenzy-teal" : "bg-slate-300"}`}>
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${showVolume ? "translate-x-5" : "translate-x-0"}`} />
+        </button>
+      </div>
+
+      {/* Product item cards */}
+      {loading ? (
+        <div className="flex justify-center py-4"><div className="w-5 h-5 rounded-full border-2 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" /></div>
+      ) : variants.length === 0 && !showForm ? (
+        <div className="rounded-2xl border-2 border-dashed border-slate-200 py-6 text-center space-y-1">
+          <p className="text-xs font-semibold text-slate-500">No product items yet</p>
+          <p className="text-[11px] text-slate-400">Add an item manually below, or create one through the <strong>UK Purchase</strong> flow.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {variants.map((v) => {
+            const vid   = v.VariantId ?? v.variantId;
+            const vname = v.VariantName ?? v.variantName ?? "—";
+            const vol   = v.Volume ?? v.volume ?? "";
+            const wt    = Number(v.Weight ?? v.weight ?? 0);
+            const tabs  = Number(v.TabsCount ?? v.tabsCount ?? v.TabletCount ?? v.tabletCount ?? 0);
+            const sp    = Number(v.SellingPrice ?? v.sellingPrice ?? 0);
+            const ws    = Number(v.WholesalePrice ?? v.wholesalePrice ?? 0);
+            const stk   = Number(v.Stock ?? v.stock ?? 0);
+            const vis   = v.IsVisible ?? v.isVisible ?? true;
+            const ac    = Number(v.ArrivalCost ?? v.arrivalCost ?? 0);
+            const outOfStock = stk === 0;
+            const belowCost  = ac > 0 && sp > 0 && sp < ac;
+            const marginPct  = ac > 0 && sp > 0 ? ((sp - ac) / sp * 100).toFixed(1) : null;
+            return (
+              <div key={vid} className={`rounded-2xl border-2 overflow-hidden transition ${
+                !vis ? "border-slate-200 opacity-60" : belowCost ? "border-tenzy-orange/50" : outOfStock ? "border-red-200" : "border-tenzy-teal/30"
+              }`}>
+                {/* Item header row */}
+                <div className={`flex items-center justify-between px-4 py-2.5 ${
+                  !vis ? "bg-slate-50" : outOfStock ? "bg-red-50/50" : "bg-teal-50/40"
+                }`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-800">{vname}</span>
+                    {vol && (
+                      <span className="text-[10px] font-bold bg-tenzy-teal text-white px-2 py-0.5 rounded-full">{vol}</span>
+                    )}
+                    {wt > 0 && (
+                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{wt}g</span>
+                    )}
+                    {tabs > 0 && (
+                      <span className="text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">{tabs} tabs</span>
+                    )}
+                    {!vis && (
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">hidden</span>
+                    )}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-tenzy-teal transition"><Edit2 size={13} /></button>
+                    <button onClick={() => handleDelete(vid, stk)} className="p-1.5 rounded-lg hover:bg-red-100 text-slate-400 hover:text-red-500 transition"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+
+                {/* Stock warning when trying to delete a variant with stock */}
+                {stockWarn?.vid === vid && (
+                  <div className="flex items-start gap-2 px-4 py-2.5 bg-amber-50 border-t border-amber-100">
+                    <AlertTriangle size={13} className="text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-700 flex-1">
+                      Cannot delete — this item still has <strong>{stockWarn.stk} units</strong> in stock. Sell or zero the stock before deleting.
+                    </p>
+                    <button onClick={() => setStockWarn(null)} className="text-amber-400 hover:text-amber-600 text-xs leading-none shrink-0">✕</button>
+                  </div>
+                )}
+
+                {/* Pricing & stock grid */}
+                <div className="grid grid-cols-4 divide-x divide-slate-100 bg-white">
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Landing Cost</p>
+                    <p className={`text-sm font-bold ${ac > 0 ? belowCost ? "text-tenzy-orange" : "text-slate-600" : "text-slate-300"}`}>
+                      {ac > 0 ? `LKR ${fmtV(ac)}` : "—"}
+                    </p>
+                    {marginPct !== null && (
+                      <p className={`text-[10px] font-semibold mt-0.5 ${parseFloat(marginPct) < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                        {parseFloat(marginPct) >= 0 ? "+" : ""}{marginPct}% margin
+                      </p>
+                    )}
+                  </div>
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Website Price</p>
+                    <p className={`text-sm font-bold ${sp > 0 ? "text-tenzy-teal" : "text-slate-300"}`}>
+                      {sp > 0 ? `LKR ${fmtV(sp)}` : "—"}
+                    </p>
+                    {belowCost && (
+                      <p className="text-[10px] text-tenzy-orange font-semibold mt-0.5">below cost</p>
+                    )}
+                  </div>
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Wholesale</p>
+                    <p className={`text-sm font-bold ${ws > 0 ? "text-amber-600" : "text-slate-300"}`}>
+                      {ws > 0 ? `LKR ${fmtV(ws)}` : "—"}
+                    </p>
+                  </div>
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Stock</p>
+                    <p className={`text-sm font-bold ${outOfStock ? "text-red-500" : stk <= 5 ? "text-amber-600" : "text-emerald-600"}`}>
+                      {stk}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {outOfStock ? "Out of stock" : stk <= 5 ? "Low" : "In stock"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Variant Images toggle row */}
+                <div className="border-t border-slate-100 px-4 py-2 bg-slate-50/60 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <ImagePlus size={11} className="text-slate-400" />
+                    <span className="text-[10px] font-semibold text-slate-500">Variant Images</span>
+                  </div>
+                  <button type="button"
+                    onClick={() => setImagesOpenFor(imagesOpenFor === vid ? null : vid)}
+                    className="text-[10px] font-semibold text-tenzy-teal hover:opacity-70 transition">
+                    {imagesOpenFor === vid ? "Close ▲" : "Manage ▼"}
+                  </button>
+                </div>
+                {imagesOpenFor === vid && (
+                  <VariantImagesPanel productId={productId} variantId={vid} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add / Edit form */}
+      {showForm && (
+        <div className="rounded-xl border border-tenzy-orange/40 bg-orange-50/30 p-4 space-y-3">
+          <p className="text-xs font-bold text-slate-700">{editVariant ? "Edit Product Item" : "Add Product Item"}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Item Name * <span className="text-slate-300">(e.g. 30ml, 250g)</span></label>
+              <input value={vform.variantName} onChange={(e) => setVform({ ...vform, variantName: e.target.value })}
+                placeholder="100ml, 250g, Large…"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Volume label <span className="text-slate-300">(shown on website)</span></label>
+              <input value={vform.volume} onChange={(e) => setVform({ ...vform, volume: e.target.value })}
+                placeholder="e.g. 100 ml"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Weight (g) * <span className="text-slate-300">used for dispatch</span></label>
+              <input type="number" min="0.1" step="0.1" value={vform.weight} onChange={(e) => setVform({ ...vform, weight: e.target.value })}
+                placeholder="e.g. 120"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal focus:ring-2 focus:ring-tenzy-orange/20 focus:border-tenzy-orange" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Tabs Count</label>
+              <input type="number" min="0" step="1" value={vform.tabsCount} onChange={(e) => setVform({ ...vform, tabsCount: e.target.value })}
+                placeholder="e.g. 30"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Stock</label>
+              <input type="number" min="0" value={vform.stock} onChange={(e) => setVform({ ...vform, stock: e.target.value })}
+                placeholder="0"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Website Price (LKR)</label>
+              <input type="number" min="0" value={vform.sellingPrice} onChange={(e) => setVform({ ...vform, sellingPrice: e.target.value })}
+                placeholder="0"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 mb-1">Wholesale Price (LKR)</label>
+              <input type="number" min="0" value={vform.wholesalePrice} onChange={(e) => setVform({ ...vform, wholesalePrice: e.target.value })}
+                placeholder="Optional"
+                className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-tenzy-teal" />
+            </div>
+            <div className="col-span-2 flex items-center gap-3">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <button type="button" onClick={() => setVform({ ...vform, isVisible: !vform.isVisible })}
+                  className={`relative w-9 h-5 rounded-full transition-colors ${vform.isVisible ? "bg-tenzy-teal" : "bg-slate-300"}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${vform.isVisible ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+                <span className="text-xs font-medium text-slate-600">Visible on website</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { setShowForm(false); setEditVariant(null); }}
+              className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 py-2 rounded-xl bg-tenzy-teal text-white text-xs font-bold hover:opacity-90 disabled:opacity-60">
+              {saving ? "Saving…" : editVariant ? "Save Changes" : "Add Variant"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showForm && (
+        <button onClick={openAdd}
+          className="w-full py-2 rounded-xl border-2 border-dashed border-slate-200 text-xs font-semibold text-slate-500 hover:border-tenzy-teal hover:text-tenzy-teal transition flex items-center justify-center gap-1.5">
+          <Plus size={13} /> Add Product Item manually
+        </button>
+      )}
+    </Section>
+  );
+}
+
+/* ── Inline product item card — price management + history ────────────────── */
+function ItemCard({ vid, pid, vn, vol, wt, sp, ws, stk, initDr, arrivalCost, onSaveDiscount }) {
+  const fmtI   = (n) => new Intl.NumberFormat("en-LK").format(Math.round(n ?? 0));
+  const inputCls = "w-full text-xs px-2 py-1.5 rounded-lg border border-slate-200 outline-none focus:border-tenzy-teal text-center";
+
+  // Editable values
+  const [editSp,   setEditSp]   = useState(sp  > 0 ? String(sp)  : "");
+  const [editWs,   setEditWs]   = useState(ws  > 0 ? String(ws)  : "");
+  const [editStk,  setEditStk]  = useState(String(stk));
+  const [editDr,   setEditDr]   = useState(initDr > 0 ? String(initDr) : "");
+
+  // Price adjustment: "set" | "percent" | "amount"
+  const [adjMode,  setAdjMode]  = useState("set");
+  const [adjVal,   setAdjVal]   = useState("");
+
+  const [saving,   setSaving]   = useState(false);
+  const [saved,    setSaved]    = useState(false);
+  const [history,  setHistory]  = useState(null); // null=not loaded, []|[...]=loaded
+  const [loadingH, setLoadingH] = useState(false);
+
+  const numSp  = parseFloat(editSp)  || 0;
+  const numWs  = parseFloat(editWs)  || 0;
+  const numStk = parseInt(editStk)   || 0;
+  const numDr  = parseFloat(editDr)  || 0;
+  const cost   = Number(arrivalCost  || 0);
+
+  // Compute adjusted preview when user picks % or amount mode
+  const adjNum = parseFloat(adjVal) || 0;
+  const previewSp = adjMode === "percent"
+    ? (numSp > 0 ? Math.round(numSp * (1 + adjNum / 100)) : 0)
+    : adjMode === "amount"
+    ? (numSp > 0 ? Math.round(numSp + adjNum) : 0)
+    : numSp;
+
+  const salePrice = numDr > 0 && previewSp > 0 ? Math.round(previewSp * (1 - numDr / 100)) : 0;
+  const marginPct = previewSp > 0 && cost > 0
+    ? ((previewSp - cost) / previewSp * 100).toFixed(1) : null;
+
+  const applyAdj = () => {
+    if (adjMode !== "set" && previewSp > 0) setEditSp(String(previewSp));
+  };
+
+  const loadHistory = async () => {
+    if (loadingH) return;
+    setLoadingH(true);
+    try {
+      const d = await productVariantsApi.getPriceHistory(vid);
+      setHistory(Array.isArray(d) ? d : []);
+    } catch { setHistory([]); }
+    finally { setLoadingH(false); }
+  };
+
+  const toggleHistory = () => {
+    if (history === null) loadHistory();
+    else setHistory(null);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const finalSp = adjMode !== "set" ? previewSp : numSp;
+    try {
+      // Log price change before saving
+      if (sp !== finalSp || ws !== numWs || initDr !== numDr) {
+        await productVariantsApi.logPriceChange(vid, {
+          productId: pid,
+          variantName: vn,
+          oldWebsitePrice:   sp,
+          newWebsitePrice:   finalSp,
+          oldWholesalePrice: ws,
+          newWholesalePrice: numWs,
+          arrivalCost:       cost > 0 ? cost : null,
+          oldDiscountRate:   initDr,
+          newDiscountRate:   numDr,
+          notes: adjMode === "percent"
+            ? `Website price adjusted ${adjNum > 0 ? "+" : ""}${adjNum}%`
+            : adjMode === "amount"
+            ? `Website price adjusted ${adjNum > 0 ? "+" : ""}LKR ${fmtI(Math.abs(adjNum))}`
+            : "Manual price update",
+        }).catch(() => {});
+      }
+      await onSaveDiscount(numDr, finalSp, numWs, numStk);
+      if (adjMode !== "set") { setEditSp(String(finalSp)); setAdjVal(""); setAdjMode("set"); }
+      setSaved(true);
+      setHistory(null); // refresh history next open
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) { alert(e.message || "Save failed."); }
+    finally { setSaving(false); }
+  };
+
+  const belowCost = cost > 0 && previewSp > 0 && previewSp < cost;
+
+  return (
+    <div className={`rounded-xl border-2 bg-white overflow-hidden ${numStk === 0 ? "border-red-200" : belowCost ? "border-tenzy-orange/60" : "border-tenzy-teal/30"}`}>
+      {/* Header */}
+      <div className={`px-3 py-2 flex items-center gap-2 ${numStk === 0 ? "bg-red-50/60" : "bg-teal-50/40"}`}>
+        <p className="text-xs font-bold text-slate-800 truncate flex-1">{vn}</p>
+        <div className="flex gap-1 shrink-0">
+          {vol && <span className="text-[10px] font-bold bg-tenzy-teal text-white px-1.5 py-0.5 rounded-full">{vol}</span>}
+          {wt > 0 && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">{wt}g</span>}
+        </div>
+      </div>
+
+      <div className="p-3 space-y-2.5">
+        {/* Arrival cost banner */}
+        {cost > 0 && (
+          <div className={`rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[10px] font-semibold ${belowCost ? "bg-tenzy-orange/10 text-tenzy-orange" : "bg-slate-100 text-slate-500"}`}>
+            <span>Arrival cost</span>
+            <span className="font-bold">LKR {fmtI(cost)}</span>
+          </div>
+        )}
+
+        {/* Prices */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 mb-0.5">Website Price (LKR)</p>
+            <input type="number" min="0" step="1" value={editSp}
+              onChange={(e) => { setEditSp(e.target.value); setAdjMode("set"); setAdjVal(""); }}
+              placeholder="0"
+              className={`${inputCls} ${numSp > 0 ? "text-tenzy-teal font-bold" : ""}`} />
+            {marginPct !== null && (
+              <p className={`text-[10px] text-center mt-0.5 font-semibold ${parseFloat(marginPct) < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                Margin: {marginPct}%
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 mb-0.5">Wholesale (LKR)</p>
+            <input type="number" min="0" step="1" value={editWs}
+              onChange={(e) => setEditWs(e.target.value)}
+              placeholder="0"
+              className={`${inputCls} ${numWs > 0 ? "text-amber-600 font-bold" : ""}`} />
+          </div>
+        </div>
+
+        {/* Price adjustment */}
+        <div className="rounded-lg border border-slate-200 p-2 space-y-1.5">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Adjust website price</p>
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[10px]">
+            {[["set","Set exact"],["percent","% change"],["amount","LKR change"]].map(([m,l]) => (
+              <button key={m} type="button" onClick={() => { setAdjMode(m); setAdjVal(""); }}
+                className={`flex-1 px-1.5 py-1 font-semibold transition ${adjMode===m ? "bg-tenzy-teal text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {adjMode !== "set" && (
+            <div className="flex gap-1.5">
+              <input type="number" step={adjMode==="percent" ? "0.1" : "1"}
+                value={adjVal} onChange={(e) => setAdjVal(e.target.value)}
+                placeholder={adjMode==="percent" ? "e.g. 10 or -5" : "e.g. 500 or -300"}
+                className={`${inputCls} flex-1`} />
+              <button onClick={applyAdj}
+                className="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
+                Apply
+              </button>
+            </div>
+          )}
+          {adjMode !== "set" && previewSp > 0 && (
+            <p className="text-[10px] text-center text-slate-500">
+              {numSp > 0 ? `LKR ${fmtI(numSp)} →` : ""} <strong className="text-tenzy-teal">LKR {fmtI(previewSp)}</strong>
+            </p>
+          )}
+        </div>
+
+        {/* Stock + discount */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 mb-0.5">Stock Qty</p>
+            <input type="number" min="0" step="1" value={editStk}
+              onChange={(e) => setEditStk(e.target.value)} placeholder="0"
+              className={`${inputCls} ${numStk > 0 ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}`} />
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 mb-0.5">Discount %</p>
+            <input type="number" min="0" max="100" step="1" value={editDr}
+              onChange={(e) => setEditDr(e.target.value)} placeholder="0"
+              className={inputCls} />
+          </div>
+        </div>
+
+        {salePrice > 0 && (
+          <p className="text-[11px] text-tenzy-orange font-semibold text-center">
+            Sale: LKR {fmtI(salePrice)} ({numDr}% off)
+          </p>
+        )}
+        {belowCost && (
+          <p className="text-[10px] text-tenzy-orange font-bold text-center">
+            ⚠ Website price is below arrival cost
+          </p>
+        )}
+
+        {/* Save */}
+        <button onClick={handleSave} disabled={saving}
+          className={`w-full py-1.5 rounded-lg text-xs font-bold transition ${
+            saved ? "bg-emerald-500 text-white" : "bg-tenzy-teal text-white hover:opacity-90 disabled:opacity-60"
+          }`}>
+          {saving ? "Saving…" : saved ? "✓ Saved" : "Save Changes"}
+        </button>
+
+        {/* Price history toggle */}
+        <button onClick={toggleHistory}
+          className="w-full py-1 text-[10px] font-semibold text-slate-400 hover:text-tenzy-teal transition flex items-center justify-center gap-1">
+          {history === null ? "▼ Show price history" : "▲ Hide price history"}
+          {loadingH && <span className="w-3 h-3 rounded-full border border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />}
+        </button>
+
+        {/* History log */}
+        {history !== null && !loadingH && (
+          <div className="space-y-1.5 border-t border-slate-100 pt-2">
+            {history.length === 0 && (
+              <p className="text-[10px] text-slate-400 text-center">No price changes recorded yet.</p>
+            )}
+            {history.map((h) => {
+              const hId = h.HistoryId ?? h.historyId;
+              const oldSp = h.OldWebsitePrice ?? h.oldWebsitePrice;
+              const newSp = h.NewWebsitePrice ?? h.newWebsitePrice;
+              const ac    = h.ArrivalCost ?? h.arrivalCost;
+              const dt    = h.ChangedAt   ?? h.changedAt;
+              const note  = h.Notes ?? h.notes ?? "";
+              const newMar = h.NewMarginPct ?? h.newMarginPct;
+              return (
+                <div key={hId} className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-2 text-[10px]">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-slate-500">{dt ? new Date(dt).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }) : "—"}</span>
+                    {newMar != null && (
+                      <span className={`font-bold ${parseFloat(newMar) < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                        Margin: {newMar}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {oldSp != null && <span className="text-slate-400 line-through">LKR {fmtI(oldSp)}</span>}
+                    {newSp != null && <><span className="text-slate-400">→</span><span className="font-bold text-tenzy-teal">LKR {fmtI(newSp)}</span></>}
+                    {ac    != null && <span className="text-slate-400 ml-1">| Cost: LKR {fmtI(ac)}</span>}
+                  </div>
+                  {note && <p className="text-slate-400 mt-0.5 italic truncate">{note}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminProducts() {
   const [products,       setProducts]       = useState([]);
   const [brands,         setBrands]         = useState([]);
   const [concernTypes,   setConcernTypes]   = useState([]);
+  const [categories,     setCategories]     = useState([]);
   const [paymentTypes,   setPaymentTypes]   = useState([]);
   const [approvedShipments, setApprovedShipments] = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [search,         setSearch]         = useState("");
   const [concFilter,     setConcFilter]     = useState(0);
+  const [catFilter,      setCatFilter]      = useState(0);
   const [brandFilter,    setBrandFilter]    = useState(0);
   const [saleFilter,     setSaleFilter]     = useState("all");
   const [stockFilter,    setStockFilter]    = useState("all");
   const [sortBy,         setSortBy]         = useState("newest");
   const [activeTab,      setActiveTab]      = useState("live");
+  const [expandedPid,    setExpandedPid]    = useState(null);  // which product row is expanded
+  const [productItems,   setProductItems]   = useState({});    // map: productId → variants[]
+  const [itemsLoadingPid,setItemsLoadingPid]= useState(null);
   const [drawer,         setDrawer]         = useState(null);
   const [editTarget,     setEditTarget]     = useState(null);
   const [form,           setForm]           = useState(emptyForm());
   const [deleteConfirm,  setDeleteConfirm]  = useState(null);
-  const [saving,         setSaving]         = useState(false);
+  const [deleteError,    setDeleteError]    = useState("");
+  const [deletedProducts, setDeletedProducts] = useState([]);
+  const [deletedLoading,  setDeletedLoading]  = useState(false);
+  const [saving,             setSaving]             = useState(false);
+  const [openVariantOnCreate, setOpenVariantOnCreate] = useState(false);
   const [uploading,      setUploading]      = useState(false);
   const [imageSaving,    setImageSaving]    = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -175,7 +861,8 @@ export default function AdminProducts() {
       paymentApi.getAll(),
       productImageApi.getAll(),
       supplyChainApi.getEligiblePricing(),
-    ]).then(([pR, bR, conR, ptR, imgR, approvedR]) => {
+      categoriesApi.getAll(),
+    ]).then(([pR, bR, conR, ptR, imgR, approvedR, catR]) => {
       // Check if any auth-protected call got a session-expired error
       const expired = [pR, bR, conR, ptR].some(
         (r) => r.status === "rejected" && r.reason?.message?.includes("Session expired")
@@ -183,8 +870,18 @@ export default function AdminProducts() {
       if (expired) { setSessionExpired(true); return; }
 
       if (bR.status   === "fulfilled") setBrands(Array.isArray(bR.value)     ? bR.value   : []);
-      if (conR.status === "fulfilled") setConcernTypes(Array.isArray(conR.value) ? conR.value : []);
+      if (conR.status === "fulfilled") {
+        const raw = Array.isArray(conR.value) ? conR.value : [];
+        const seen = new Set();
+        setConcernTypes(raw.filter((ct) => {
+          const id = ct.concernTypeId ?? ct.ConcernTypeId ?? ct.id;
+          if (id == null || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        }));
+      }
       if (ptR.status  === "fulfilled") setPaymentTypes(Array.isArray(ptR.value)  ? ptR.value  : []);
+      if (catR.status === "fulfilled") setCategories(Array.isArray(catR.value)  ? catR.value  : []);
       if (approvedR.status === "fulfilled") setApprovedShipments(Array.isArray(approvedR.value) ? approvedR.value : []);
 
       if (pR.status === "fulfilled") {
@@ -205,6 +902,18 @@ export default function AdminProducts() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { if (activeTab === "deleted") loadDeleted(); }, [activeTab]);
+  const toggleExpand = async (pid) => {
+    if (expandedPid === pid) { setExpandedPid(null); return; }
+    setExpandedPid(pid);
+    if (productItems[pid]) return; // already loaded
+    setItemsLoadingPid(pid);
+    try {
+      const d = await productVariantsApi.getAll(pid);
+      setProductItems((prev) => ({ ...prev, [pid]: Array.isArray(d) ? d : [] }));
+    } catch { setProductItems((prev) => ({ ...prev, [pid]: [] })); }
+    finally { setItemsLoadingPid(null); }
+  };
 
   const bid_of    = (b) => b.brandId    ?? b.BrandId    ?? b.Brandid;
   const brandName = useCallback((id) => (
@@ -220,13 +929,14 @@ export default function AdminProducts() {
       const matchSearch = (p.name ?? "").toLowerCase().includes(q) || brandName(bid).toLowerCase().includes(q);
       const matchBrand = brandFilter === 0 || bid === brandFilter;
       const matchConc = concFilter === 0 || productConcernIds(p).includes(concFilter);
+      const matchCat = catFilter === 0 || (p.categoryId ?? p.CategoryId) === catFilter;
       const matchSale = saleFilter === "all" || (saleFilter === "sale" ? sale : !sale);
       const matchStock =
         stockFilter === "all" ||
         (stockFilter === "out" && stk <= 0) ||
         (stockFilter === "low" && stk > 0 && stk < 15) ||
         (stockFilter === "in" && stk >= 15);
-      return matchSearch && matchBrand && matchConc && matchSale && matchStock;
+      return matchSearch && matchBrand && matchConc && matchCat && matchSale && matchStock;
     });
 
     return [...rows].sort((a, b) => {
@@ -263,7 +973,7 @@ export default function AdminProducts() {
           return dateB - dateA;
       }
     });
-  }, [products, search, brandFilter, concFilter, saleFilter, stockFilter, sortBy, brandName]);
+  }, [products, search, brandFilter, concFilter, catFilter, saleFilter, stockFilter, sortBy, brandName]);
 
   const pendingPriceRows = useMemo(() => (
     approvedShipments.filter((item) => item.pricingReviewStatus !== "applied_live")
@@ -293,31 +1003,24 @@ export default function AdminProducts() {
   };
 
   const openEdit = async (p) => {
-    const sp = parseFloat(p.sellingPrice ?? p.SellingPrice ?? 0);
-    const op = parseFloat(p.originalPrice ?? p.OriginalPrice ?? sp);
-    const calcDiscount = op > 0 && sp < op ? Math.round((1 - sp / op) * 100) : 0;
-    const dr = p.discountRate ?? p.DiscountRate ?? calcDiscount;
     const pid = p.productId ?? p.ProductId ?? p.productid;
 
     setForm({
-      name:         p.name ?? "",
-      brandId:      bid_of(p) || "",
-      description:  p.description ?? "",
-      weight:       p.weight != null ? String(p.weight) : "",
-      tabletCount:  p.tabletCount != null ? String(p.tabletCount ?? p.TabletCount ?? "") : "",
-      showWeight:   p.showWeight ?? p.ShowWeight ?? true,
+      name:           p.name ?? "",
+      brandId:        bid_of(p) || "",
+      description:    p.description ?? "",
+      howToUse:       p.howToUse   ?? p.HowToUse   ?? "",
+      ingredients:    p.ingredients ?? p.Ingredients ?? "",
+      showWeight:     p.showWeight    ?? p.ShowWeight    ?? false,
       showTabletCount: p.showTabletCount ?? p.ShowTabletCount ?? false,
-      inSale:       p.inSale       ?? p.InSale       ?? p.insale   ?? false,
-      stock:        String(p.stockQuantity ?? p.StockQuantity ?? p.stock ?? ""),
-      price:        String(op || sp || ""),
-      discountRate: String(Math.round(parseFloat(dr) || 0)),
-      wholesalePrice: (p.wholesalePrice ?? p.WholesalePrice) != null ? String(p.wholesalePrice ?? p.WholesalePrice) : "",
-      startUTC:     (p.startUTC ?? p.StartUTC ?? new Date().toISOString()).slice(0, 10),
-      endUTC:       (p.endUTC   ?? p.EndUTC   ?? "").slice(0, 10),
-      images:       [],
-      // null = not yet loaded — backend will leave concerns/options unchanged on save
+      showVolume:     p.showVolume    ?? p.ShowVolume    ?? false,
+      inSale:         p.inSale ?? p.InSale ?? p.insale ?? false,
+      images:         [],
       concerns:       null,
       paymentOptions: null,
+      categoryId:     p.categoryId ?? p.CategoryId ?? null,
+      subCategoryIds: String(p.subCategoryIdsCsv ?? p.SubCategoryIdsCsv ?? "")
+        .split(",").map((id) => parseInt(id.trim(), 10)).filter((id) => Number.isInteger(id) && id > 0),
       faqs: (p.faqs ?? []).map((f) => ({
         faqId:    f.faqId    ?? f.FAQId    ?? Date.now(),
         question: f.question ?? f.Question ?? "",
@@ -361,7 +1064,7 @@ export default function AdminProducts() {
     }
   };
 
-  const closeDrawer = () => { setDrawer(null); setEditTarget(null); };
+  const closeDrawer = () => { setDrawer(null); setEditTarget(null); setOpenVariantOnCreate(false); };
 
   const syncProductImagesIntoList = useCallback((productId, images) => {
     setProducts((prev) => prev.map((product) => {
@@ -444,9 +1147,7 @@ export default function AdminProducts() {
   const handleSave = async () => {
     if (!form.name.trim()) { alert("Product name is required."); return; }
     if (!form.brandId)     { alert("Please select a brand."); return; }
-    if (!form.weight || parseFloat(form.weight) <= 0) { alert("Weight (g) is required."); return; }
-    if (!form.price)       { alert("Price is required."); return; }
-    if (!form.stock)       { alert("Stock quantity is required."); return; }
+    // Price, stock, and weight are managed at the Product Item level — no validation needed here
     if (saving) return;
     setSaving(true);
     try {
@@ -462,35 +1163,20 @@ export default function AdminProducts() {
       }
       const faqsToSave = normalizedFaqs.filter((faq) => faq.question && faq.answer);
 
-      const originalPrice  = parseFloat(form.price) || 0;
-      const discountRate   = parseFloat(form.discountRate) || 0;
-      const sellingPrice   = Math.round(originalPrice * (1 - discountRate / 100) * 100) / 100;
-      const wholesalePrice = form.wholesalePrice ? parseFloat(form.wholesalePrice) : null;
-      const minCost = editTarget?.TotalUnitCostLkr ?? editTarget?.totalUnitCostLkr ?? null;
-      if (minCost !== null && sellingPrice > 0 && sellingPrice < minCost) {
-        if (!window.confirm(`Website price (LKR ${fmt(sellingPrice)}) is below total unit cost (LKR ${fmt(minCost)}).\n\nOnly continue if a valid reason was provided during pricing. Proceed?`)) return;
-      }
-      if (minCost !== null && wholesalePrice !== null && wholesalePrice < minCost) {
-        if (!window.confirm(`Wholesale price (LKR ${fmt(wholesalePrice)}) is below total unit cost (LKR ${fmt(minCost)}).\n\nOnly continue if a valid reason was provided during pricing. Proceed?`)) return;
-      }
       const body = {
-        name:          form.name.trim(),
-        brandId:       parseInt(form.brandId, 10),
-        description:   form.description,
-        weight:        form.weight ? parseFloat(form.weight) : null,
-        tabletCount:   form.tabletCount ? parseInt(form.tabletCount, 10) : null,
-        showWeight:    form.showWeight,
+        name:            form.name.trim(),
+        brandId:         parseInt(form.brandId, 10),
+        description:     form.description,
+        howToUse:        form.howToUse   || null,
+        ingredients:     form.ingredients || null,
+        showWeight:      form.showWeight,
         showTabletCount: form.showTabletCount,
-        inSale:        form.inSale,
-        stockQuantity: parseInt(form.stock, 10),
-        sellingPrice,
-        originalPrice,
-        startUTC:      toApiDate(form.startUTC),
-        endUTC:        toApiDate(form.endUTC),
+        showVolume:      form.showVolume,
+        inSale:          form.inSale,
         concernTypeIds,
+        categoryId:      form.categoryId ?? null,
+        subCategoryIds:  (form.subCategoryIds ?? []).filter((id) => id > 0),
         paymentOptions:  form.paymentOptions,
-        faqs:            faqsToSave,
-        wholesalePrice,
       };
       if (drawer === "add") {
         const result = await productsApi.create(body);
@@ -509,24 +1195,58 @@ export default function AdminProducts() {
         }
         if (newId) {
           await syncProductFaqs(newId, faqsToSave);
+          // Auto-switch to edit mode so variants can be added immediately
+          loadAll();
+          const freshProduct = {
+            productId: newId, productid: newId,
+            name: body.name, brandId: body.brandId,
+            showWeight: body.showWeight, showTabletCount: body.showTabletCount,
+            showVolume: body.showVolume, inSale: body.inSale,
+            categoryId: body.categoryId,
+          };
+          setEditTarget(freshProduct);
+          setForm((f) => ({ ...f, concerns: concernTypeIds, faqs: faqsToSave }));
+          setOpenVariantOnCreate(true);
+          setDrawer("edit");
         }
       } else {
         const pid = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
         await productsApi.update(pid, body);
         await syncProductFaqs(pid, faqsToSave);
+        loadAll();
+        closeDrawer();
       }
-      loadAll();
-      closeDrawer();
     } catch (err) { alert(err.message); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id) => {
+    setDeleteError("");
     try {
       await productsApi.remove(id);
+      setDeleteConfirm(null);
       loadAll();
-    } catch (err) { alert(err.message); }
-    setDeleteConfirm(null);
+      if (activeTab === "deleted") loadDeleted();
+    } catch (err) {
+      setDeleteError(err.message || "Delete failed.");
+    }
+  };
+
+  const loadDeleted = async () => {
+    setDeletedLoading(true);
+    try {
+      const data = await productsApi.getDeleted();
+      setDeletedProducts(Array.isArray(data) ? data : []);
+    } catch { setDeletedProducts([]); }
+    finally { setDeletedLoading(false); }
+  };
+
+  const handleRestore = async (id) => {
+    try {
+      await productsApi.restore(id);
+      loadDeleted();
+      loadAll();
+    } catch (err) { alert(err.message || "Restore failed."); }
   };
 
   // Image helpers
@@ -732,6 +1452,8 @@ export default function AdminProducts() {
           <p className="text-sm text-slate-500 mt-0.5">
             {activeTab === "live"
               ? `${products.length} products · ${products.filter((p) => parseInt(p.stockQuantity ?? p.StockQuantity ?? p.stock ?? 0, 10) === 0).length} out of stock`
+              : activeTab === "deleted"
+              ? `${deletedProducts.length} deleted products`
               : `${pendingPriceRows.length} items waiting on pricing decisions`}
           </p>
         </div>
@@ -744,8 +1466,9 @@ export default function AdminProducts() {
       <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: "live", label: "Live Products", count: products.length },
+            { id: "live",    label: "Products",              count: products.length },
             { id: "pending", label: "Pending Price Approve", count: pendingPriceRows.length },
+            { id: "deleted", label: "Deleted",               count: deletedProducts.length },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -782,7 +1505,7 @@ export default function AdminProducts() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder={activeTab === "live" ? "Search products or brand…" : "Search pending price items…"}
-            className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition" />
+            className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-orange transition" />
           {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={14} className="text-slate-400" /></button>}
         </div>
         {activeTab === "live" && (
@@ -798,15 +1521,13 @@ export default function AdminProducts() {
               })}
             </select>
             <select
-              value={concFilter}
-              onChange={(e) => setConcFilter(parseInt(e.target.value, 10))}
+              value={catFilter}
+              onChange={(e) => setCatFilter(parseInt(e.target.value, 10))}
               className={filterStyles.concern}>
-              <option value={0}>All Concerns</option>
-              {concernTypes.map((c) => {
-                const cid   = c.concernTypeId ?? c.ConcernTypeId;
-                const ctype = c.name ?? c.Name ?? c.concernType ?? c.ConcernType ?? "—";
-                return <option key={cid} value={cid}>{ctype}</option>;
-              })}
+              <option value={0}>All Categories</option>
+              {categories.filter((c) => c.isActive !== false).map((c) => (
+                <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+              ))}
             </select>
             <select
               value={saleFilter}
@@ -856,6 +1577,54 @@ export default function AdminProducts() {
         )}
       </div>
 
+      {activeTab === "deleted" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-2">
+            <AlertTriangle size={14} className="text-amber-500" />
+            <p className="text-xs font-semibold text-slate-600">
+              Deleted products are hidden from the website. Restore to make them live again.
+            </p>
+          </div>
+          {deletedLoading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 rounded-full border-4 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" />
+            </div>
+          )}
+          {!deletedLoading && deletedProducts.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-12">No deleted products.</p>
+          )}
+          {!deletedLoading && deletedProducts.map((p) => {
+            const pid = productIdOf(p);
+            const img = p.primaryImageUrl ?? p.PrimaryImageUrl ?? null;
+            const name = p.name ?? p.Name ?? "—";
+            const brand = p.brandName ?? p.BrandName ?? "—";
+            const deletedAt = p.deletedAt ?? p.DeletedAt;
+            const price = productNumber(p, ["sellingPrice", "SellingPrice"], 0);
+            return (
+              <div key={pid} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-b-0 opacity-70 hover:opacity-100 transition">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden shrink-0">
+                  {img ? <img src={img} alt={name} className="w-full h-full object-cover grayscale" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-[10px]">No img</div>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-700 truncate">{name}</p>
+                  <p className="text-[10px] text-slate-400">{brand} · LKR {fmt(price)}</p>
+                  {deletedAt && (
+                    <p className="text-[10px] text-red-400">
+                      Deleted: {new Date(deletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleRestore(pid)}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-tenzy-teal/10 text-tenzy-teal text-xs font-semibold hover:bg-tenzy-teal hover:text-white transition">
+                  Restore
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {activeTab === "live" ? (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="md:hidden divide-y divide-slate-50">
@@ -902,14 +1671,14 @@ export default function AdminProducts() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {["Product", "Brand", "Wholesale", "Website", "Discount", "Stock", "Sale", "Actions"].map((h) => (
+                  {["Product", "Brand", "Stock", "Sale", "Actions", "Items"].map((h) => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-12 text-sm text-slate-400">No products found.</td></tr>
+                  <tr><td colSpan={6} className="text-center py-12 text-sm text-slate-400">No products found.</td></tr>
                 )}
                 {filtered.map((p) => {
                   const pid   = p.productId ?? p.ProductId ?? p.productid;
@@ -923,7 +1692,8 @@ export default function AdminProducts() {
                   const st   = stockStatus(stk);
                   const img  = p.primaryImageUrl ?? primaryImage(p.images);
                   return (
-                    <tr key={pid} className="hover:bg-slate-50 transition-colors">
+                    <React.Fragment key={pid}>
+                    <tr className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">
@@ -933,11 +1703,6 @@ export default function AdminProducts() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600">{brandName(bid)}</td>
-                      <td className="px-4 py-3 text-xs font-semibold text-amber-700">
-                        {(p.wholesalePrice ?? p.WholesalePrice) ? `LKR ${fmt(p.wholesalePrice ?? p.WholesalePrice)}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-xs font-bold text-slate-800">LKR {fmt(prc)}</td>
-                      <td className="px-4 py-3 text-xs text-tenzy-orange font-semibold">{disc > 0 ? `${disc}%` : "—"}</td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>{stk} · {st.label}</span>
                       </td>
@@ -952,7 +1717,70 @@ export default function AdminProducts() {
                           <button onClick={() => setDeleteConfirm(pid)} className="p-1.5 rounded-lg hover:bg-red-500 hover:text-white text-slate-500 transition"><Trash2 size={13} /></button>
                         </div>
                       </td>
+                      {/* Expand/collapse product items */}
+                      <td className="px-2 py-3">
+                        <button onClick={() => toggleExpand(pid)}
+                          className={`p-1.5 rounded-lg transition text-xs font-bold flex items-center gap-1 ${expandedPid === pid ? "bg-tenzy-teal text-white" : "bg-slate-100 text-slate-500 hover:bg-tenzy-teal/10 hover:text-tenzy-teal"}`}>
+                          <Package size={12} />
+                          {expandedPid === pid ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        </button>
+                      </td>
                     </tr>
+                    {/* ── Inline Product Items ── */}
+                    {expandedPid === pid && (
+                      <tr>
+                        <td colSpan={6} className="bg-slate-50/80 border-t border-slate-100 px-4 py-3">
+                          {itemsLoadingPid === pid ? (
+                            <div className="flex justify-center py-4"><div className="w-5 h-5 rounded-full border-2 border-tenzy-teal/30 border-t-tenzy-teal animate-spin" /></div>
+                          ) : (productItems[pid] ?? []).length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-2">No product items yet — create them through UK Purchase.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Product Items</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                                {(productItems[pid] ?? []).map((v) => {
+                                  const vid  = v.VariantId ?? v.variantId;
+                                  const vn   = v.VariantName ?? v.variantName ?? "—";
+                                  const vol  = v.Volume ?? v.volume ?? "";
+                                  const wt   = Number(v.Weight ?? v.weight ?? 0);
+                                  const sp   = Number(v.SellingPrice ?? v.sellingPrice ?? 0);
+                                  const ws   = Number(v.WholesalePrice ?? v.wholesalePrice ?? 0);
+                                  const stk  = Number(v.Stock ?? v.stock ?? 0);
+                                  const vis  = v.IsVisible ?? v.isVisible ?? true;
+                                  const oos  = stk === 0;
+                                  const dr          = Number(v.DiscountRate ?? v.discountRate ?? 0);
+                                  const arrivalCost = Number(v.ArrivalCost ?? v.arrivalCost ?? 0);
+                                  return (
+                                    <ItemCard key={`${vid}-${sp}-${ws}-${stk}-${dr}`}
+                                      vid={vid} pid={pid} vn={vn} vol={vol} wt={wt}
+                                      sp={sp} ws={ws} stk={stk} vis={vis} oos={oos}
+                                      initDr={dr} arrivalCost={arrivalCost}
+                                      onSaveDiscount={(newDr, newSp, newWs, newStk) =>
+                                        productVariantsApi.update(vid, {
+                                          variantName: vn, volume: vol || null,
+                                          weight: wt, sellingPrice: newSp,
+                                          wholesalePrice: newWs || null, discountRate: newDr,
+                                          stock: newStk, isVisible: vis,
+                                          sortOrder: Number(v.SortOrder ?? v.sortOrder ?? 0),
+                                        }).then(() => setProductItems((prev) => ({
+                                          ...prev,
+                                          [pid]: (prev[pid] ?? []).map((vi) =>
+                                            (vi.VariantId ?? vi.variantId) === vid
+                                              ? { ...vi, SellingPrice: newSp, WholesalePrice: newWs, Stock: newStk, DiscountRate: newDr }
+                                              : vi
+                                          ),
+                                        })))
+                                      }
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -965,17 +1793,34 @@ export default function AdminProducts() {
             {filteredPendingPriceRows.length === 0 && <p className="text-sm text-slate-400 text-center py-12">No pending price items found.</p>}
             {filteredPendingPriceRows.map((item) => {
               const status = pricingStatusMeta(item.pricingReviewStatus);
+              const isWaiting = item.pricingReviewStatus === "awaiting_stock_depletion";
+              const pending   = Number(item.pendingSellingPrice ?? 0);
+              const current   = Number(item.currentSellingPrice ?? 0);
               return (
-                <div key={item.arrivalItemId} className="p-4 space-y-3">
+                <div key={item.arrivalItemId} className="p-4 space-y-2.5">
                   <div>
-                    <p className="text-xs font-bold text-slate-800">{item.productName}</p>
-                    <p className="text-[10px] text-slate-400">{item.brandName}</p>
+                    <p className="text-xs font-bold text-slate-800">{item.variantName || item.productName}</p>
+                    {item.variantName && <p className="text-[10px] text-slate-500">{item.productName}</p>}
+                    <p className="text-[10px] text-slate-400">{item.brandName} · {item.dispatchReference}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-[11px]">
                     <span className={`rounded-full px-2 py-0.5 font-semibold ${status.cls}`}>{status.label}</span>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">Qty {item.approvedQuantity}</span>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">Live stock {item.currentStockQuantity ?? 0}</span>
                   </div>
+                  {isWaiting && (
+                    <div className="space-y-0.5">
+                      {pending > 0 && (
+                        <p className="text-[10px] text-slate-500">
+                          Live price: <strong>LKR {fmt(current)}</strong>
+                          {" · "}Pending: <strong>LKR {fmt(pending)}</strong>
+                        </p>
+                      )}
+                      {(item.currentStockQuantity ?? 0) > 0
+                        ? <p className="text-[10px] text-amber-600">Waiting — {item.currentStockQuantity} units must sell first</p>
+                        : <p className="text-[10px] text-emerald-600">Stock depleted — activate in Pricing</p>}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <a href="/#/admin/pricing" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-tenzy-teal hover:text-tenzy-teal">
                       Open pricing
@@ -990,29 +1835,41 @@ export default function AdminProducts() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {["Dispatch", "Product", "Approved Qty", "Current Live Price", "Current Live Stock", "Decision", "Action"].map((h) => (
+                  {["Dispatch", "Product", "Qty", "Live Price", "Pending Price", "Live Stock", "Decision", ""].map((h) => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredPendingPriceRows.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-12 text-sm text-slate-400">No pending price items found.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-sm text-slate-400">No pending price items found.</td></tr>
                 )}
                 {filteredPendingPriceRows.map((item) => {
-                  const status = pricingStatusMeta(item.pricingReviewStatus);
+                  const status  = pricingStatusMeta(item.pricingReviewStatus);
+                  const pending = Number(item.pendingSellingPrice ?? 0);
+                  const current = Number(item.currentSellingPrice ?? 0);
+                  const isWaiting = item.pricingReviewStatus === "awaiting_stock_depletion";
                   return (
                     <tr key={item.arrivalItemId} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-xs font-semibold text-slate-700">{item.dispatchReference}</td>
                       <td className="px-4 py-3">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-800">{item.productName}</p>
-                          <p className="text-[11px] text-slate-500">{item.brandName}</p>
-                        </div>
+                        <p className="text-xs font-semibold text-slate-800">{item.variantName || item.productName}</p>
+                        {item.variantName && <p className="text-[11px] text-slate-400">{item.productName}</p>}
+                        <p className="text-[11px] text-slate-500">{item.brandName}</p>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600">{item.approvedQuantity}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600">LKR {fmt(item.currentSellingPrice ?? 0)}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{item.currentStockQuantity ?? 0}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">{current > 0 ? `LKR ${fmt(current)}` : "—"}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {isWaiting && pending > 0
+                          ? <span className="font-semibold text-violet-700">LKR {fmt(pending)}</span>
+                          : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {item.currentStockQuantity ?? 0}
+                        {isWaiting && (item.currentStockQuantity ?? 0) === 0 && (
+                          <span className="ml-1 text-emerald-600 font-semibold">✓ depleted</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
                       </td>
@@ -1035,10 +1892,24 @@ export default function AdminProducts() {
         <>
           <div className="fixed inset-0 bg-black/50 z-40" onClick={closeDrawer} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 rounded-t-3xl shrink-0">
+            <div className={`relative w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] transition-colors duration-300 ${form.inSale ? "bg-orange-50" : "bg-white"}`}>
+            <div className={`flex items-center justify-between px-6 py-4 border-b rounded-t-3xl shrink-0 transition-colors duration-300 ${form.inSale ? "border-orange-200 bg-gradient-to-r from-orange-100 to-amber-50" : "border-slate-100"}`}>
               <p className="font-bold text-slate-900 text-lg">{drawer === "add" ? "Add Product" : "Edit Product"}</p>
-              <button onClick={closeDrawer} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"><X size={18} /></button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, inSale: !form.inSale })}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full font-bold text-xs transition-all duration-200 ${
+                    form.inSale
+                      ? "bg-tenzy-orange text-white shadow-lg shadow-tenzy-orange/40 scale-105"
+                      : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${form.inSale ? "bg-white animate-pulse" : "bg-slate-300"}`} />
+                  ON SALE
+                </button>
+                <button onClick={closeDrawer} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"><X size={18} /></button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -1057,131 +1928,68 @@ export default function AdminProducts() {
                   </Field>
                 </div>
                 <Field label="Description">
-                  <textarea rows={3} value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Product description…"
-                    className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition resize-none" />
+                  <DescriptionStatsEditor
+                    value={form.description}
+                    onChange={(description) => setForm({ ...form, description })}
+                  />
                 </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Weight (g)" required>
-                    <Input type="number" min="0" step="0.1" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} placeholder="e.g. 340" />
-                  </Field>
-                  <Field label="Tablet count">
-                    <Input type="number" min="1" step="1" value={form.tabletCount} onChange={(e) => setForm({ ...form, tabletCount: e.target.value })} placeholder="e.g. 60" />
-                  </Field>
-                </div>
 
-                {/* Visibility toggles */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-bold text-slate-600 mb-3">Show on website</p>
+                <Field label="How to Use">
+                  <HowToUseStepsEditor
+                    value={form.howToUse}
+                    onChange={(howToUse) => setForm({ ...form, howToUse })}
+                  />
+                </Field>
+
+                <Field label="Ingredients">
+                  <IngredientsTableEditor
+                    value={form.ingredients}
+                    onChange={(ingredients) => setForm({ ...form, ingredients })}
+                  />
+                </Field>
+                {/* Visibility toggles — actual values (weight, volume, tablets) are set at UK purchase time */}
+                <div className="rounded-xl border border-tenzy-orange/50 bg-white px-4 py-3">
+                  <p className="text-xs font-bold text-slate-600 mb-1">Show on website</p>
+                  <p className="text-[10px] text-slate-400 mb-3">Values are set when recording a UK purchase — enable here to show them on the product page.</p>
                   <div className="flex flex-wrap gap-5">
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, showWeight: !form.showWeight })}
-                        className={`relative w-9 h-5 rounded-full transition-colors ${form.showWeight ? "bg-tenzy-teal" : "bg-slate-300"}`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.showWeight ? "translate-x-4" : "translate-x-0"}`} />
-                      </button>
-                      <span className="text-xs font-medium text-slate-600">Weight</span>
-                    </label>
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, showTabletCount: !form.showTabletCount })}
-                        disabled={!form.tabletCount}
-                        className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-40 ${form.showTabletCount ? "bg-tenzy-teal" : "bg-slate-300"}`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.showTabletCount ? "translate-x-4" : "translate-x-0"}`} />
-                      </button>
-                      <span className={`text-xs font-medium ${form.tabletCount ? "text-slate-600" : "text-slate-400"}`}>
-                        Tablet count {!form.tabletCount && <span className="text-[10px]">(add tablet count first)</span>}
-                      </span>
-                    </label>
+                    {[
+                      { key: "showWeight",      label: "Weight"      },
+                      { key: "showTabletCount", label: "Tablet count" },
+                      { key: "showVolume",      label: "Volume"      },
+                    ].map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2.5 cursor-pointer">
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, [key]: !form[key] })}
+                          className={`relative w-9 h-5 rounded-full transition-colors ${form[key] ? "bg-tenzy-teal" : "bg-slate-300"}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form[key] ? "translate-x-4" : "translate-x-0"}`} />
+                        </button>
+                        <span className="text-xs font-medium text-slate-600">{label}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
-                <Field label="On Sale">
-                  <div className="flex items-center gap-3 mt-1">
-                    <button type="button" onClick={() => setForm({ ...form, inSale: !form.inSale })}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${form.inSale ? "bg-tenzy-orange" : "bg-slate-200"}`}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${form.inSale ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                    <span className="text-xs font-semibold text-slate-600">{form.inSale ? "Yes" : "No"}</span>
-                  </div>
-                </Field>
               </Section>
 
-              <Section icon={DollarSign} title="Inventory & Pricing">
-                {(() => {
-                  const minCost = editTarget?.TotalUnitCostLkr ?? editTarget?.totalUnitCostLkr ?? null;
-                  const wsp = parseFloat(form.wholesalePrice) || 0;
-                  const wbp = parseFloat(form.price) || 0;
-                  return (
-                    <>
-                      {minCost != null && (
-                        <div className="rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600 flex items-center justify-between">
-                          <span>Unit cost floor (min price)</span>
-                          <span className="font-bold text-slate-800">LKR {fmt(minCost)}</span>
-                        </div>
-                      )}
-                      <Field label="Stock Quantity" required>
-                        <Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="0" />
-                      </Field>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Wholesale Price (LKR)">
-                          <Input
-                            type="number" min="0" step="1"
-                            value={form.wholesalePrice}
-                            onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })}
-                            placeholder="B2B price"
-                            className={minCost != null && form.wholesalePrice && wsp < minCost ? "border-red-300 bg-red-50" : ""}
-                          />
-                          {minCost != null && form.wholesalePrice && wsp < minCost && (
-                            <p className="mt-1 text-[11px] text-red-600">Below unit cost — cannot save.</p>
-                          )}
-                        </Field>
-                        <Field label="Website Price (LKR)" required>
-                          <Input
-                            type="number" min="0" step="1"
-                            value={form.price}
-                            onChange={(e) => setForm({ ...form, price: e.target.value })}
-                            placeholder="0.00"
-                            className={minCost != null && form.price && wbp < minCost ? "border-red-300 bg-red-50" : ""}
-                          />
-                          {minCost != null && form.price && wbp < minCost && (
-                            <p className="mt-1 text-[11px] text-red-600">Below unit cost — cannot save.</p>
-                          )}
-                        </Field>
-                      </div>
-                    </>
-                  );
-                })()}
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Discount Rate (%)">
-                    <Input type="number" min="0" max="100" value={form.discountRate} onChange={(e) => setForm({ ...form, discountRate: e.target.value })} placeholder="0" />
-                  </Field>
-                  <div />
+              {/* Pricing & stock are managed through Product Items (variants) created via UK Purchase */}
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 flex items-start gap-3">
+                <DollarSign size={16} className="text-indigo-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-indigo-700">Pricing &amp; stock managed via Product Items</p>
+                  <p className="text-[11px] text-indigo-500 mt-0.5 leading-relaxed">
+                    Stock, prices, and dispatch details are set on each <strong>Product Item</strong> (e.g. 30ml, 60ml)
+                    created through the <strong>UK Purchase</strong> flow. Use the <em>Product Items</em> section
+                    below (edit view) to see and manage them.
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Pricing Start Date">
-                    <Input type="date" value={form.startUTC} onChange={(e) => setForm({ ...form, startUTC: e.target.value })} />
-                  </Field>
-                  <Field label="Pricing End Date">
-                    <Input type="date" value={form.endUTC} onChange={(e) => setForm({ ...form, endUTC: e.target.value })} />
-                  </Field>
-                </div>
-                {form.price && parseFloat(form.discountRate) > 0 && (
-                  <div className="bg-tenzy-teal/10 rounded-xl px-3 py-2 text-xs text-tenzy-teal font-semibold">
-                    Sale price: LKR {fmt(Math.round(parseFloat(form.price) * (1 - parseFloat(form.discountRate) / 100)))}
-                  </div>
-                )}
-              </Section>
+              </div>
 
               <Section icon={ImagePlus} title="Product Images">
                 <div className="space-y-2">
                   {form.images.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-xl">No images yet. Add one below.</p>
+                    <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-xl">No images yet. Images are added through each product variant.</p>
                   )}
                   {drawer === "edit" && (
                     <p className="text-[10px] text-slate-400 bg-slate-50 rounded-xl px-3 py-2">
@@ -1209,37 +2017,93 @@ export default function AdminProducts() {
                     </div>
                   ))}
                 </div>
-                <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed cursor-pointer transition
-                  ${uploading || imageSaving ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed" : "border-tenzy-teal/40 hover:border-tenzy-teal hover:bg-tenzy-teal/5 text-tenzy-teal"}`}>
-                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
-                    disabled={uploading || imageSaving} onChange={handleImageFilePick} />
-                  <ImagePlus size={15} />
-                  <span className="text-xs font-semibold">
-                    {uploading ? "Uploading…" : imageSaving ? "Saving image changes…" : "Choose image to upload"}
-                  </span>
-                </label>
-                <p className="text-[10px] text-slate-400">JPEG, PNG, WebP or GIF · max 5 MB · ★ = primary shown in shop</p>
+                <p className="text-[10px] text-slate-400">Images are uploaded per product variant. Use the Product Items section below to add images to each variant.</p>
               </Section>
 
-              <Section icon={Tag} title="Skin Concerns">
+              <Section icon={Tag} title="Category">
+                <Field label="Category">
+                  <Sel
+                    value={form.categoryId ?? ""}
+                    onChange={(e) => {
+                      const newCatId = e.target.value ? parseInt(e.target.value, 10) : null;
+                      setForm((f) => ({ ...f, categoryId: newCatId, subCategoryIds: [] }));
+                    }}
+                  >
+                    <option value="">— Select a category —</option>
+                    {categories.filter((c) => c.isActive !== false).map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+                    ))}
+                  </Sel>
+                </Field>
+
+                {form.categoryId && (() => {
+                  const cat = categories.find((c) => c.categoryId === form.categoryId);
+                  const subs = (cat?.subCategories ?? []).filter((s) => s.isActive !== false);
+                  if (subs.length === 0) return null;
+                  return (
+                    <Field label="Sub-Categories (select all that apply)">
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {subs.map((sub) => {
+                          const active = (form.subCategoryIds ?? []).includes(sub.subCategoryId);
+                          return (
+                            <button key={sub.subCategoryId} type="button"
+                              onClick={() => {
+                                setForm((f) => {
+                                  const current = f.subCategoryIds ?? [];
+                                  return {
+                                    ...f,
+                                    subCategoryIds: active
+                                      ? current.filter((id) => id !== sub.subCategoryId)
+                                      : [...current, sub.subCategoryId],
+                                  };
+                                });
+                              }}
+                              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+                                active
+                                  ? "bg-tenzy-teal text-white border-tenzy-teal"
+                                  : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"
+                              }`}>
+                              {sub.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </Field>
+                  );
+                })()}
+              </Section>
+
+              <Section icon={Shield} title="Skin Concerns">
                 {form.concerns === null && (
                   <p className="text-xs text-slate-400 italic">Loading existing concerns…</p>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  {concernTypes.map((c) => {
-                    const cid    = c.concernTypeId ?? c.ConcernTypeId;
-                    const ctype  = c.name ?? c.Name ?? c.concernType ?? c.ConcernType ?? "—";
-                    const active = (form.concerns ?? []).includes(cid);
-                    return (
-                      <button key={cid} type="button" onClick={() => toggleConcern(cid)}
-                        className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
-                          active ? "bg-tenzy-teal text-white border-tenzy-teal" : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal"
-                        }`}>
-                        {ctype}
-                      </button>
-                    );
-                  })}
-                </div>
+                {concernTypes.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No concern types configured. Add some in Reference Data.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {concernTypes
+                      .filter((ct) => ct.isActive === true || ct.isActive === 1)
+                      .map((ct) => {
+                        const cid    = ct.concernTypeId ?? ct.ConcernTypeId ?? ct.id;
+                        const label  = ct.concernType ?? ct.ConcernType ?? ct.name ?? ct.Name ?? "—";
+                        const active = (form.concerns ?? []).includes(cid);
+                        return (
+                          <button key={cid} type="button"
+                            onClick={() => toggleConcern(cid)}
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+                              active
+                                ? "bg-tenzy-teal text-white border-tenzy-teal shadow-sm shadow-tenzy-teal/30"
+                                : "border-slate-200 text-slate-600 hover:border-tenzy-teal hover:text-tenzy-teal bg-white"
+                            }`}>
+                            {active && <span className="mr-1">✓</span>}{label}
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+                {form.concerns !== null && form.concerns.length === 0 && concernTypes.length > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-1">No concerns selected — tap a concern to add it to this product.</p>
+                )}
               </Section>
 
               <Section icon={CreditCard} title="Payment Options">
@@ -1284,7 +2148,7 @@ export default function AdminProducts() {
                       <textarea rows={2} value={fq.answer}
                         onChange={(e) => updateFaq(fq.faqId, "answer", e.target.value)}
                         placeholder="Answer…"
-                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-teal transition resize-none" />
+                        className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-tenzy-teal/30 focus:border-tenzy-orange transition resize-none" />
                     </div>
                   ))}
                   <button onClick={addFaq}
@@ -1293,6 +2157,18 @@ export default function AdminProducts() {
                   </button>
                 </div>
               </Section>
+
+              {/* Variants — shown in edit mode (auto-opens form when coming from new product creation) */}
+              {drawer === "edit" && editTarget && (() => {
+                const pid = editTarget.productId ?? editTarget.ProductId ?? editTarget.productid;
+                return (
+                  <VariantsSection
+                    productId={pid}
+                    showVolume={editTarget.showVolume ?? editTarget.ShowVolume ?? false}
+                    initialShowForm={openVariantOnCreate}
+                  />
+                );
+              })()}
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3 rounded-b-3xl shrink-0">
@@ -1312,16 +2188,31 @@ export default function AdminProducts() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setDeleteConfirm(null); setDeleteError(""); }} />
           <div className="relative bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center"><AlertTriangle size={18} className="text-red-500" /></div>
               <p className="font-bold text-slate-900">Delete Product?</p>
             </div>
-            <p className="text-sm text-slate-500 mb-5">This will permanently remove the product and all associated data.</p>
+            <p className="text-sm text-slate-500 mb-4">
+              The product will be disabled and moved to the Deleted tab. It can be restored at any time.
+            </p>
+            {deleteError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+                <p className="text-sm font-semibold text-red-600">{deleteError}</p>
+              </div>
+            )}
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">Cancel</button>
-              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition">Delete</button>
+              <button
+                onClick={() => { setDeleteConfirm(null); setDeleteError(""); }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition">
+                Delete
+              </button>
             </div>
           </div>
         </div>

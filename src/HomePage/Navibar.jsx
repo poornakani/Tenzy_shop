@@ -10,11 +10,11 @@ import MobileProductSearchDropdown from "@/Widgets/MobileProductSearchDropdown";
 import { useCart } from "@/Context/CartContext";
 import { useIconHover } from "@/Animation/IconAnimation";
 import { useAuth } from "@/Context/AuthContext";
-import { concernsApi } from "@/services/api";
+import { categoriesApi } from "@/services/api";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const Navibar = () => {
+const Navibar = ({ solidDark = false }) => {
   const [open, setOpen] = useState(false);
   const { cartCount } = useCart();
   const { user, logout, isAdmin } = useAuth();
@@ -25,17 +25,17 @@ const Navibar = () => {
   const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-  const [concernOpen, setConcernOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [mobileQuery, setMobileQuery] = useState("");
-  const [concernItems, setConcernItems] = useState([]);
+  const [categoryItems, setCategoryItems] = useState([]);
 
   const { wishlistCount } = useWishlist();
   const navigate = useNavigate();
   const location = useLocation();
 
   const navInnerRef = useRef(null);
-  const concernBtnRef = useRef(null);
-  const concernMenuRef = useRef(null);
+  const categoryBtnRef = useRef(null);
+  const categoryMenuRef = useRef(null);
 
   const searchRef = useRef(null);
   const wishRef = useRef(null);
@@ -46,71 +46,67 @@ const Navibar = () => {
   useIconHover(cartRef);
   useIconHover(accountRef);
 
-  // Highlight selected concern from URL (?concern=aging)
+  // Highlight selected category from URL (?categoryId=1)
   const sp = new URLSearchParams(location.search);
-  const selectedConcernId = sp.get("concernID") || sp.get("concern");
-  const selectedConcernInt = selectedConcernId
-    ? Number(selectedConcernId)
-    : null;
+  const selectedCategoryId = sp.get("categoryId") || sp.get("categoryID");
+  const selectedCategoryInt = selectedCategoryId ? Number(selectedCategoryId) : null;
 
-  // keep your glass look at top
-  const NORMAL_BG = "rgba(255,255,255,0.10)";
-  const NORMAL_BORDER = "rgba(255,255,255,0.15)";
-  // on scroll make it more readable (dark glass)
-  const SCROLL_BG = "rgba(17,24,39,0.88)";
+  const SCROLL_BG     = "rgba(17,24,39,0.92)";
   const SCROLL_BORDER = "rgba(255,255,255,0.22)";
 
-  // Navbar bg change on scroll
+  // Smart navbar: always visible, hides on scroll-down, reappears on scroll-up
   useEffect(() => {
-    if (!navInnerRef.current) return;
+    const nav = navInnerRef.current;
+    if (!nav) return;
 
-    gsap.set(navInnerRef.current, {
-      backgroundColor: NORMAL_BG,
-      borderColor: NORMAL_BORDER,
-      willChange: "background-color, border-color, transform",
+    gsap.set(nav, {
+      backgroundColor: SCROLL_BG,
+      borderColor: SCROLL_BORDER,
+      y: 0,
+      opacity: 1,
+      willChange: "transform, opacity",
       force3D: true,
     });
 
-    const st = ScrollTrigger.create({
-      trigger: document.documentElement,
-      start: "top top-=1",
-      end: 999999,
-      onEnter: () => {
-        gsap.to(navInnerRef.current, {
-          backgroundColor: SCROLL_BG,
-          borderColor: SCROLL_BORDER,
-          duration: 0.18,
-          overwrite: "auto",
-        });
-      },
-      onLeaveBack: () => {
-        gsap.to(navInnerRef.current, {
-          backgroundColor: NORMAL_BG,
-          borderColor: NORMAL_BORDER,
-          duration: 0.18,
-          overwrite: "auto",
-        });
-      },
-    });
+    let lastY = window.scrollY;
+    let visible = true;
 
-    return () => st.kill();
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      const diff = currentY - lastY;
+
+      // Scrolling down and moved more than 8px — hide
+      if (diff > 8 && visible) {
+        visible = false;
+        gsap.to(nav, { y: -90, opacity: 0, duration: 0.28, ease: "power2.in", overwrite: "auto" });
+      }
+      // Scrolling up or at very top — show
+      else if ((diff < -4 || currentY < 60) && !visible) {
+        visible = true;
+        gsap.to(nav, { y: 0, opacity: 1, duration: 0.32, ease: "power2.out", overwrite: "auto" });
+      }
+
+      lastY = currentY;
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // close concern dropdown when clicking outside
+  // close category dropdown when clicking outside
   useEffect(() => {
     const onDown = (e) => {
-      if (!concernOpen) return;
-      const btn = concernBtnRef.current;
-      const menu = concernMenuRef.current;
+      if (!categoryOpen) return;
+      const btn = categoryBtnRef.current;
+      const menu = categoryMenuRef.current;
       if (!btn || !menu) return;
-
       if (!btn.contains(e.target) && !menu.contains(e.target)) {
-        setConcernOpen(false);
+        setCategoryOpen(false);
       }
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [concernOpen]);
+  }, [categoryOpen]);
 
   // close profile dropdown when clicking outside
   useEffect(() => {
@@ -126,26 +122,23 @@ const Navibar = () => {
 
   useEffect(() => {
     let cancelled = false;
-
-    concernsApi.getAll()
+    categoriesApi.getAll()
       .then((rows) => {
         if (cancelled) return;
-        setConcernItems(
+        setCategoryItems(
           (Array.isArray(rows) ? rows : [])
+            .filter((row) => row.isActive !== false)
             .map((row) => ({
-              concernID: Number(row.concernTypeId ?? row.ConcernTypeId ?? row.concernID ?? row.ConcernID ?? 0),
-              concernType: String(row.name ?? row.Name ?? row.concernType ?? row.ConcernType ?? "").trim(),
+              categoryId: Number(row.categoryId ?? row.CategoryId ?? 0),
+              name: String(row.name ?? row.Name ?? "").trim(),
             }))
-            .filter((row) => row.concernID > 0 && row.concernType)
+            .filter((row) => row.categoryId > 0 && row.name)
         );
       })
       .catch(() => {
-        if (!cancelled) setConcernItems([]);
+        if (!cancelled) setCategoryItems([]);
       });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   //  When mobile menu opens/closes, ensure desktop dropdown never renders behind it
@@ -158,21 +151,17 @@ const Navibar = () => {
     }
   }, [open]);
 
-  const goConcern = (id) => {
-    setConcernOpen(false);
+  const goCategory = (id) => {
+    setCategoryOpen(false);
     setOpen(false);
-    if (id === 1) {
-      navigate("/products");
-      return;
-    }
-    navigate(`/products?concernID=${encodeURIComponent(id)}`);
+    navigate(`/products?categoryId=${encodeURIComponent(id)}`);
   };
 
-  const concernLabel =
-    concernItems.find((c) => c.concernID === selectedConcernInt)?.concernType ||
-    "Concerns";
+  const categoryLabel =
+    categoryItems.find((c) => c.categoryId === selectedCategoryInt)?.name ||
+    "Categories";
 
-  const isConcernActive = Boolean(selectedConcernId);
+  const isCategoryActive = Boolean(selectedCategoryId);
 
   return (
     <div className="fixed top-0 left-0 w-full z-50">
@@ -187,7 +176,7 @@ const Navibar = () => {
             className="flex items-center"
             onClick={() => {
               setOpen(false);
-              setConcernOpen(false);
+              setCategoryOpen(false);
               setDesktopSearchOpen(false);
               setMobileSearchOpen(false);
             }}
@@ -208,44 +197,44 @@ const Navibar = () => {
               Shop Now
             </Link>
 
-            {/* Concerns dropdown */}
+            {/* Categories dropdown */}
             <div className="relative">
               <button
-                ref={concernBtnRef}
+                ref={categoryBtnRef}
                 type="button"
-                onClick={() => setConcernOpen((v) => !v)}
+                onClick={() => setCategoryOpen((v) => !v)}
                 className={[
                   "text-sm font-medium text-white hover:opacity-80",
                   "flex items-center gap-2",
-                  isConcernActive
+                  isCategoryActive
                     ? "px-3 py-1 rounded-full bg-white/15 border border-white/20"
                     : "",
                 ].join(" ")}
               >
-                {concernLabel}
+                {categoryLabel}
                 <span
                   className={[
                     "transition-transform duration-200",
-                    concernOpen ? "rotate-180" : "rotate-0",
+                    categoryOpen ? "rotate-180" : "rotate-0",
                   ].join(" ")}
                 >
                   ▾
                 </span>
               </button>
 
-              {concernOpen && (
+              {categoryOpen && (
                 <div
-                  ref={concernMenuRef}
+                  ref={categoryMenuRef}
                   className="absolute left-1/2 -translate-x-1/2 mt-3 w-64 rounded-2xl border border-white/20 bg-black/95 backdrop-blur-xl shadow-2xl overflow-hidden"
                 >
                   <div className="p-2">
-                    {concernItems.map((c) => {
-                      const active = c.concernID === selectedConcernInt;
+                    {categoryItems.map((c) => {
+                      const active = c.categoryId === selectedCategoryInt;
                       return (
                         <button
-                          key={c.concernID}
+                          key={c.categoryId}
                           type="button"
-                          onClick={() => goConcern(c.concernID)}
+                          onClick={() => goCategory(c.categoryId)}
                           className={[
                             "w-full text-left px-3 py-2 rounded-xl text-sm",
                             "transition",
@@ -254,7 +243,7 @@ const Navibar = () => {
                               : "text-white/90 hover:bg-white/10",
                           ].join(" ")}
                         >
-                          {c.concernType}
+                          {c.name}
                         </button>
                       );
                     })}
@@ -537,22 +526,20 @@ const Navibar = () => {
 
                   <details className="group rounded-2xl border border-white/15 bg-white/10 overflow-hidden">
                     <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between hover:bg-white/15 transition">
-                      <span className="text-sm font-semibold">Concerns</span>
-                      <span className="transition group-open:rotate-180">
-                        ▾
-                      </span>
+                      <span className="text-sm font-semibold">Categories</span>
+                      <span className="transition group-open:rotate-180">▾</span>
                     </summary>
 
                     <div className="px-3 pb-3 pt-2">
                       <div className="grid grid-cols-1 gap-2">
-                        {concernItems.map((c) => {
-                          const active = c.concernID === selectedConcernInt;
+                        {categoryItems.map((c) => {
+                          const active = c.categoryId === selectedCategoryInt;
                           return (
                             <button
-                              key={c.concernID}
+                              key={c.categoryId}
                               type="button"
                               onClick={() => {
-                                goConcern(c.concernID);
+                                goCategory(c.categoryId);
                                 setOpen(false);
                               }}
                               className={[
@@ -562,7 +549,7 @@ const Navibar = () => {
                                   : "bg-transparent text-white/90 border-white/10 hover:bg-white/10",
                               ].join(" ")}
                             >
-                              {c.concernType}
+                              {c.name}
                             </button>
                           );
                         })}

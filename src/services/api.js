@@ -1,7 +1,11 @@
 const BASE_URL = import.meta.env.DEV
   ? "http://localhost:5225"
   : "https://www.tenzyapitest.dotnetcloud.co.uk";
-const API_DEBUG = import.meta.env.DEV;
+
+
+// const BASE_URL = "https://www.apitenzyuk.dotnetcloud.co.uk";
+
+  const API_DEBUG = import.meta.env.DEV;
 
 function getToken() {
   return localStorage.getItem("authToken");
@@ -47,6 +51,13 @@ async function tryRefreshToken() {
 async function request(path, options = {}, _isRetry = false) {
   const method = options.method || "GET";
   const url = `${BASE_URL}${path}`;
+  const headers = {
+    ...authHeaders(),
+    ...(options.headers || {}),
+  };
+  if (options.body && !(options.body instanceof FormData)) {
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+  }
   let res;
   try {
     if (API_DEBUG) {
@@ -58,11 +69,7 @@ async function request(path, options = {}, _isRetry = false) {
     }
     res = await fetch(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders(),
-        ...(options.headers || {}),
-      },
+      headers,
     });
   } catch (err) {
     if (API_DEBUG) {
@@ -192,15 +199,76 @@ export const api = {
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+
+// Login uses a dedicated fetch so a 401 from the server (wrong password, locked
+// account, etc.) surfaces the backend's actual error message instead of the
+// generic "Session expired" that the shared request() helper throws.
+async function loginRequest(email, password) {
+  const url = `${BASE_URL}/api/userlogin/login`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new Error("Unable to reach the server. Please check your connection.");
+  }
+
+  const raw = await res.text().catch(() => "");
+  let data = null;
+  if (raw) {
+    try { data = JSON.parse(raw); } catch { /* not JSON */ }
+  }
+
+  // Treat HTTP error OR { result: false } as a failure — read the backend message.
+  if (!res.ok || (data && "result" in data && data.result === false)) {
+    const backendMsg =
+      data?.message      ?? data?.Message      ??
+      data?.error        ?? data?.Error        ??
+      data?.title        ?? data?.detail       ??
+      data?.response?.message                  ??
+      (raw && !raw.trim().startsWith("<") ? raw.trim() : "");
+
+    // Map common backend phrases to clear user-facing copy.
+    const msg = backendMsg || "";
+    const lower = msg.toLowerCase();
+    if (lower.includes("lock")) {
+      throw new Error(
+        "Your account has been temporarily locked due to too many failed login attempts. Please try again later or reset your password."
+      );
+    }
+    if (lower.includes("invalid") || lower.includes("incorrect") || lower.includes("wrong") || lower.includes("not match")) {
+      throw new Error("Incorrect email or password. Please try again.");
+    }
+    if (lower.includes("not found") || lower.includes("no user") || lower.includes("does not exist")) {
+      throw new Error("No account found with that email address.");
+    }
+    if (lower.includes("disabled") || lower.includes("deactivated") || lower.includes("inactive")) {
+      throw new Error("This account has been deactivated. Please contact support.");
+    }
+    if (msg) throw new Error(msg);
+
+    // Last-resort fallback based on HTTP status.
+    if (res.status === 401 || res.status === 400) {
+      throw new Error("Incorrect email or password. Please try again.");
+    }
+    throw new Error(`Sign in failed (${res.status}). Please try again.`);
+  }
+
+  if (data && "response" in data) return data.response;
+  return data;
+}
+
 export const authApi = {
-  login: (email, password) =>
-    api.post("/api/userlogin/login", { email, password }),
-  register: (email, password, displayName) =>
+  login: (email, password) => loginRequest(email, password),
+  register: (email, password, displayName, userRole = 2) =>
     api.post("/api/userlogin/register", {
       email,
       password,
       displayName,
-      userRole: 2,
+      userRole,
       status: 1,
     }),
   forgotPassword: (email) =>
@@ -213,10 +281,12 @@ export const authApi = {
 export const productsApi = {
   getAll: () => api.get("/api/products"),
   getAllAdmin: () => api.get("/api/products/admin"),
+  getDeleted: () => api.get("/api/products/deleted"),
   getById: (id) => api.get(`/api/products/${id}`),
   create: (body) => api.post("/api/products", body),
   update: (id, b) => api.post(`/api/products/${id}/update`, b),
   remove: (id) => api.post(`/api/products/${id}/delete`, {}),
+  restore: (id) => api.post(`/api/products/${id}/restore`, {}),
   getConcerns: (id) => api.get(`/api/products/${id}/concerns`),
   getPaymentOptions: (id) => api.get(`/api/products/${id}/payment-options`),
 };
@@ -304,6 +374,8 @@ export const supplyChainApi = {
     api.post(`/api/admin/supply-chain/arrivals/items/${itemId}/update`, body),
   approveDamagedItem: (itemId, body) =>
     api.post(`/api/admin/supply-chain/arrivals/items/${itemId}/approve-damaged`, body),
+  approveArrivalItems: (arrivalVerificationId, body = {}) =>
+    api.post(`/api/admin/supply-chain/arrivals/${arrivalVerificationId}/approve`, body),
 
   getEligiblePricing: () => api.get("/api/admin/supply-chain/pricing/eligible"),
   getPricing: () => api.get("/api/admin/supply-chain/pricing"),
@@ -316,6 +388,8 @@ export const supplyChainApi = {
     api.get(`/api/admin/supply-chain/reports/dispatch${toQuery(params)}`),
   getMonthlyDispatchSummary: (params = {}) =>
     api.get(`/api/admin/supply-chain/reports/monthly-dispatch-summary${toQuery(params)}`),
+  getPricingReport: () =>
+    api.get(`/api/admin/supply-chain/reports/pricing`),
 
   // Stock item delete / update
   deleteProcurementItem: (itemId, reason) =>
@@ -378,9 +452,28 @@ export const reportsApi = {
 export const customersApi = {
   getAll: (page = 1, search = "") =>
     api.get(
-      `/api/admin/customers?page=${page}${search ? `&search=${search}` : ""}`,
+      `/api/admin/customers?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ""}`,
     ),
   getById: (id) => api.get(`/api/admin/customers/${id}`),
+  updateRole: (id, roleId) => api.post(`/api/admin/customers/${id}/role`, { roleId }),
+  deactivate: (id) => api.post(`/api/admin/customers/${id}/deactivate`, {}),
+  activate: (id) => api.post(`/api/admin/customers/${id}/activate`, {}),
+  unlock: (id) => api.post(`/api/admin/customers/${id}/unlock`, {}),
+  resetPassword: (id, newPassword) => api.post(`/api/admin/customers/${id}/reset-password`, { newPassword }),
+};
+
+// ── Categories ────────────────────────────────────────────────────────────────
+export const categoriesApi = {
+  getAll: () => api.get("/api/categories"),
+  getById: (id) => api.get(`/api/categories/${id}`),
+  create: (name) => api.post("/api/categories", { name }),
+  update: (id, name) => api.post(`/api/categories/${id}/update`, { categoryId: id, name }),
+  activate: (id) => api.post(`/api/categories/${id}/activate`, {}),
+  deactivate: (id) => api.post(`/api/categories/${id}/deactivate`, {}),
+  createSubCategory: (categoryId, name) => api.post("/api/categories/subcategories", { categoryId, name }),
+  updateSubCategory: (id, name) => api.post(`/api/categories/subcategories/${id}/update`, { subCategoryId: id, name }),
+  activateSubCategory: (id) => api.post(`/api/categories/subcategories/${id}/activate`, {}),
+  deactivateSubCategory: (id) => api.post(`/api/categories/subcategories/${id}/deactivate`, {}),
 };
 
 // ── Concerns ──────────────────────────────────────────────────────────────────
@@ -409,6 +502,15 @@ export const productImageApi = {
   create: (body) => api.post("/api/productimage", body),
   update: (body) => api.post("/api/productimage/update", body),
   deactivate: (id) => api.post(`/api/productimage/deactive/${id}`, {}),
+  getByVariant: async (productId, variantId) => {
+    const all = await productImageApi.getAll();
+    return all.filter(
+      (img) =>
+        (img.productId ?? img.ProductId) === productId &&
+        (img.variantId ?? img.VariantId) === variantId &&
+        (img.isActive ?? img.IsActive) !== false
+    );
+  },
 };
 
 // ── Product FAQ ───────────────────────────────────────────────────────────────
@@ -467,6 +569,72 @@ export const uploadApi = {
 
     return data.data.url; // e.g. "https://i.ibb.co/xxx/image.jpg"
   },
+
+  // Delete an image from ImgBB using its hosted URL.
+  // The image ID is embedded in the path: https://i.ibb.co/{id}/filename.jpg
+  // Deletion is best-effort — failures are silently swallowed so they never
+  // block the primary operation (brand delete, image replace, etc.).
+  deleteImage: async (imageUrl) => {
+    if (!imageUrl || !imageUrl.includes("i.ibb.co")) return;
+    const apiKey = import.meta.env.VITE_IMGBB_API_KEY;
+    if (!apiKey || apiKey === "your_imgbb_api_key_here") return;
+    try {
+      const id = new URL(imageUrl).pathname.split("/").filter(Boolean)[0];
+      if (!id) return;
+      await fetch(`https://api.imgbb.com/1/image/${id}?key=${apiKey}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // best-effort only — do not surface imgbb deletion failures to the user
+    }
+  },
+};
+
+// ── Payment Status Types (Reference Data) ─────────────────────────────────────
+export const paymentStatusApi = {
+  getAll:         () => api.get("/api/admin/payment-status"),
+  getAllIncluding: () => api.get("/api/admin/payment-status/all"),
+  create:         (body) => api.post("/api/admin/payment-status", body),
+  update:         (id, body) => api.post(`/api/admin/payment-status/${id}/update`, body),
+  deactivate:     (id) => api.post(`/api/admin/payment-status/${id}/deactivate`, {}),
+};
+
+// ── Order Payments ─────────────────────────────────────────────────────────────
+export const orderPaymentsApi = {
+  getByOrder: (orderId) => api.get(`/api/admin/orders/manual/${orderId}/payments`),
+  create:     (orderId, body) => api.post(`/api/admin/orders/manual/${orderId}/payments`, body),
+};
+
+// ── Product Variants ───────────────────────────────────────────────────────────
+export const productVariantsApi = {
+  getAllItems:      () => api.get("/api/products/variants/all"),
+  getVisible:      (productId) => api.get(`/api/products/${productId}/variants`),
+  getAll:          (productId) => api.get(`/api/products/${productId}/variants/admin`),
+  create:          (productId, body) => api.post(`/api/products/${productId}/variants`, body),
+  update:          (variantId, body) => api.post(`/api/products/variants/${variantId}/update`, body),
+  remove:          (variantId) => api.post(`/api/products/variants/${variantId}/delete`, {}),
+  setShowVolume:   (productId, show) => api.post(`/api/products/${productId}/show-volume`, { showVolume: show }),
+  getPriceHistory: (variantId) => api.get(`/api/products/variants/${variantId}/price-history`),
+  getAllPriceHistory: () => api.get("/api/products/variants/price-history"),
+  logPriceChange:  (variantId, body) => api.post(`/api/products/variants/${variantId}/price-history`, body),
+};
+
+// ── Order Status Types (Reference Data) ───────────────────────────────────────
+export const orderStatusApi = {
+  getAll:       () => api.get("/api/admin/order-status"),
+  getAllIncluding: () => api.get("/api/admin/order-status/all"),
+  create:       (body) => api.post("/api/admin/order-status", body),
+  update:       (id, body) => api.post(`/api/admin/order-status/${id}/update`, body),
+  deactivate:   (id) => api.post(`/api/admin/order-status/${id}/deactivate`, {}),
+};
+
+// ── Admin Orders (manually created orders with invoice PDF) ───────────────────
+export const invoicesApi = {
+  getNextNumber: () => api.get("/api/admin/orders/manual/next-number"),
+  create: (body) => api.post("/api/admin/orders/manual", body),
+  getAll: () => api.get("/api/admin/orders/manual"),
+  getById: (id) => api.get(`/api/admin/orders/manual/${id}`),
+  updateStatus: (id, statusId) => api.post(`/api/admin/orders/manual/${id}/status`, { statusId }),
 };
 
 // ── Admin / Audit ─────────────────────────────────────────────────────────────

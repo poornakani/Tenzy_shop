@@ -255,10 +255,6 @@ export default function PageTransition({ children }) {
               height:       s.r * 2,
               borderRadius: "50%",
               background:   s.color,
-              /*
-                Offset from screen centre by s.x / s.y,
-                then pull back by half the dot's own size.
-              */
               transform: `translate(calc(${s.x}px - 50%), calc(${s.y}px - 50%))`,
               opacity: 0.9,
               boxShadow: `0 0 ${s.r * 3}px ${s.color}`,

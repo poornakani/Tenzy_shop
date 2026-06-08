@@ -8,6 +8,12 @@ import React, {
 import gsap from "gsap";
 import { useNavigate } from "react-router-dom";
 
+/* ── Variant helpers ───────────────────────────────────────────── */
+function vId(v)    { return v?.VariantId    ?? v?.variantId    ?? v?.id    ?? v?.Id;    }
+function vName(v)  { return v?.VariantName  ?? v?.variantName  ?? v?.name  ?? v?.Name  ?? ""; }
+function vPrice(v) { return Number(v?.SellingPrice ?? v?.sellingPrice ?? v?.FinalSellingPrice ?? v?.finalSellingPrice ?? v?.Price ?? v?.price ?? 0); }
+function vStock(v) { return Number(v?.Stock ?? v?.stock ?? v?.StockQuantity ?? v?.stockQuantity ?? v?.AvailableStock ?? v?.availableStock ?? 0); }
+
 const QuickViewModal = ({
   open,
   product,
@@ -23,18 +29,42 @@ const QuickViewModal = ({
   const panelRef = useRef(null);
 
   const [qty, setQty] = useState(1);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
-  const stock = product?.stockCount ?? 0;
-  const outOfStock = !!product?.outOfStock || stock === 0;
+  const variants = useMemo(() => product?.variants ?? [], [product]);
+
+  // Auto-select first in-stock variant when modal opens or product changes
+  useEffect(() => {
+    if (!open) return;
+    const first = variants.find(v => vStock(v) > 0) ?? variants[0] ?? null;
+    setSelectedVariant(first);
+    setQty(1);
+  }, [open, product?.id, variants]);
+
+  const variantPrice  = selectedVariant ? vPrice(selectedVariant) : 0;
+  const displayPrice  = selectedVariant
+    ? Math.round(variantPrice > 0 ? variantPrice : (product?.discountedPrice ?? 0))
+    : (product?.discountedPrice ?? 0);
+  const displayStock  = selectedVariant
+    ? vStock(selectedVariant)
+    : (product?.stockCount ?? 0);
+  const outOfStock    = selectedVariant ? displayStock === 0 : (!!product?.outOfStock || displayStock === 0);
 
   const maxQty = useMemo(() => {
     if (outOfStock) return 1;
-    return Math.max(1, stock);
-  }, [outOfStock, stock]);
+    return Math.max(1, displayStock);
+  }, [outOfStock, displayStock]);
+
 
   useEffect(() => {
-    if (open) setQty(1);
-  }, [open, product?.id]);
+    if (!open) return;
+
+    const onEsc = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [open, onClose]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -44,7 +74,6 @@ const QuickViewModal = ({
 
       const isMobile = window.matchMedia("(max-width: 767px)").matches;
 
-      // keep same motion behavior; only sizing is changed via classes
       gsap.set(panelRef.current, { autoAlpha: 0, y: 18, scale: 0.985 });
 
       gsap
@@ -64,16 +93,6 @@ const QuickViewModal = ({
 
     return () => ctx.revert();
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onEsc = (e) => {
-      if (e.key === "Escape") onClose?.();
-    };
-    document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
-  }, [open, onClose]);
 
   const decQty = () => setQty((v) => Math.max(1, v - 1));
   const incQty = () => setQty((v) => Math.min(maxQty, v + 1));
@@ -139,7 +158,7 @@ const QuickViewModal = ({
         <div className="max-h-[75vh] overflow-y-auto md:max-h-none md:overflow-visible">
           <div className="grid gap-4 p-4 md:gap-5 md:p-5 md:grid-cols-2">
             {/* Image */}
-            <div className="rounded-2xl md:rounded-3xl overflow-hidden border border-slate-200 bg-slate-50">
+            <div className="self-start rounded-2xl md:rounded-3xl overflow-hidden border border-slate-200 bg-slate-50">
               <div className="relative aspect-4/3 md:aspect-4/5">
                 <img
                   src={product.image}
@@ -161,7 +180,7 @@ const QuickViewModal = ({
                         : "bg-linear-to-r from-teal-500 to-teal-600 shadow-teal-500/20"
                     }`}
                 >
-                  {outOfStock ? "Out of stock" : `Stock: ${stock}`}
+                  {outOfStock ? "Out of stock" : `Stock: ${displayStock}`}
                 </div>
 
                 <div className="absolute inset-x-0 bottom-0 h-16 md:h-24 bg-linear-to-t from-black/30 to-transparent" />
@@ -170,24 +189,115 @@ const QuickViewModal = ({
 
             {/* Details */}
             <div className="flex flex-col">
+
+              {/* Variant selector */}
+              {variants.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2.5 px-0.5"
+                    style={{ color: "#2BB9B4" }}>
+                    {product.showTabletCount ? "Select count" : product.showWeight ? "Select weight" : "Select size"}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {variants.map(v => {
+                      const vid      = vId(v);
+                      const name     = vName(v);
+                      const price    = vPrice(v);
+                      const stk      = vStock(v);
+                      const soldOut  = stk === 0;
+                      const lowStock = !soldOut && stk < 10;
+                      const isActive = selectedVariant && String(vId(selectedVariant)) === String(vid);
+                      const vol  = v.Volume  ?? v.volume;
+                      const wt   = v.Weight  ?? v.weight;
+                      const tabs = Number(v.TabsCount ?? v.tabsCount ?? 0);
+                      const specLines = [
+                        product.showWeight      && wt  && Number(wt) > 0 ? `Weight: ${wt}g`    : null,
+                        product.showVolume      && vol                    ? `Volume: ${vol}ml`  : null,
+                        product.showTabletCount && tabs > 0               ? `Tablets: ${tabs}`  : null,
+                      ].filter(Boolean);
+                      const fallbackSpec = specLines.join(" · ");
+
+                      return (
+                        <button key={vid} type="button" disabled={soldOut}
+                          onClick={() => { setSelectedVariant(v); setQty(1); }}
+                          className="relative flex flex-col gap-1 rounded-2xl border-2 p-3 text-left transition-all duration-200"
+                          style={{
+                            borderColor: isActive ? "#2BB9B4" : soldOut ? "#f1f5f9" : "#e2e8f0",
+                            background:  isActive
+                              ? "linear-gradient(135deg,rgba(43,185,180,0.09),rgba(43,185,180,0.03))"
+                              : soldOut ? "#fafafa" : "white",
+                            opacity:   soldOut ? 0.5 : 1,
+                            cursor:    soldOut ? "not-allowed" : "pointer",
+                            boxShadow: isActive
+                              ? "0 0 0 3px rgba(43,185,180,0.15),0 4px 14px rgba(43,185,180,0.12)"
+                              : "0 1px 3px rgba(0,0,0,0.05)",
+                          }}>
+
+                          {/* Sold-out stripe overlay */}
+                          {soldOut && (
+                            <span className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden">
+                              <span className="absolute inset-0" style={{ background: "repeating-linear-gradient(-45deg,transparent,transparent 7px,rgba(148,163,184,0.12) 7px,rgba(148,163,184,0.12) 8px)" }} />
+                            </span>
+                          )}
+
+                          {/* Active dot */}
+                          {isActive && (
+                            <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full"
+                              style={{ background: "#2BB9B4" }} />
+                          )}
+
+                          {/* Name */}
+                          <span className={`text-sm font-bold leading-tight pr-4 ${isActive ? "text-tenzy-teal" : soldOut ? "text-slate-400" : "text-slate-800"}`}>
+                            {name || fallbackSpec || "Option"}
+                          </span>
+
+                          {/* Labeled spec lines */}
+                          {name && specLines.map((line, i) => (
+                            <span key={i} className="text-[10px] font-medium text-slate-400 leading-snug">{line}</span>
+                          ))}
+
+                          {/* Price */}
+                          {price > 0 && (
+                            <span className={`text-xs font-bold mt-1 ${isActive ? "text-tenzy-teal" : "text-slate-600"}`}>
+                              LKR {formatLKR(price)}
+                            </span>
+                          )}
+
+                          {/* Stock pill */}
+                          <span className={`self-start mt-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                            soldOut  ? "bg-red-50 text-red-400"
+                            : lowStock ? "bg-amber-50 text-amber-500"
+                            : isActive ? "bg-teal-50 text-teal-600"
+                            : "bg-emerald-50 text-emerald-600"
+                          }`}>
+                            {soldOut ? "Sold out" : lowStock ? `Only ${stk} left` : "In stock"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Price */}
               <div className="rounded-2xl md:rounded-3xl border border-slate-200 bg-linear-to-br from-teal-50 via-white to-orange-50 p-3 md:p-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
                     <p className="text-xs md:text-sm text-slate-600">Price</p>
                     <p className="text-lg md:text-xl font-semibold text-slate-900">
-                      LKR {formatLKR(product.discountedPrice)}
+                      LKR {formatLKR(displayPrice)}
                     </p>
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-xs md:text-sm text-slate-500 line-through">
-                      LKR {formatLKR(product.price)}
-                    </p>
-                    <p className="text-xs md:text-sm font-semibold text-tenzy-orange">
-                      -{product.discountPercent}%
-                    </p>
-                  </div>
+                  {!selectedVariant && product.discountPercent > 0 && (
+                    <div className="text-right">
+                      <p className="text-xs md:text-sm text-slate-500 line-through">
+                        LKR {formatLKR(product.price)}
+                      </p>
+                      <p className="text-xs md:text-sm font-semibold text-tenzy-orange">
+                        -{product.discountPercent}%
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -262,7 +372,19 @@ const QuickViewModal = ({
                     <button
                       type="button"
                       disabled={outOfStock}
-                      onClick={() => onAddToCart?.(product, qty)}
+                      onClick={() => {
+                        const vid = selectedVariant ? vId(selectedVariant) : null;
+                        const cartItem = selectedVariant ? {
+                          ...product,
+                          id: `${product.id}-v${vid}`,
+                          discountedPrice: displayPrice,
+                          price: displayPrice,
+                          stockCount: displayStock,
+                          variantId: vid,
+                          variantName: vName(selectedVariant),
+                        } : product;
+                        onAddToCart?.(cartItem, qty);
+                      }}
                       className={`w-full rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-sm font-semibold transition active:scale-95
                         ${
                           outOfStock
@@ -278,7 +400,7 @@ const QuickViewModal = ({
                     <p className="mt-2 text-[11px] text-slate-600">
                       Total:{" "}
                       <span className="font-semibold text-slate-900">
-                        LKR {formatLKR(product.discountedPrice * qty)}
+                        LKR {formatLKR(displayPrice * qty)}
                       </span>
                     </p>
                   )}
@@ -295,79 +417,6 @@ const QuickViewModal = ({
                 </div>
               </div>
 
-              {/* md+ only (unchanged extra details) */}
-              <div className="hidden md:block">
-                <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs text-slate-700">
-                    Pay from{" "}
-                    <span className="font-semibold">
-                      {product.minInstallments}+
-                    </span>{" "}
-                    instalments with{" "}
-                    <span className="font-semibold">
-                      {product.paymentProvider}
-                    </span>
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Example: LKR {formatLKR(product.price)} /{" "}
-                    {product.minInstallments} = LKR{" "}
-                    {formatLKR(
-                      Math.round(product.price / product.minInstallments)
-                    )}
-                  </p>
-                </div>
-
-                {(product.brand ||
-                  product.sku ||
-                  product.description) && (
-                  <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold text-slate-600 mb-3">
-                      Details
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-
-                      {product.brand && (
-                        <div>
-                          <p className="text-xs text-slate-500">Brand</p>
-                          <p className="font-semibold text-slate-900">
-                            {product.brand}
-                          </p>
-                        </div>
-                      )}
-
-                      {product.sku && (
-                        <div>
-                          <p className="text-xs text-slate-500">SKU</p>
-                          <p className="font-semibold text-slate-900">
-                            {product.sku}
-                          </p>
-                        </div>
-                      )}
-
-                      {typeof product.weight !== "undefined" && (
-                        <div>
-                          <p className="text-xs text-slate-500">Weight</p>
-                          <p className="font-semibold text-slate-900">
-                            {product.weight}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {product.description && (
-                      <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-                        {product.description}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <p className="mt-3 text-[11px] text-slate-500">
-                  Press <span className="font-semibold">Esc</span> or click
-                  outside to close.
-                </p>
-              </div>
             </div>
           </div>
         </div>
