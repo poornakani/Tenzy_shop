@@ -181,12 +181,12 @@ function DescriptionTab({ description }) {
   return (
     <div>
       {prose && (
-        <div className="max-w-2xl">
+        <div>
           <ProductDescriptionContent value={prose} />
         </div>
       )}
       {stats.length > 0 && (
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-5 max-w-2xl">
+        <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-5">
           {stats.map((s, i) => (
             <div key={i} className="border-t-2 border-slate-200 pt-4">
               <p className="font-modern-negra text-4xl sm:text-5xl text-slate-900 leading-none">{s.stat}</p>

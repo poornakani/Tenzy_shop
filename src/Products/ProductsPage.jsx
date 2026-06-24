@@ -787,15 +787,36 @@ const ProductsPage = () => {
   );
 
   return (
-    <div ref={wrapRef} className="w-full overflow-hidden bg-zinc-50 min-h-screen">
+    <div ref={wrapRef} className="w-full overflow-hidden min-h-screen">
       <Navibar />
 
-      {/* Nav spacer */}
-      <div className="h-24 bg-linear-to-b from-slate-950/90 via-slate-900/60 to-transparent" />
+      {/* Beautiful Hero Section */}
+      <div className="relative overflow-hidden pt-24 sm:pt-28 md:pt-36 pb-12 sm:pb-16 md:pb-20">
+        {/* Decorative Background */}
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-orange-100/40 to-transparent rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-gradient-to-tr from-teal-100/30 to-transparent rounded-full blur-3xl" />
+        </div>
 
-      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 pb-16">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8 sm:mb-12">
+            <span className="inline-flex items-center gap-2 mb-3 text-xs font-bold tracking-[0.2em] uppercase">
+              <span className="w-2 h-2 rounded-full" style={{ background: "#E8522A" }} />
+              Explore Our Collection
+            </span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4">
+              Find Your <span className="text-transparent bg-clip-text" style={{ backgroundImage: "linear-gradient(135deg, #E8522A 0%, #2BB9B4 100%)" }}>Perfect</span> Beauty Match
+            </h1>
+            <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+              Discover 500+ premium beauty products from 50+ trusted global brands. Easy navigation, expert curation, and authentic quality.
+            </p>
+          </div>
+        </div>
+      </div>
 
-        {/* ── HERO / SEARCH ───────────────────────────────────────── */}
+      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pb-16">
+
+        {/* ── SEARCH & FILTERS ───────────────────────────────────────── */}
         <section className="pp-hero">
           <div className="rounded-3xl bg-white border border-zinc-100 shadow-sm overflow-hidden">
 
@@ -1057,17 +1078,24 @@ const ProductsPage = () => {
 
           {/* ── Desktop Filters Sidebar ─────────────────────────── */}
           <aside className="hidden lg:block lg:col-span-3">
-            <div className="sticky top-[158px] rounded-3xl border border-zinc-100 bg-white shadow-sm overflow-hidden">
+            <div className="sticky top-[158px] rounded-2xl overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)",
+                border: "1px solid rgba(232,82,42,0.12)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.08)"
+              }}>
 
               {/* Sidebar header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-50">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal size={14} style={{ color: "#2BB9B4" }} />
-                  <h2 className="text-sm font-bold text-zinc-900">Filters</h2>
+              <div className="px-6 py-5 border-b" style={{ borderColor: "rgba(232,82,42,0.15)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg" style={{ background: "rgba(232,82,42,0.12)" }}>
+                    <SlidersHorizontal size={14} style={{ color: "#E8522A" }} />
+                  </div>
+                  <h2 className="text-base font-bold text-gray-900">Filters</h2>
                   {hasActiveFilters && (
                     <span
-                      className="h-4 w-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
-                      style={{ background: "#E8522A" }}
+                      className="ml-auto h-5 w-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+                      style={{ background: "linear-gradient(135deg, #E8522A 0%, #2BB9B4 100%)" }}
                     >
                       {activeFilterCount}
                     </span>
@@ -1080,7 +1108,7 @@ const ProductsPage = () => {
                     className="text-[11px] font-semibold hover:opacity-70 transition"
                     style={{ color: "#E8522A" }}
                   >
-                    Clear all
+                    ✕ Clear all filters
                   </button>
                 )}
               </div>
@@ -1240,29 +1268,32 @@ const ProductsPage = () => {
           {/* ── Product Grid ─────────────────────────────────────── */}
           <section className="pp-grid lg:col-span-9">
             {filtered.length === 0 ? (
-              <div className="rounded-3xl border border-zinc-100 bg-white shadow-sm p-10 text-center">
+              <div className="rounded-2xl p-12 sm:p-16 text-center" style={{
+                background: "linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)",
+                border: "1px solid rgba(232,82,42,0.12)",
+              }}>
                 <div
-                  className="mx-auto h-14 w-14 rounded-2xl flex items-center justify-center text-2xl mb-4"
-                  style={{ background: "rgba(43,185,180,0.07)" }}
+                  className="mx-auto h-16 w-16 rounded-2xl flex items-center justify-center text-4xl mb-6 inline-block"
+                  style={{ background: "linear-gradient(135deg, rgba(232,82,42,0.10) 0%, rgba(43,185,180,0.10) 100%)" }}
                 >
                   🔍
                 </div>
-                <h3 className="text-lg font-bold text-zinc-900">No results found</h3>
-                <p className="mt-2 text-sm text-zinc-500">
-                  Try adjusting your filters or search term.
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">No products found</h3>
+                <p className="text-gray-600 max-w-sm mx-auto mb-6">
+                  Try adjusting your filters, search term, or price range to find what you're looking for.
                 </p>
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="mt-5 rounded-2xl px-6 py-3 text-sm font-bold text-white hover:opacity-90 transition active:scale-95"
-                  style={{ background: "#2BB9B4" }}
+                  className="px-8 py-3 rounded-full text-sm font-bold text-white hover:shadow-lg transition active:scale-95 inline-block"
+                  style={{ background: "linear-gradient(135deg, #E8522A 0%, #2BB9B4 100%)" }}
                 >
-                  Reset filters
+                  Reset all filters
                 </button>
               </div>
             ) : (
               <>
-                <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid gap-5 sm:gap-6 grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {pagedProducts.map((p) => (
                     <ProductCard
                       key={p.id}

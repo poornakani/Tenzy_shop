@@ -8,6 +8,7 @@ import header2 from "../public/images/header2.jpg";
 import header3 from "../public/images/header3.jpg";
 import header4 from "../public/images/header4.jpg";
 import banner01 from "../public/images/header4.jpg";
+import backgroundTexture from "../public/images/backgroundTexture.jpg";
 
 import placeholder from "../public/images/sellingProd/placeholder.svg";
 import check from "../public/images/check.png";
@@ -24,6 +25,7 @@ export const assets = {
   header4,
   banner01,
   check,
+  backgroundTexture,
 };
 
 export const sellingpro = {

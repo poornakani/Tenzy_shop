@@ -637,6 +637,29 @@ export const invoicesApi = {
   updateStatus: (id, statusId) => api.post(`/api/admin/orders/manual/${id}/status`, { statusId }),
 };
 
+// ── Blogs ─────────────────────────────────────────────────────────────────────
+export const blogsApi = {
+  getAll: (page = 1, pageSize = 20) => {
+    const q = toQuery({ page, pageSize });
+    return api.get(`/api/blogs${q}`);
+  },
+  getById: (id) => api.get(`/api/blogs/${id}`),
+  getBySlug: (slug) => api.get(`/api/blogs/slug/${slug}`),
+  getPublished: (page = 1, pageSize = 20) => {
+    const q = toQuery({ page, pageSize });
+    return api.get(`/api/blogs/published${q}`);
+  },
+  create: (body) => api.post("/api/blogs", body),
+  update: (id, body) => api.post(`/api/blogs/${id}`, body),
+  delete: (id) => api.post(`/api/blogs/${id}/delete`, {}),
+  publish: (id) => api.post(`/api/blogs/${id}/publish`, {}),
+  unpublish: (id) => api.post(`/api/blogs/${id}/unpublish`, {}),
+  search: (query, page = 1, pageSize = 20) => {
+    const q = toQuery({ query, page, pageSize });
+    return api.get(`/api/blogs/search${q}`);
+  },
+};
+
 // ── Admin / Audit ─────────────────────────────────────────────────────────────
 export const adminApi = {
   getAuditLogs: (page = 1, pageSize = 50, adminUserId = null) => {

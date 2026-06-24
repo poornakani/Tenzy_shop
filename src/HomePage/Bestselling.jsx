@@ -1,6 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 import QuickViewModal from "@/Widgets/QuickViewModal";
 import { useWishlist } from "@/Context/WishlistContext";
 import { Heart, Eye, ShoppingBag, ChevronRight } from "lucide-react";
@@ -13,8 +11,6 @@ import {
   productImageApi,
   productVariantsApi,
 } from "@/services/api";
-
-gsap.registerPlugin(ScrollTrigger);
 
 const TEAL   = "#2BB9B4";
 const ORANGE = "#E8522A";
@@ -145,10 +141,12 @@ function dedupeProducts(products) {
   return [...byId.values()];
 }
 
-/* ── Per-card component (needs own state for carousel + selector) ── */
+/* ── Modern Product Card Component ────────────────────────────────── */
 function BestSellingCard({ p, addToCart, showToast, toggleWishlist, isWishlisted, openQuickView, navigate }) {
   const [activeImg,       setActiveImg]       = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [isHovering,      setIsHovering]      = useState(false);
+  const cardRef                              = useRef(null);
 
   // Split product-level vs variant-level images; build variant → url[] map
   const { productImages, variantImagesMap } = useMemo(() => {
@@ -169,19 +167,16 @@ function BestSellingCard({ p, addToCart, showToast, toggleWishlist, isWishlisted
       .filter(Boolean);
     const vMap = new Map();
     vBuckets.forEach((imgs, vid) => vMap.set(vid, toUrls(imgs)));
-    // Fall back to all images if no product-level ones exist
     const base = productLvl.length ? productLvl : (p.images ?? []);
     return { productImages: toUrls(base), variantImagesMap: vMap };
   }, [p.images]);
 
-  // Pre-select first in-stock variant when variants arrive
   useEffect(() => {
     const vs = p.variants ?? [];
     const first = vs.find(v => getVariantStock(v) > 0) ?? vs[0] ?? null;
     setSelectedVariant(first);
   }, [p.variants]);
 
-  // Switch to variant images when a variant is selected; fallback to product images
   const displayImages = useMemo(() => {
     if (!selectedVariant) return productImages;
     const vid     = selectedVariant.VariantId ?? selectedVariant.variantId;
@@ -189,7 +184,6 @@ function BestSellingCard({ p, addToCart, showToast, toggleWishlist, isWishlisted
     return vImgs?.length ? vImgs : productImages;
   }, [selectedVariant, productImages, variantImagesMap]);
 
-  // Reset carousel on image set change
   useEffect(() => { setActiveImg(0); }, [displayImages]);
 
   const variants      = p.variants ?? [];
@@ -213,159 +207,158 @@ function BestSellingCard({ p, addToCart, showToast, toggleWishlist, isWishlisted
 
   return (
     <article
-      className="bs-card group relative bg-white rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1"
-      style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.07)", border: "1px solid rgba(0,0,0,0.07)" }}
+      ref={cardRef}
+      className="bs-card group relative bg-white rounded-xl overflow-hidden flex flex-col cursor-pointer transition-all duration-500"
+      style={{
+        boxShadow: isHovering
+          ? "0 20px 50px rgba(232,82,42,0.15), 0 0 40px rgba(43,185,180,0.08)"
+          : "0 4px 16px rgba(0,0,0,0.08)",
+        border: "1px solid rgba(232,82,42,0.10)",
+        transform: isHovering ? "translateY(-8px)" : "translateY(0)",
+      }}
       onClick={() => navigate(`/product/${p.id}`)}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
     >
-      {/* ── Image carousel ───────────────────────────────────────── */}
-      <div className="relative aspect-4/5 overflow-hidden bg-zinc-50 shrink-0">
+      {/* Image Container */}
+      <div className="relative aspect-4/5 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 shrink-0">
         {displayImages.length > 0 ? (
           <img
             src={displayImages[activeImg]}
             alt={p.name}
             onError={e => { e.currentTarget.style.display = "none"; }}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+            className="h-full w-full object-cover transition-transform duration-700"
+            style={{ transform: isHovering ? "scale(1.08)" : "scale(1)" }}
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center bg-zinc-100">
-            <ShoppingBag size={40} className="text-zinc-300" />
+          <div className="h-full w-full flex items-center justify-center bg-gray-100">
+            <ShoppingBag size={40} className="text-gray-300" />
           </div>
         )}
 
-        {/* Arrow buttons — visible on hover */}
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+        {/* Badge Container */}
+        <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
+          {p.inSale && !outOfStock && (
+            <span className="rounded-lg px-3 py-1 text-[10px] font-bold uppercase text-white tracking-wider backdrop-blur-sm" style={{ background: `${ORANGE}ee` }}>
+              {p.discountPercent > 0 ? `${p.discountPercent}% OFF` : "SALE"}
+            </span>
+          )}
+          {isLow && (
+            <span className="rounded-lg px-3 py-1 text-[10px] font-bold uppercase text-white tracking-wider backdrop-blur-sm" style={{ background: "#f59e0bee" }}>
+              Low Stock
+            </span>
+          )}
+          {p.id % 4 === 0 && !outOfStock && (
+            <span className="rounded-lg px-3 py-1 text-[10px] font-bold uppercase text-white tracking-wider backdrop-blur-sm" style={{ background: `${TEAL}ee` }}>
+              New
+            </span>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="absolute top-3 right-3 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); toggleWishlist(p); }}
+            aria-label="Wishlist"
+            className="flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 backdrop-blur-md hover:scale-110"
+            style={{ background: wishlisted ? "rgba(239,68,68,0.95)" : "rgba(255,255,255,0.95)" }}
+          >
+            <Heart size={16} className={wishlisted ? "fill-red-500 text-red-500" : "text-gray-700"} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); openQuickView(p); }}
+            className="flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 hover:scale-110"
+            style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
+          >
+            <Eye size={16} className="text-white" strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Arrow buttons */}
         {displayImages.length > 1 && (
           <>
             <button type="button" onClick={prev}
-              className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/85 backdrop-blur-sm flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity active:scale-90">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white active:scale-90">
+              <ChevronRight size={16} color={ORANGE} style={{ transform: "rotate(180deg)" }} strokeWidth={2.5} />
             </button>
             <button type="button" onClick={next}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/85 backdrop-blur-sm flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity active:scale-90">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white active:scale-90">
+              <ChevronRight size={16} color={ORANGE} strokeWidth={2.5} />
             </button>
           </>
         )}
 
         {/* Dot indicators */}
         {displayImages.length > 1 && (
-          <div className="absolute bottom-9 inset-x-0 z-10 flex items-center justify-center gap-1 pointer-events-none">
+          <div className="absolute bottom-3 inset-x-0 z-10 flex items-center justify-center gap-1.5 pointer-events-none">
             {displayImages.map((_, i) => (
               <button key={i} type="button"
                 onClick={e => { e.stopPropagation(); setActiveImg(i); }}
-                className={`pointer-events-auto rounded-full transition-all duration-200 ${i === activeImg ? "w-3 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/55 hover:bg-white/80"}`}
+                className="pointer-events-auto rounded-full transition-all duration-300"
+                style={{
+                  width: i === activeImg ? "20px" : "6px",
+                  height: "6px",
+                  background: i === activeImg ? "white" : "rgba(255,255,255,0.5)",
+                }}
               />
             ))}
           </div>
         )}
 
-        {/* Badges */}
-        <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5">
-          {p.inSale && !outOfStock && (
-            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: ORANGE }}>
-              {p.discountPercent > 0 ? `${p.discountPercent}% OFF` : "SALE"}
-            </span>
-          )}
-          {isLow && (
-            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: "#f59e0b" }}>
-              Low Stock
-            </span>
-          )}
-          {p.id % 4 === 0 && !outOfStock && (
-            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase text-white tracking-wider" style={{ background: TEAL }}>
-              New
-            </span>
-          )}
-        </div>
-
-        {/* Wishlist */}
-        <button type="button" onClick={e => { e.stopPropagation(); toggleWishlist(p); }}
-          aria-label="Wishlist"
-          className="absolute top-2.5 right-2.5 z-10 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 active:scale-90"
-          style={{ background: wishlisted ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)" }}>
-          <Heart size={15} className={wishlisted ? "fill-red-500 text-red-500" : "text-zinc-600"} strokeWidth={2} />
-        </button>
-
-        {/* Quick view */}
-        <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-          <button type="button"
-            onClick={e => { e.stopPropagation(); openQuickView(p); }}
-            className="pointer-events-auto flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white transition-all duration-200 active:scale-95"
-            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}>
-            <Eye size={13} /> Quick View
-          </button>
-        </div>
-
-        {/* Out of stock */}
+        {/* Out of stock overlay */}
         {outOfStock && (
-          <div className="absolute bottom-0 inset-x-0 z-10 py-2.5 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <span className="text-xs font-bold tracking-widest uppercase text-white">Out of Stock</span>
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <span className="text-sm font-bold tracking-widest uppercase text-white">Out of Stock</span>
           </div>
         )}
-
-        <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.35), transparent)" }} />
       </div>
 
-      {/* ── Card body ────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 p-3.5">
-        <span className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: TEAL }}>
+      {/* Card Content */}
+      <div className="flex flex-col flex-1 p-4">
+        <span className="text-[9px] font-bold uppercase tracking-[0.1em] mb-1" style={{ color: TEAL }}>
           {p.brand}
         </span>
 
-        <h3 className="text-sm font-semibold text-zinc-900 leading-snug line-clamp-2 flex-1">
+        <h3 className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2 flex-1 mb-2">
           {p.name}
         </h3>
 
-        <div className="flex items-center gap-1.5 mt-1.5">
+        <div className="flex items-center gap-1.5 mb-3">
           <Stars value={rating} />
-          <span className="text-[10px] text-zinc-400 font-medium">{rating} ({reviews})</span>
+          <span className="text-[9px] text-gray-500 font-medium">({reviews})</span>
         </div>
-
 
         {/* Price */}
-        <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2.5">
-          {displayPrice > 0 ? (
-            <>
-              <div className="flex items-end justify-between gap-2">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Price</p>
-                  <span className="text-sm font-bold text-zinc-900">LKR {formatLKR(displayPrice)}</span>
-                </div>
-                {!selectedVariant && p.discountPercent > 0 && (
-                  <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 text-white ml-auto" style={{ background: ORANGE }}>
-                    -{p.discountPercent}%
-                  </span>
-                )}
-              </div>
-              {!selectedVariant && p.discountPercent > 0 && (
-                <p className="mt-1 text-xs text-zinc-400 line-through">LKR {formatLKR(p.price)}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-[10px] text-zinc-400 italic">Price not available</p>
-          )}
+        <div className="rounded-lg p-3 mb-3" style={{ background: `${ORANGE}08`, border: `1px solid ${ORANGE}20` }}>
+          <p className="text-[9px] font-bold uppercase tracking-wider text-gray-600 mb-1">Price</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-base font-bold text-gray-900">LKR {formatLKR(displayPrice)}</span>
+            {!selectedVariant && p.discountPercent > 0 && (
+              <span className="text-[9px] font-bold text-gray-500 line-through">LKR {formatLKR(p.price)}</span>
+            )}
+          </div>
         </div>
 
-
         {/* Stock bar */}
-        <div className="mt-2.5">
-          <div className="h-1 rounded-full bg-zinc-100 overflow-hidden">
+        <div className="mb-3">
+          <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
             <div className="h-full rounded-full transition-all duration-500"
               style={{
                 width: outOfStock ? "0%" : `${Math.min(100, (displayStock / 20) * 100)}%`,
                 background: isLow ? "#f59e0b" : TEAL,
               }} />
           </div>
-          <p className="text-[10px] mt-0.5" style={{ color: isLow ? "#f59e0b" : "#a1a1aa" }}>
-            {outOfStock ? "Out of stock" : isLow ? `Only ${displayStock} left!` : `${displayStock} in stock`}
+          <p className="text-[9px] mt-1 font-medium" style={{ color: isLow ? "#f59e0b" : "#9ca3af" }}>
+            {outOfStock ? "Out of stock" : isLow ? `Only ${displayStock} left!` : `In stock`}
           </p>
         </div>
 
-        {/* Add to cart */}
+        {/* Add to cart button */}
         <button type="button" disabled={outOfStock}
           onClick={e => {
             e.stopPropagation();
@@ -383,10 +376,10 @@ function BestSellingCard({ p, addToCart, showToast, toggleWishlist, isWishlisted
             const vname = selectedVariant ? ` (${getVariantName(selectedVariant)})` : "";
             showToast({ title: "Added to cart", message: `${p.name}${vname} × 1`, image: p.image });
           }}
-          className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-95"
+          className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 active:scale-95"
           style={outOfStock
-            ? { background: "#f4f4f5", color: "#a1a1aa", cursor: "not-allowed" }
-            : { background: ORANGE, color: "white", boxShadow: `0 4px 14px rgba(232,82,42,0.28)` }
+            ? { background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" }
+            : { background: ORANGE, color: "white", boxShadow: `0 4px 12px ${ORANGE}40` }
           }>
           <ShoppingBag size={13} strokeWidth={2.5} />
           {outOfStock ? "Unavailable" : "Add to Bag"}
@@ -469,47 +462,49 @@ const BestSelling = () => {
     }).catch(console.error);
   }, []);
 
-  const displayed = useMemo(() => allProducts.slice(0, 10), [allProducts]);
+  const displayed = useMemo(() => allProducts.slice(0, 20), [allProducts]);
 
-  useEffect(() => {
-    if (!wrapRef.current || displayed.length === 0) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo(".bs-title", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "power2.out", scrollTrigger: { trigger: wrapRef.current, start: "top 82%" } });
-      gsap.fromTo(".bs-card",  { y: 30, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.65, ease: "power2.out", stagger: 0.07, scrollTrigger: { trigger: wrapRef.current, start: "top 78%" } });
-    }, wrapRef);
-    return () => ctx.revert();
-  }, [displayed.length]);
+  // Animations disabled for performance
 
   const openQuickView  = p  => { setSelectedProduct(p); setQuickViewOpen(true); };
   const closeQuickView = () => { setQuickViewOpen(false); setSelectedProduct(null); };
 
   return (
-    <section ref={wrapRef} className="w-full py-12 md:py-16" style={{ background: "#fafaf9" }}>
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+    <section ref={wrapRef} className="w-full py-16 sm:py-20 md:py-28 relative overflow-hidden bg-gradient-to-b from-white via-white to-blue-50/20">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
 
-        {/* Header */}
-        <div className="bs-title flex items-end justify-between gap-4 mb-8">
-          <div>
-            <span className="inline-flex items-center gap-2 mb-2 text-xs font-bold tracking-[0.2em] uppercase" style={{ color: TEAL }}>
-              <span className="h-px w-6 inline-block" style={{ background: TEAL }} />
-              Top Picks
-            </span>
-            <h2 className="text-3xl md:text-[2.6rem] font-bold text-zinc-900 leading-tight">
-              Best <span className="italic" style={{ color: ORANGE }}>Selling</span>
-            </h2>
-            <p className="mt-1.5 text-sm text-zinc-500 max-w-md">
-              Expert-curated favourites — tried, loved, and trusted by our customers.
-            </p>
+        {/* Modern Header */}
+        <div className="mb-12 sm:mb-14 md:mb-16">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-8">
+            {/* Left: Title & Description */}
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 mb-4">
+                <span className="w-1 h-3 rounded-full" style={{ background: ORANGE }} />
+                <span className="text-xs sm:text-sm font-bold tracking-wider uppercase text-orange-500">
+                  Top Picks for You
+                </span>
+              </div>
+
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 leading-tight mb-3">
+                Best <span className="text-transparent bg-clip-text" style={{ backgroundImage: `linear-gradient(135deg, ${ORANGE} 0%, ${TEAL} 100%)` }}>Selling</span>
+              </h2>
+              <p className="text-sm sm:text-base text-slate-600 max-w-xl leading-relaxed">
+                Discover the most loved, trusted, and best-rated beauty products loved by thousands of customers.
+              </p>
+            </div>
+
+            {/* Right: View All Button */}
+            <button
+              onClick={() => navigate("/products")}
+              className="self-start sm:self-end px-6 sm:px-8 py-3 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold text-sm sm:text-base transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/30 active:scale-95 whitespace-nowrap"
+            >
+              View All →
+            </button>
           </div>
-          <button onClick={() => navigate("/products")}
-            className="hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold shrink-0 transition-all duration-200 hover:gap-2.5"
-            style={{ color: TEAL }}>
-            View All <ChevronRight size={16} strokeWidth={2.5} />
-          </button>
         </div>
 
-        {/* Grid */}
-        <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {/* Product Grid - Modern Layout */}
+        <div className="grid gap-5 sm:gap-6 grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" style={{ perspective: "1000px" }}>
           {displayed.map(p => (
             <BestSellingCard
               key={p.id}
@@ -525,14 +520,19 @@ const BestSelling = () => {
         </div>
 
         {displayed.length === 0 && (
-          <div className="py-20 text-center text-zinc-400 text-sm">No products yet.</div>
+          <div className="py-20 text-center text-gray-400 text-sm">No products yet.</div>
         )}
 
-        <div className="flex justify-center mt-10">
+        {/* CTA Button */}
+        <div className="flex justify-center">
           <button onClick={() => navigate("/products")}
-            className="inline-flex items-center gap-2 rounded-full px-10 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
-            style={{ background: `linear-gradient(135deg, ${TEAL} 0%, #22a19d 100%)`, boxShadow: `0 8px 28px rgba(43,185,180,0.30)` }}>
-            See All Products <ChevronRight size={16} strokeWidth={2.5} />
+            className="group inline-flex items-center gap-2 rounded-full px-8 py-4 text-sm font-bold text-white transition-all duration-300 hover:shadow-xl hover:scale-105 active:scale-95"
+            style={{
+              background: `linear-gradient(135deg, ${ORANGE} 0%, ${TEAL} 100%)`,
+              boxShadow: `0 12px 32px rgba(232,82,42,0.35)`,
+            }}>
+            <span>Explore All Products</span>
+            <ChevronRight size={18} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>

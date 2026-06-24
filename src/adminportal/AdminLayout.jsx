@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Truck, Users,
   BarChart2, LogOut, Menu, X, Bell, ChevronRight,
   ExternalLink, Store, Star, PackagePlus, Database, Percent,
-  BadgeCheck, Layers, Shield,
+  BadgeCheck, Layers, Shield, Newspaper,
 } from "lucide-react";
 import { useAuth } from "../Context/AuthContext";
 import { supplyChainApi } from "../services/api";
@@ -13,6 +13,7 @@ const ALL_NAV = [
   { to: "/admin",              label: "Dashboard",   icon: LayoutDashboard, end: true },
   { to: "/admin/orders",       label: "Orders",      icon: ShoppingCart },
   { to: "/admin/products",     label: "Products",    icon: Package },
+  { to: "/admin/blogs",        label: "Beauty Tips", icon: Newspaper },
   { to: "/admin/procurement",  label: "UK Purchase", icon: PackagePlus,     superAdminOnly: true },
   { to: "/admin/arrival",      label: "Arrival",     icon: BadgeCheck },
   { to: "/admin/pricing",      label: "Pricing",     icon: Percent,         superAdminOnly: true },
